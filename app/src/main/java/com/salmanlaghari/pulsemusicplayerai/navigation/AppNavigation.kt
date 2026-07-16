@@ -39,6 +39,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivac
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsTermsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.SplashScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.FullPlayerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.QueueScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.SearchScreen
@@ -193,7 +194,14 @@ fun AppNavigation(
                 FullPlayerScreen(
                     viewModel = musicViewModel,
                     onNavigateBack = { navController.popBackStack() },
-                    onShowQueue = { navController.navigate(Screen.Queue.route) }
+                    onShowQueue = { navController.navigate(Screen.Queue.route) },
+                    onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
+                )
+            }
+            composable(Screen.Equalizer.route) {
+                EqualizerScreen(
+                    viewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Search.route) {

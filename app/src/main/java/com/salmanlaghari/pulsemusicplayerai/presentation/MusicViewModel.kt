@@ -54,6 +54,21 @@ class MusicViewModel(
     val repeatMode = playbackConnectionManager.repeatMode
     val currentQueue = playbackConnectionManager.currentQueue
 
+    // Sleep Timer, Speed, and Pitch States
+    val sleepTimerRemainingMs = playbackConnectionManager.sleepTimerRemainingMs
+    val playbackSpeed = playbackConnectionManager.playbackSpeed
+    val playbackPitch = playbackConnectionManager.playbackPitch
+
+    // Equalizer & Audio Effects States
+    val isEqSupported get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.isEqSupported
+    val isBassSupported get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.isBassSupported
+    val isVirtualizerSupported get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.isVirtualizerSupported
+    val isLoudnessSupported get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.isLoudnessSupported
+
+    val bassStrength get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.bassStrength
+    val virtualizerStrength get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.virtualizerStrength
+    val loudnessGainDb get() = com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.loudnessGainDb
+
     // 4. Search States
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -157,6 +172,60 @@ class MusicViewModel(
 
     fun clearQueue() {
         playbackConnectionManager.clearQueue()
+    }
+
+    // 8. Sleep Timer & Parameter Control
+    fun startSleepTimer(minutes: Int) {
+        playbackConnectionManager.startSleepTimer(minutes)
+    }
+
+    fun stopSleepTimer() {
+        playbackConnectionManager.stopSleepTimer()
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        playbackConnectionManager.setPlaybackSpeed(speed)
+    }
+
+    fun setPlaybackPitch(pitch: Float) {
+        playbackConnectionManager.setPlaybackPitch(pitch)
+    }
+
+    // 9. Equalizer and Audio effects Wrapper
+    fun getEqBandsCount(): Int {
+        return com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.getBandsCount()
+    }
+
+    fun getEqBandFrequency(band: Short): Int {
+        return com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.getBandFrequency(band)
+    }
+
+    fun getEqBandLevelRange(): Pair<Short, Short> {
+        return com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.getBandLevelRange()
+    }
+
+    fun getEqBandLevel(band: Short): Short {
+        return com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.getBandLevel(band)
+    }
+
+    fun setEqBandLevel(band: Short, level: Short) {
+        com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.setBandLevel(band, level)
+    }
+
+    fun setBassBoostStrength(strength: Short) {
+        com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.setBassStrength(strength)
+    }
+
+    fun setVirtualizerStrength(strength: Short) {
+        com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.setVirtualizerStrength(strength)
+    }
+
+    fun setLoudnessGain(gainDb: Float) {
+        com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.setLoudnessGain(gainDb)
+    }
+
+    fun applyEqPreset(presetName: String) {
+        com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackService.audioEffectManager.applyPreset(presetName)
     }
 }
 

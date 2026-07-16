@@ -8,7 +8,11 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
+import com.salmanlaghari.pulsemusicplayerai.utils.dataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,9 +20,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class PlaybackConnectionManager(private val context: Context) {
+
+    companion object {
+        private val LAST_SONG_ID_KEY = stringPreferencesKey("last_song_id")
+        private val LAST_POSITION_KEY = longPreferencesKey("last_position")
+    }
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var mediaControllerFuture: ListenableFuture<MediaController>? = null
@@ -46,9 +56,21 @@ class PlaybackConnectionManager(private val context: Context) {
     private val _currentQueue = MutableStateFlow<List<Song>>(emptyList())
     val currentQueue: StateFlow<List<Song>> = _currentQueue.asStateFlow()
 
+    // Sleep Timer States
+    private val _sleepTimerRemainingMs = MutableStateFlow<Long>(0L)
+    val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs.asStateFlow()
+
+    // Playback Speed & Pitch States
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _playbackPitch = MutableStateFlow(1.0f)
+    val playbackPitch: StateFlow<Float> = _playbackPitch.asStateFlow()
+
     // Full song list references to resolve Song entities
     private var allSongsReference: List<Song> = emptyList()
     private var positionUpdateJob: Job? = null
+    private var sleepTimerJob: Job? = null
 
     init {
         initializeController()
@@ -62,11 +84,13 @@ class PlaybackConnectionManager(private val context: Context) {
             mediaController = mediaControllerFuture?.get()
             mediaController?.addListener(PlayerListener())
             updateStateFromController()
+            restoreLastPlayedState()
         }, MoreExecutors.directExecutor())
     }
 
     fun setAllSongsReference(songs: List<Song>) {
         allSongsReference = songs
+        restoreLastPlayedState()
     }
 
     private fun updateStateFromController() {
@@ -76,10 +100,16 @@ class PlaybackConnectionManager(private val context: Context) {
         _repeatMode.value = controller.repeatMode
         _duration.value = controller.duration.coerceAtLeast(0L)
         _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
+        _playbackSpeed.value = controller.playbackParameters.speed
+        _playbackPitch.value = controller.playbackParameters.pitch
 
         val activeMediaId = controller.currentMediaItem?.mediaId
         if (activeMediaId != null) {
-            _currentSong.value = allSongsReference.find { it.id.toString() == activeMediaId }
+            val foundSong = allSongsReference.find { it.id.toString() == activeMediaId }
+            _currentSong.value = foundSong
+            if (foundSong != null) {
+                saveLastPlayedState(foundSong.id, controller.currentPosition.coerceAtLeast(0L))
+            }
         } else {
             _currentSong.value = null
         }
@@ -104,8 +134,10 @@ class PlaybackConnectionManager(private val context: Context) {
         positionUpdateJob = scope.launch {
             while (true) {
                 mediaController?.let { controller ->
-                    _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
+                    val pos = controller.currentPosition.coerceAtLeast(0L)
+                    _currentPosition.value = pos
                     _duration.value = controller.duration.coerceAtLeast(0L)
+                    _currentSong.value?.let { saveLastPlayedState(it.id, pos) }
                 }
                 delay(1000)
             }
@@ -133,6 +165,9 @@ class PlaybackConnectionManager(private val context: Context) {
         controller.seekTo(targetIndex, 0L)
         controller.prepare()
         controller.play()
+
+        // Restore speed/pitch to player
+        controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(_playbackSpeed.value, _playbackPitch.value))
 
         updateStateFromController()
     }
@@ -174,6 +209,83 @@ class PlaybackConnectionManager(private val context: Context) {
         }
         controller.repeatMode = nextMode
         _repeatMode.value = nextMode
+    }
+
+    // --- Sleep Timer ---
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _sleepTimerRemainingMs.value = 0L
+            return
+        }
+        _sleepTimerRemainingMs.value = minutes * 60 * 1000L
+        sleepTimerJob = scope.launch {
+            while (_sleepTimerRemainingMs.value > 0L) {
+                delay(1000)
+                _sleepTimerRemainingMs.value = (_sleepTimerRemainingMs.value - 1000L).coerceAtLeast(0L)
+            }
+            // Timer expired: pause music
+            pause()
+        }
+    }
+
+    fun stopSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerRemainingMs.value = 0L
+    }
+
+    // --- Speed & Pitch Controls ---
+    fun setPlaybackSpeed(speed: Float) {
+        _playbackSpeed.value = speed
+        val controller = mediaController ?: return
+        controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(speed, _playbackPitch.value))
+    }
+
+    fun setPlaybackPitch(pitch: Float) {
+        _playbackPitch.value = pitch
+        val controller = mediaController ?: return
+        controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(_playbackSpeed.value, pitch))
+    }
+
+    // --- State Persistence ---
+    private fun saveLastPlayedState(songId: Long, positionMs: Long) {
+        scope.launch {
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[LAST_SONG_ID_KEY] = songId.toString()
+                    preferences[LAST_POSITION_KEY] = positionMs
+                }
+            } catch (e: Exception) {
+                // Ignore any write issues during quick position ticks
+            }
+        }
+    }
+
+    private fun restoreLastPlayedState() {
+        if (allSongsReference.isEmpty()) return
+        scope.launch {
+            try {
+                val preferences = context.dataStore.data.first()
+                val lastSongIdStr = preferences[LAST_SONG_ID_KEY] ?: return@launch
+                val lastPosition = preferences[LAST_POSITION_KEY] ?: 0L
+                val lastSong = allSongsReference.find { it.id.toString() == lastSongIdStr }
+
+                val controller = mediaController
+                if (lastSong != null && controller != null && controller.currentMediaItem == null) {
+                    _currentSong.value = lastSong
+                    _currentPosition.value = lastPosition
+                    _duration.value = lastSong.duration
+
+                    // Pre-load the song silently into queue
+                    controller.setMediaItem(lastSong.toMediaItem())
+                    controller.seekTo(lastPosition)
+                    controller.prepare()
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 
     fun removeFromQueue(songId: Long) {

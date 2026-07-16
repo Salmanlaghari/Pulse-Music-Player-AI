@@ -9,6 +9,10 @@ import androidx.media3.session.MediaSessionService
 
 class PlaybackService : MediaSessionService() {
 
+    companion object {
+        val audioEffectManager = AudioEffectManager()
+    }
+
     private var mediaSession: MediaSession? = null
     private var exoPlayer: ExoPlayer? = null
 
@@ -26,7 +30,12 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true) // Automatically pause playback on headphones unplug (Become-Noisy)
             .build()
 
-        // 2. Initialize Media3 MediaSession
+        // 2. Initialize Audio effects
+        exoPlayer?.let { player ->
+            audioEffectManager.initEffects(player.audioSessionId)
+        }
+
+        // 3. Initialize Media3 MediaSession
         exoPlayer?.let { player ->
             mediaSession = MediaSession.Builder(this, player)
                 .setCallback(CustomSessionCallback())
@@ -47,6 +56,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        audioEffectManager.release()
         mediaSession?.run {
             player.release()
             release()
