@@ -77,7 +77,7 @@ fun SettingsAboutScreen(onNavigateBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Version 1.0.0 (Session 1 Stable)",
+                    text = "Version 1.0.0 (Session 4 Stable)",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
@@ -88,12 +88,19 @@ fun SettingsAboutScreen(onNavigateBack: () -> Unit) {
                     lineHeight = 20.sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Developer: Salman Laghari",
+                    text = "Developer: Prince Laghari ❤️",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Admin: admin@",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.secondary
                 )
             }
         }
