@@ -27,14 +27,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
       - name: Run Gradle Verification & Checks
-        run: gradle check --no-daemon
+        run: ./gradlew check --no-daemon
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Build Unsigned Release APK
-        run: gradle assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename and Prepare APKs
         run: |
