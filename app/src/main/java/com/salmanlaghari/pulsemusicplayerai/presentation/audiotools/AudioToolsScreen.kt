@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MergeType
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SlowMotionVideo
 import androidx.compose.material.icons.filled.SpeakerNotes
 import androidx.compose.material.icons.filled.SyncAlt
@@ -64,6 +65,7 @@ enum class StudioScreen {
     CUTTER,
     MERGER,
     CONVERTER,
+    MP3_TO_MP4,
     EXTRACTOR,
     COMPRESSOR,
     SPEED_PITCH,
@@ -121,6 +123,15 @@ fun AudioToolsScreen() {
             }
             StudioScreen.CONVERTER -> {
                 ConverterToolScreen(
+                    viewModel = studioViewModel,
+                    onNavigateBack = {
+                        studioViewModel.clearSelection()
+                        currentScreen = StudioScreen.MAIN_LIST
+                    }
+                )
+            }
+            StudioScreen.MP3_TO_MP4 -> {
+                Mp3ToMp4ToolScreen(
                     viewModel = studioViewModel,
                     onNavigateBack = {
                         studioViewModel.clearSelection()
@@ -300,6 +311,7 @@ fun AudioToolsMainList(
         AudioToolData("MP3 Cutter", "Cut, trim, and make ringtones out of any sound file.", Icons.Default.ContentCut, StudioScreen.CUTTER),
         AudioToolData("Audio Merger", "Merge two or more MP3 files together easily.", Icons.Default.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert audio files to any format (MP3, WAV, FLAC, etc.)", Icons.Default.Transform, StudioScreen.CONVERTER),
+        AudioToolData("MP3 to MP4", "Convert MP3 files into beautiful animated spectrum videos.", Icons.Default.Movie, StudioScreen.MP3_TO_MP4),
         AudioToolData("Extract Audio", "Pull high quality music track files directly from video files.", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
         AudioToolData("Compressor", "Reduce file size without sacrificing beautiful acoustic details.", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
         AudioToolData("Speed Changer", "Alter speed/pitch of any audio track easily.", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)

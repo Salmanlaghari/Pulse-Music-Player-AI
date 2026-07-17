@@ -1,7 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.home
 
 import androidx.compose.foundation.background
-import coil.compose.AsyncImage
+import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -253,29 +253,13 @@ fun ContinueListeningCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(
+                SongArtwork(
+                    song = song,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (song.artUri != null) {
-                        AsyncImage(
-                            model = song.artUri,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                        .clip(RoundedCornerShape(8.dp)),
+                    iconSize = 24.dp
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -437,37 +421,14 @@ fun SongHorizontalLazyRow(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
+                    SongArtwork(
+                        song = song,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(80.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (song.artUri != null) {
-                            AsyncImage(
-                                model = song.artUri,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
+                            .clip(RoundedCornerShape(8.dp)),
+                        iconSize = 32.dp
+                    )
                     Column {
                         Text(
                             text = song.title,
@@ -527,29 +488,13 @@ fun MiniPlayer(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Box(
+                    SongArtwork(
+                        song = song,
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (song.artUri != null) {
-                            AsyncImage(
-                                model = song.artUri,
-                                contentDescription = "Mini Album Art",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = "Mini Album Art",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
+                            .clip(RoundedCornerShape(8.dp)),
+                        iconSize = 22.dp
+                    )
 
                     Spacer(modifier = Modifier.width(12.dp))
 

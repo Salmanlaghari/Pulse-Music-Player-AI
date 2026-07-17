@@ -1,7 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.library
 
 import androidx.compose.foundation.background
-import coil.compose.AsyncImage
+import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -258,29 +258,13 @@ fun LibrarySongRowCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Box(
+                SongArtwork(
+                    song = song,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (song.artUri != null) {
-                        AsyncImage(
-                            model = song.artUri,
-                            contentDescription = song.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = song.title,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                        .clip(RoundedCornerShape(8.dp)),
+                    iconSize = 24.dp
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 

@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -211,6 +213,207 @@ fun ConverterToolScreen(
                     }
                 ) {
                     Text("Export", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+// --- 5. MP3 TO MP4 VISUALIZER EXPORTER SCREEN ---
+
+@Composable
+fun Mp3ToMp4ToolScreen(
+    viewModel: AudioStudioViewModel,
+    onNavigateBack: () -> Unit
+) {
+    val selectedFiles by viewModel.selectedFiles.collectAsState()
+    var exportPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_BARS) }
+    var exportBgStyle by remember { mutableStateOf("Album Art") }
+    var exportResolution by remember { mutableStateOf("1080p") }
+
+    var outputFileName by remember { mutableStateOf("Visualizer_Spectrogram_Export") }
+    var showSaveDialog by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) viewModel.selectFiles(listOf(uri))
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("MP3 to MP4 Studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (selectedFiles.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(200.dp).clickable { filePickerLauncher.launch("audio/*") },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Select MP3/Audio Track for Video", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+            }
+        } else {
+            val sourceUri = selectedFiles.first()
+            val name = sourceUri.lastPathSegment ?: "Selected Audio"
+
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AudioFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 1. Visualizer Preset Selector
+                Text("1. Visualizer Spectrum Preset", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        VisualizerPreset.values().forEach { preset ->
+                            val isSelected = exportPreset == preset
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                    .clickable { exportPreset = preset }
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(preset.displayName, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                if (isSelected) {
+                                    Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 2. Background Style Selector
+                Text("2. Video Background Style", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Album Art", "Solid Color", "Gradient", "Image").forEach { style ->
+                        val isSelected = exportBgStyle == style
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clickable { exportBgStyle = style },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(style, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 3. Video Resolution Selector
+                Text("3. Target Video Resolution", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("720p (HD)", "1080p (Full HD)").forEach { res ->
+                        val isSelected = (res.startsWith("720p") && exportResolution == "720p") || (res.startsWith("1080p") && exportResolution == "1080p")
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clickable { exportResolution = if (res.startsWith("720p")) "720p" else "1080p" },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(res, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Button(
+                    onClick = { showSaveDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Generate MP4 Visualizer Video", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = { viewModel.clearSelection() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("Import another audio file", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("Output Filename", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = outputFileName,
+                    onValueChange = { outputFileName = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSaveDialog = false
+                        val uri = selectedFiles.firstOrNull()
+                        if (uri != null) {
+                            viewModel.exportVisualizerVideo(uri, outputFileName)
+                        }
+                    }
+                ) {
+                    Text("Export Video", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

@@ -21,8 +21,11 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModelFactory
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModelFactory
+import coil.Coil
+import coil.ImageLoader
 import com.salmanlaghari.pulsemusicplayerai.theme.PulseMusicPlayerAITheme
 import com.salmanlaghari.pulsemusicplayerai.utils.ThemePreferenceManager
+import com.salmanlaghari.pulsemusicplayerai.utils.SongArtworkFetcher
 
 class MainActivity : ComponentActivity() {
 
@@ -40,6 +43,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Setup Coil image loader for premium custom artwork fetching and caching
+        val imageLoader = ImageLoader.Builder(applicationContext)
+            .components {
+                add(SongArtworkFetcher.Factory(applicationContext))
+            }
+            .build()
+        Coil.setImageLoader(imageLoader)
+
         setContent {
             val userDarkModePreference by mainViewModel.isDarkTheme.collectAsState()
             val systemInDarkTheme = isSystemInDarkTheme()

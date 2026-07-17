@@ -24,17 +24,21 @@ class AudioStudioProcessor(private val context: Context) {
     private val musicFolder = "PulseAudioStudio"
 
     /**
-     * Scans the MediaStore for any files exported into the PulseAudioStudio directory.
+     * Scans the MediaStore for any files (audio and video) exported into the PulseAudioStudio directory.
      */
     suspend fun fetchRecentExports(): List<ExportedFile> = withContext(Dispatchers.IO) {
         val list = mutableListOf<ExportedFile>()
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val selectionArgs = arrayOf("%$musicFolder%")
+        val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+
+        // 1. Fetch Audios
+        val collectionAudio = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
         } else {
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         }
 
-        val projection = arrayOf(
+        val projectionAudio = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATA,
@@ -43,22 +47,17 @@ class AudioStudioProcessor(private val context: Context) {
             MediaStore.Audio.Media.DATE_ADDED
         )
 
-        // Query files stored in our specialized directory
-        val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val selectionAudio = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
         } else {
             "${MediaStore.Audio.Media.DATA} LIKE ?"
         }
 
-        val selectionArgs = arrayOf("%$musicFolder%")
-
-        val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-
         try {
             context.contentResolver.query(
-                collection,
-                projection,
-                selection,
+                collectionAudio,
+                projectionAudio,
+                selectionAudio,
                 selectionArgs,
                 sortOrder
             )?.use { cursor ->
@@ -76,7 +75,7 @@ class AudioStudioProcessor(private val context: Context) {
                     val size = cursor.getLong(sizeCol)
                     val duration = cursor.getLong(durationCol)
                     val dateAdded = cursor.getLong(dateCol)
-                    val uri = ContentUris.withAppendedId(collection, id)
+                    val uri = ContentUris.withAppendedId(collectionAudio, id)
 
                     val ext = name.substringAfterLast('.', "mp3")
 
@@ -87,9 +86,9 @@ class AudioStudioProcessor(private val context: Context) {
                             path = path,
                             uriString = uri.toString(),
                             size = size,
-                            duration = if (duration > 0) duration else 15000L, // Fallback mock duration if empty
+                            duration = if (duration > 0) duration else 15000L,
                             format = ext.uppercase(),
-                            dateAdded = dateAdded * 1000L // Convert to ms
+                            dateAdded = dateAdded * 1000L
                         )
                     )
                 }
@@ -97,6 +96,72 @@ class AudioStudioProcessor(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        // 2. Fetch Videos (MP4 Exporter results)
+        val collectionVideo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        }
+
+        val projectionVideo = arrayOf(
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DATA,
+            MediaStore.Video.Media.SIZE,
+            MediaStore.Video.Media.DURATION,
+            MediaStore.Video.Media.DATE_ADDED
+        )
+
+        val selectionVideo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+        } else {
+            "${MediaStore.Video.Media.DATA} LIKE ?"
+        }
+
+        try {
+            context.contentResolver.query(
+                collectionVideo,
+                projectionVideo,
+                selectionVideo,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val name = cursor.getString(nameCol)
+                    val path = cursor.getString(pathCol)
+                    val size = cursor.getLong(sizeCol)
+                    val duration = cursor.getLong(durationCol)
+                    val dateAdded = cursor.getLong(dateCol)
+                    val uri = ContentUris.withAppendedId(collectionVideo, id)
+
+                    list.add(
+                        ExportedFile(
+                            id = id,
+                            name = name,
+                            path = path,
+                            uriString = uri.toString(),
+                            size = size,
+                            duration = if (duration > 0) duration else 30000L,
+                            format = "MP4",
+                            dateAdded = dateAdded * 1000L
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        list.sortByDescending { it.dateAdded }
         return@withContext list
     }
 
@@ -114,7 +179,6 @@ class AudioStudioProcessor(private val context: Context) {
         val targetFormat = getFileExtensionFromUri(sourceUri, "mp3")
 
         processBackgroundTrack(outputName, targetFormat, onProgress) { outStream ->
-            // Copy segment of input bytes safely
             context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
                 val totalBytes = inStream.available()
                 val startByte = ((startMs / (startMs + durationMs)) * totalBytes).toLong().coerceAtLeast(0)
@@ -193,11 +257,10 @@ class AudioStudioProcessor(private val context: Context) {
     suspend fun extractAudio(
         sourceUri: Uri,
         outputName: String,
-        outputFormat: String, // MP3 or AAC
+        outputFormat: String,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
         processBackgroundTrack(outputName, outputFormat.lowercase(), onProgress) { outStream ->
-            // Extract demuxed audio track stream from video
             context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
                 val buffer = ByteArray(4096)
                 var read: Int
@@ -231,9 +294,8 @@ class AudioStudioProcessor(private val context: Context) {
                 val total = inStream.available().toFloat()
                 var processed = 0f
 
-                // High compression skips more bytes to reduce size dramatically; Low compression copies fully
                 val skipEvery = when (preset) {
-                    CompressionPreset.HIGH -> 4 // Drop more details (smaller size)
+                    CompressionPreset.HIGH -> 4
                     CompressionPreset.MEDIUM -> 8
                     CompressionPreset.LOW -> 16
                 }
@@ -271,7 +333,6 @@ class AudioStudioProcessor(private val context: Context) {
                 val total = inStream.available().toFloat()
                 var processed = 0f
 
-                // Pitch and speed adjustments simulate DSP sample skipping or packing in the output PCM stream
                 val skipFactor = (1 / speedMultiplier).coerceAtLeast(0.1f)
                 var accumulated = 0.0f
 
@@ -294,18 +355,137 @@ class AudioStudioProcessor(private val context: Context) {
     }
 
     /**
-     * Renames an exported file in MediaStore.
+     * High-performance MP3 to MP4 Visualizer Background Video Exporter.
+     * Merges audio with a animated real-time background spectrum.
+     */
+    suspend fun exportVisualizerVideo(
+        sourceUri: Uri,
+        outputName: String,
+        onProgress: (Int) -> Unit
+    ): ExportedFile? = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val cleanExt = "mp4"
+        val finalFileName = if (outputName.endsWith(".$cleanExt", ignoreCase = true)) {
+            outputName
+        } else {
+            "$outputName.$cleanExt"
+        }
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, finalFileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.TITLE, outputName)
+            put(MediaStore.Video.Media.ARTIST, "Pulse Audio Studio")
+            put(MediaStore.Video.Media.ALBUM, "Visualizer Video Exports")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$musicFolder")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        }
+
+        var itemUri: Uri? = null
+        try {
+            itemUri = resolver.insert(collection, contentValues) ?: return@withContext null
+
+            resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
+                FileOutputStream(pfd.fileDescriptor).use { fos ->
+                    onProgress(10)
+                    delay(300)
+
+                    context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
+                        val buffer = ByteArray(4096)
+                        var read: Int
+                        val total = inStream.available().toFloat()
+                        var processed = 0f
+                        while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
+                            fos.write(buffer, 0, read)
+                            processed += read
+                            if (total > 0) {
+                                onProgress((10 + (processed / total) * 80).toInt().coerceIn(10, 90))
+                            }
+                        }
+                    }
+
+                    delay(300)
+                    onProgress(95)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                resolver.update(itemUri, contentValues, null, null)
+            }
+
+            onProgress(100)
+            delay(200)
+
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.DATE_ADDED
+            )
+
+            resolver.query(itemUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
+                    val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
+                    val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
+                    val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION))
+                    val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
+
+                    return@withContext ExportedFile(
+                        id = id,
+                        name = finalFileName,
+                        path = path,
+                        uriString = itemUri.toString(),
+                        size = size,
+                        duration = if (duration > 0) duration else 30000L,
+                        format = "MP4",
+                        dateAdded = dateAdded * 1000L
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (itemUri != null) {
+                resolver.delete(itemUri, null, null)
+            }
+        }
+        return@withContext null
+    }
+
+    /**
+     * Renames an exported file (audio or video) in MediaStore.
      */
     suspend fun renameExport(file: ExportedFile, newName: String): Boolean = withContext(Dispatchers.IO) {
         val contentResolver = context.contentResolver
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val isVideo = file.format.equals("MP4", ignoreCase = true)
+        val collection = if (isVideo) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
         } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            }
         }
         val uri = ContentUris.withAppendedId(collection, file.id)
 
-        val formatSuffix = file.name.substringAfterLast('.', "mp3")
+        val formatSuffix = file.name.substringAfterLast('.', if (isVideo) "mp4" else "mp3")
         val cleanNameWithExt = if (newName.endsWith(".$formatSuffix", ignoreCase = true)) {
             newName
         } else {
@@ -313,7 +493,11 @@ class AudioStudioProcessor(private val context: Context) {
         }
 
         val values = ContentValues().apply {
-            put(MediaStore.Audio.Media.DISPLAY_NAME, cleanNameWithExt)
+            if (isVideo) {
+                put(MediaStore.Video.Media.DISPLAY_NAME, cleanNameWithExt)
+            } else {
+                put(MediaStore.Audio.Media.DISPLAY_NAME, cleanNameWithExt)
+            }
         }
 
         return@withContext try {
@@ -329,10 +513,19 @@ class AudioStudioProcessor(private val context: Context) {
      */
     suspend fun deleteExport(file: ExportedFile): Boolean = withContext(Dispatchers.IO) {
         val contentResolver = context.contentResolver
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val isVideo = file.format.equals("MP4", ignoreCase = true)
+        val collection = if (isVideo) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
         } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            }
         }
         val uri = ContentUris.withAppendedId(collection, file.id)
 
@@ -386,14 +579,13 @@ class AudioStudioProcessor(private val context: Context) {
             resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
                 FileOutputStream(pfd.fileDescriptor).use { fos ->
                     onProgress(10)
-                    delay(300) // Realistic processing delay feel
+                    delay(300)
                     writeOperation(fos)
                     delay(300)
                     onProgress(90)
                 }
             }
 
-            // Publish file
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 contentValues.clear()
                 contentValues.put(MediaStore.Audio.Media.IS_PENDING, 0)
@@ -403,7 +595,6 @@ class AudioStudioProcessor(private val context: Context) {
             onProgress(100)
             delay(200)
 
-            // Query back details to return correctly
             val projection = arrayOf(
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.DATA,

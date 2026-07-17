@@ -230,6 +230,32 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    fun exportVisualizerVideo(sourceUri: Uri, outputName: String) {
+        if (_isProcessing.value) return
+        _isProcessing.value = true
+        _progress.value = 0
+        _statusMessage.value = "Starting visualizer background exporter..."
+
+        activeJob = viewModelScope.launch {
+            try {
+                val result = processor.exportVisualizerVideo(sourceUri, outputName) { prog ->
+                    _progress.value = prog
+                    _statusMessage.value = "Exporting MP4 Spectrum Video: $prog%"
+                }
+                _isProcessing.value = false
+                if (result != null) {
+                    _showResultDialog.value = Pair(true, result)
+                    loadRecentExports()
+                } else {
+                    _showResultDialog.value = Pair(false, null)
+                }
+            } catch (e: Exception) {
+                _isProcessing.value = false
+                _showResultDialog.value = Pair(false, null)
+            }
+        }
+    }
+
     fun renameExport(file: ExportedFile, newName: String) {
         viewModelScope.launch {
             if (processor.renameExport(file, newName)) {
@@ -248,12 +274,13 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
 
     fun shareExport(file: ExportedFile) {
         try {
+            val isVideo = file.format.equals("MP4", ignoreCase = true)
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "audio/*"
+                type = if (isVideo) "video/mp4" else "audio/*"
                 putExtra(Intent.EXTRA_STREAM, file.uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Share Exported Audio").apply {
+            context.startActivity(Intent.createChooser(intent, if (isVideo) "Share Exported Video" else "Share Exported Audio").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
         } catch (e: Exception) {
