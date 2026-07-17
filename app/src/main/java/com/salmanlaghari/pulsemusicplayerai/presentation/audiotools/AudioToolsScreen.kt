@@ -60,18 +60,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoStudioType
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoStudioScreen
+
 enum class StudioScreen {
     MAIN_LIST,
     CUTTER,
     MERGER,
     CONVERTER,
-    MP3_TO_MP4,
+    VIDEO_STUDIO,
     EXTRACTOR,
     COMPRESSOR,
     SPEED_PITCH,
     LIBRARY
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioToolsScreen() {
     val context = LocalContext.current
@@ -80,6 +91,8 @@ fun AudioToolsScreen() {
     )
 
     var currentScreen by remember { mutableStateOf(StudioScreen.MAIN_LIST) }
+    var showVideoStudioSheet by remember { mutableStateOf(false) }
+    var selectedVideoType by remember { mutableStateOf(VideoStudioType.MP3_TO_MP4) }
 
     val isProcessing by studioViewModel.isProcessing.collectAsState()
     val progress by studioViewModel.progress.collectAsState()
@@ -100,6 +113,9 @@ fun AudioToolsScreen() {
                     onNavigateToTool = { screen ->
                         studioViewModel.clearSelection()
                         currentScreen = screen
+                    },
+                    onOpenVideoStudio = {
+                        showVideoStudioSheet = true
                     }
                 )
             }
@@ -130,8 +146,9 @@ fun AudioToolsScreen() {
                     }
                 )
             }
-            StudioScreen.MP3_TO_MP4 -> {
-                Mp3ToMp4ToolScreen(
+            StudioScreen.VIDEO_STUDIO -> {
+                VideoStudioScreen(
+                    type = selectedVideoType,
                     viewModel = studioViewModel,
                     onNavigateBack = {
                         studioViewModel.clearSelection()
@@ -300,18 +317,112 @@ fun AudioToolsScreen() {
                 }
             )
         }
+
+        // --- 10 Dedicated Video Studio Templates Selector Sheet ---
+        if (showVideoStudioSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showVideoStudioSheet = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 16.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Video Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        IconButton(onClick = { showVideoStudioSheet = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Select a professional video rendering template to convert your audio track:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(VideoStudioType.values()) { type ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(76.dp)
+                                    .clickable {
+                                        selectedVideoType = type
+                                        showVideoStudioSheet = false
+                                        currentScreen = StudioScreen.VIDEO_STUDIO
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Movie,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(type.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(type.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun AudioToolsMainList(
-    onNavigateToTool: (StudioScreen) -> Unit
+    onNavigateToTool: (StudioScreen) -> Unit,
+    onOpenVideoStudio: () -> Unit
 ) {
     val toolsList = listOf(
         AudioToolData("MP3 Cutter", "Cut, trim, and make ringtones out of any sound file.", Icons.Default.ContentCut, StudioScreen.CUTTER),
         AudioToolData("Audio Merger", "Merge two or more MP3 files together easily.", Icons.Default.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert audio files to any format (MP3, WAV, FLAC, etc.)", Icons.Default.Transform, StudioScreen.CONVERTER),
-        AudioToolData("MP3 to MP4", "Convert MP3 files into beautiful animated spectrum videos.", Icons.Default.Movie, StudioScreen.MP3_TO_MP4),
+        AudioToolData("Video Studio Pro", "Convert MP3 files into 10+ premium animated video templates.", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
         AudioToolData("Extract Audio", "Pull high quality music track files directly from video files.", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
         AudioToolData("Compressor", "Reduce file size without sacrificing beautiful acoustic details.", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
         AudioToolData("Speed Changer", "Alter speed/pitch of any audio track easily.", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)
@@ -400,7 +511,13 @@ fun AudioToolsMainList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(80.dp)
-                        .clickable { onNavigateToTool(tool.targetScreen) },
+                        .clickable {
+                            if (tool.targetScreen == StudioScreen.VIDEO_STUDIO) {
+                                onOpenVideoStudio()
+                            } else {
+                                onNavigateToTool(tool.targetScreen)
+                            }
+                        },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {

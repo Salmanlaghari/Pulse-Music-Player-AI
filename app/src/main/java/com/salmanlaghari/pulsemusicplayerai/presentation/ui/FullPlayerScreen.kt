@@ -8,7 +8,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,17 +23,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HeartBroken
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -40,6 +47,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -53,6 +61,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -71,6 +81,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +104,7 @@ fun FullPlayerScreen(
     onShowQueue: () -> Unit,
     onNavigateToEqualizer: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val currentSong by viewModel.currentSong.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -119,9 +133,16 @@ fun FullPlayerScreen(
     var isOrientationLocked by remember { mutableStateOf(false) }
     var isImmersiveFullscreen by remember { mutableStateOf(false) }
 
-    val cyclePreset = {
-        val nextOrdinal = (currentPreset.ordinal + 1) % VisualizerPreset.values().size
-        currentPreset = VisualizerPreset.values()[nextOrdinal]
+    // Visualizer bottom sheet menu states
+    var showVisualizerMenu by remember { mutableStateOf(false) }
+    var favoriteVisualizers by remember { mutableStateOf(setOf(VisualizerPreset.CIRCULAR_BARS, VisualizerPreset.LINEAR_BARS)) }
+    var recentlyUsedVisualizers by remember { mutableStateOf(listOf(VisualizerPreset.CIRCULAR_BARS, VisualizerPreset.LINEAR_BARS, VisualizerPreset.PARTICLE_ORB)) }
+    var visualizerSearchQuery by remember { mutableStateOf("") }
+    var selectedCategoryTab by remember { mutableStateOf("All") }
+
+    val selectVisualizer = { preset: VisualizerPreset ->
+        currentPreset = preset
+        recentlyUsedVisualizers = (listOf(preset) + recentlyUsedVisualizers.filter { it != preset }).take(5)
     }
 
     // Resolve current slider position
@@ -154,7 +175,7 @@ fun FullPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF07070F))
+                .background(Color(0xFF05050C))
         ) {
             VisualizerCanvas(
                 preset = currentPreset,
@@ -183,19 +204,22 @@ fun FullPlayerScreen(
                     Column {
                         Text(
                             text = currentSong?.title ?: "Not Playing",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
                             color = Color.White
                         )
                         Text(
                             text = currentSong?.artist ?: "Unknown Artist",
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
 
                     IconButton(
-                        onClick = { isImmersiveFullscreen = false },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            isImmersiveFullscreen = false
+                        },
                         modifier = Modifier
                             .background(Color.White.copy(alpha = 0.15f), shape = CircleShape)
                     ) {
@@ -210,28 +234,32 @@ fun FullPlayerScreen(
                 // Floating glassmorphic parameters tuner card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.65f)),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f)),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Click to cycle visual style
+                        // Click to open Visualizer bottom sheet menu
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { cyclePreset() }
-                                .padding(8.dp),
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showVisualizerMenu = true
+                                }
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Visual Style:", fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f))
+                            Text("Visual Style:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.7f))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(currentPreset.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Text(currentPreset.displayName, fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             }
                         }
 
@@ -242,7 +270,7 @@ fun FullPlayerScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Sensitivity:", fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.width(72.dp))
+                            Text("Sensitivity:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.width(80.dp))
                             Slider(
                                 value = sensitivityScale,
                                 onValueChange = { sensitivityScale = it },
@@ -255,7 +283,7 @@ fun FullPlayerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(String.format("%.1fx", sensitivityScale), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.width(32.dp))
+                            Text(String.format("%.1fx", sensitivityScale), fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White, modifier = Modifier.width(36.dp))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -266,22 +294,31 @@ fun FullPlayerScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { viewModel.skipToPrevious() }) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(28.dp))
+                            IconButton(onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.skipToPrevious()
+                            }) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
                             }
                             IconButton(
-                                onClick = { viewModel.togglePlayPause() },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(48.dp)
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.togglePlayPause()
+                                },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(56.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
-                            IconButton(onClick = { viewModel.skipToNext() }) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(28.dp))
+                            IconButton(onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.skipToNext()
+                            }) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(32.dp))
                             }
                         }
                     }
@@ -310,7 +347,10 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onNavigateBack) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onNavigateBack()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.ArrowBack,
                                 contentDescription = "Collapse Player",
@@ -322,20 +362,24 @@ fun FullPlayerScreen(
                             Text(
                                 text = "NOW PLAYING",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 2.sp
                             )
                             Text(
                                 text = currentSong?.album ?: "No Album Active",
                                 fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        IconButton(onClick = onShowQueue) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onShowQueue()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.QueueMusic,
                                 contentDescription = "Open Queue",
@@ -344,14 +388,27 @@ fun FullPlayerScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Premium Rotating Album Art Box or Real-time Visualizer
+                    // Flagship Large Album Art Box (Increased size to 300dp) with dynamic glowing borders
                     Box(
                         modifier = Modifier
-                            .size(280.dp)
+                            .size(300.dp)
                             .scale(playPauseScale)
-                            .clip(RoundedCornerShape(140.dp)),
+                            .border(
+                                BorderStroke(
+                                    2.dp,
+                                    Brush.sweepGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.secondary,
+                                            MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                ),
+                                shape = RoundedCornerShape(150.dp)
+                            )
+                            .clip(RoundedCornerShape(150.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (showVisualizer) {
@@ -368,8 +425,8 @@ fun FullPlayerScreen(
                         } else {
                             Card(
                                 modifier = Modifier.fillMaxSize(),
-                                shape = RoundedCornerShape(140.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
+                                shape = RoundedCornerShape(150.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 24.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 Box(
@@ -390,52 +447,61 @@ fun FullPlayerScreen(
                                         song = currentSong,
                                         modifier = Modifier
                                             .fillMaxSize(0.96f)
-                                            .clip(RoundedCornerShape(135.dp))
+                                            .clip(RoundedCornerShape(145.dp))
                                             .rotate(resolvedRotation),
-                                        iconSize = 100.dp
+                                        iconSize = 110.dp
                                     )
                                 }
                             }
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Studio Visualizer Action Dock Panel
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), shape = RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
                             .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = { showVisualizer = !showVisualizer },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showVisualizer = !showVisualizer
+                            },
                             modifier = Modifier.background(
                                 if (showVisualizer) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            ).size(36.dp)
+                                shape = RoundedCornerShape(10.dp)
+                            ).size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GraphicEq,
                                 contentDescription = "Toggle Visualizer",
                                 tint = if (showVisualizer) Color.White else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
+                        // Preset Selector: Opens the Premium Visualizer Studio Menu Bottom Sheet
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), shape = RoundedCornerShape(8.dp))
-                                .clickable(enabled = showVisualizer) { cyclePreset() }
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), shape = RoundedCornerShape(10.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showVisualizerMenu = true
+                                }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = if (showVisualizer) currentPreset.displayName else "Visualizer Off",
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                 maxLines = 1,
@@ -446,6 +512,7 @@ fun FullPlayerScreen(
                         IconButton(
                             onClick = {
                                 if (showVisualizer) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     sensitivityScale = when (sensitivityScale) {
                                         1.0f -> 1.5f
                                         1.5f -> 2.0f
@@ -454,42 +521,48 @@ fun FullPlayerScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(38.dp),
                             enabled = showVisualizer
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = "Sensitivity",
                                 tint = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
                         IconButton(
-                            onClick = { isOrientationLocked = !isOrientationLocked },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isOrientationLocked = !isOrientationLocked
+                            },
                             modifier = Modifier.background(
                                 if (isOrientationLocked) MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            ).size(36.dp)
+                                shape = RoundedCornerShape(10.dp)
+                            ).size(38.dp)
                         ) {
                             Icon(
                                 imageVector = if (isOrientationLocked) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
                                 contentDescription = "Orientation Lock",
                                 tint = if (isOrientationLocked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
                         IconButton(
-                            onClick = { isImmersiveFullscreen = true },
-                            modifier = Modifier.size(36.dp),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isImmersiveFullscreen = true
+                            },
+                            modifier = Modifier.size(38.dp),
                             enabled = showVisualizer
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Fullscreen,
                                 contentDescription = "Enter Fullscreen",
                                 tint = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -504,31 +577,40 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onNavigateToEqualizer) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onNavigateToEqualizer()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Equalizer,
                                 contentDescription = "Equalizer",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        IconButton(onClick = { showAdjustmentsSheet = true }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showAdjustmentsSheet = true
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Speed,
                                 contentDescription = "Playback Parameters",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        IconButton(onClick = { showSleepTimerSheet = true }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showSleepTimerSheet = true
+                        }) {
                             Box(contentAlignment = Alignment.TopEnd) {
                                 Icon(
                                     imageVector = Icons.Default.Timer,
                                     contentDescription = "Sleep Timer",
                                     tint = if (sleepTimerMs > 0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                                 if (sleepTimerMs > 0) {
                                     Box(
@@ -555,16 +637,18 @@ fun FullPlayerScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = currentSong?.title ?: "Not Playing",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                letterSpacing = (-0.5).sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = currentSong?.artist ?: "Select a track to start",
-                                fontSize = 16.sp,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -572,20 +656,23 @@ fun FullPlayerScreen(
                         }
 
                         IconButton(
-                            onClick = { currentSong?.let { viewModel.toggleFavorite(it) } }
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                currentSong?.let { viewModel.toggleFavorite(it) }
+                            }
                         ) {
                             Icon(
                                 imageVector = if (currentSong?.isFavorite == true) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Toggle Favorite",
                                 tint = if (currentSong?.isFavorite == true) Color.Red else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Interactive SeekBar / Progress Control
+                    // Flagship progress seeker with animated track
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Slider(
                             value = displayedPosition.toFloat(),
@@ -601,7 +688,7 @@ fun FullPlayerScreen(
                             colors = SliderDefaults.colors(
                                 thumbColor = MaterialTheme.colorScheme.primary,
                                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+                                inactiveTrackColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -614,12 +701,14 @@ fun FullPlayerScreen(
                         ) {
                             Text(
                                 text = formatTime(displayedPosition),
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                             )
                             Text(
                                 text = formatTime(duration),
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                             )
                         }
@@ -633,68 +722,83 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { viewModel.toggleShuffle() }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.toggleShuffle()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = "Shuffle",
-                                tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                modifier = Modifier.size(24.dp)
+                                tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        IconButton(onClick = { viewModel.skipToPrevious() }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.skipToPrevious()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(40.dp)
                             )
                         }
 
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(76.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
-                                .clickable { viewModel.togglePlayPause() },
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.togglePlayPause()
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(40.dp)
                             )
                         }
 
-                        IconButton(onClick = { viewModel.skipToNext() }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.skipToNext()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(40.dp)
                             )
                         }
 
-                        IconButton(onClick = { viewModel.toggleRepeatMode() }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.toggleRepeatMode()
+                        }) {
                             val repeatIcon = when (repeatMode) {
                                 Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
                                 else -> Icons.Default.Repeat
                             }
                             val repeatColor = when (repeatMode) {
-                                Player.REPEAT_MODE_OFF -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                Player.REPEAT_MODE_OFF -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                 else -> MaterialTheme.colorScheme.secondary
                             }
                             Icon(
                                 imageVector = repeatIcon,
                                 contentDescription = "Repeat Settings",
                                 tint = repeatColor,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Premium branding
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -711,6 +815,211 @@ fun FullPlayerScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
                             textAlign = TextAlign.Center
                         )
+                    }
+                }
+            }
+        }
+
+        // --- Visualizer Studio Pro Menu Bottom Sheet ---
+        if (showVisualizerMenu) {
+            ModalBottomSheet(
+                onDismissRequest = { showVisualizerMenu = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 16.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                ) {
+                    // Header Area
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Visualizer Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        IconButton(onClick = { showVisualizerMenu = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Search field
+                    OutlinedTextField(
+                        value = visualizerSearchQuery,
+                        onValueChange = { visualizerSearchQuery = it },
+                        placeholder = { Text("Search 50+ presets...", fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        trailingIcon = {
+                            if (visualizerSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { visualizerSearchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Categories Horizontal Slider Row
+                    val categories = listOf("All", "Radial", "Bars", "Particles", "Ambient", "Fluid", "Symmetric", "3D")
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(categories) { category ->
+                            val isSelected = selectedCategoryTab == category
+                            Card(
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .clickable { selectedCategoryTab = category },
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                )
+                            ) {
+                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text(category, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Recently Used presets panel
+                    if (recentlyUsedVisualizers.isNotEmpty()) {
+                        Text("Recently Used", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(recentlyUsedVisualizers) { preset ->
+                                Card(
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            selectVisualizer(preset)
+                                            showVisualizerMenu = false
+                                            showVisualizer = true
+                                        },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                ) {
+                                    Row(modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(preset.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // Main Presets listing list
+                    Text("Select Preset", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val filteredPresets = VisualizerPreset.values().filter { preset ->
+                        val matchesSearch = preset.displayName.contains(visualizerSearchQuery, ignoreCase = true) || preset.description.contains(visualizerSearchQuery, ignoreCase = true)
+                        val matchesCategory = selectedCategoryTab == "All" || preset.category == selectedCategoryTab
+                        matchesSearch && matchesCategory
+                    }
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(filteredPresets) { preset ->
+                            val isSelected = currentPreset == preset
+                            val isFav = favoriteVisualizers.contains(preset)
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        selectVisualizer(preset)
+                                        showVisualizerMenu = false
+                                        showVisualizer = true
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                ),
+                                border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        // Preset Mini Preview Circle Thumbnail
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.GraphicEq,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Column {
+                                            Text(preset.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(preset.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        // Favorite button inside bottom sheet
+                                        IconButton(
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                favoriteVisualizers = if (isFav) favoriteVisualizers - preset else favoriteVisualizers + preset
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                                contentDescription = "Favorite",
+                                                tint = if (isFav) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -152,7 +152,31 @@ fun AppNavigation(
                 HomeScreen(
                     viewModel = musicViewModel,
                     onNavigateToSearch = { navController.navigate(Screen.Search.route) },
-                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }
+                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
+                    onNavigateToAIHub = {
+                        navController.navigate(Screen.AIHub.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToFavorites = {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToLibrary = {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToEqualizer = {
+                        navController.navigate(Screen.Equalizer.route)
+                    }
                 )
             }
             composable(Screen.Library.route) {
