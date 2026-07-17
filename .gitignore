@@ -6,9 +6,6 @@ app/build/
 # Gradle files
 .gradle/
 **/.gradle/
-gradlew
-gradlew.bat
-gradle/wrapper/
 
 # Android Studio / IntelliJ IDEA
 .idea/
