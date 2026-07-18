@@ -19,4 +19,5 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object Queue : Screen("queue")
     object Equalizer : Screen("equalizer")
+    object TemplateStudio : Screen("template_studio")
 }

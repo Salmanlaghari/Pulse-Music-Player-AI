@@ -39,6 +39,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivac
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsTermsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.SplashScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.templatestudio.TemplateStudioScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.FullPlayerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.QueueScreen
@@ -183,7 +184,10 @@ fun AppNavigation(
                 LibraryScreen(viewModel = musicViewModel)
             }
             composable(Screen.AudioTools.route) {
-                AudioToolsScreen()
+                AudioToolsScreen(
+                    musicViewModel = musicViewModel,
+                    onNavigateToTemplateStudio = { navController.navigate(Screen.TemplateStudio.route) }
+                )
             }
             composable(Screen.AIHub.route) {
                 AIHubScreen()
@@ -213,13 +217,21 @@ fun AppNavigation(
                 SettingsFeedbackScreen(onNavigateBack = { navController.popBackStack() })
             }
 
+            composable(Screen.TemplateStudio.route) {
+                TemplateStudioScreen(
+                    musicViewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             // Playback routes
             composable(Screen.FullPlayer.route) {
                 FullPlayerScreen(
                     viewModel = musicViewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onShowQueue = { navController.navigate(Screen.Queue.route) },
-                    onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
+                    onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) },
+                    onNavigateToTemplateStudio = { navController.navigate(Screen.TemplateStudio.route) }
                 )
             }
             composable(Screen.Equalizer.route) {

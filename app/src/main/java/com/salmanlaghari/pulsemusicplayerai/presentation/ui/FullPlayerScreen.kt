@@ -102,7 +102,8 @@ fun FullPlayerScreen(
     viewModel: MusicViewModel,
     onNavigateBack: () -> Unit,
     onShowQueue: () -> Unit,
-    onNavigateToEqualizer: () -> Unit
+    onNavigateToEqualizer: () -> Unit,
+    onNavigateToTemplateStudio: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val currentSong by viewModel.currentSong.collectAsState()

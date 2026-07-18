@@ -36,9 +36,11 @@ class MainActivity : ComponentActivity() {
 
     private val audioScanner by lazy { AudioScanner(applicationContext) }
     private val musicRepository by lazy { MusicRepository(applicationContext, audioScanner) }
+    private val lyricsRepository by lazy { com.salmanlaghari.pulsemusicplayerai.data.repository.LyricsRepository(applicationContext) }
+    private val premiumManager by lazy { com.salmanlaghari.pulsemusicplayerai.utils.PremiumManager(applicationContext) }
     private val playbackConnectionManager by lazy { PlaybackConnectionManager(applicationContext) }
     private val musicViewModel: MusicViewModel by viewModels {
-        MusicViewModelFactory(musicRepository, playbackConnectionManager)
+        MusicViewModelFactory(musicRepository, playbackConnectionManager, lyricsRepository, premiumManager)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

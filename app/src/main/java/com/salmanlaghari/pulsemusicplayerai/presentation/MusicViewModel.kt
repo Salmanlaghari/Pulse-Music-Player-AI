@@ -19,8 +19,52 @@ import kotlinx.coroutines.launch
 
 class MusicViewModel(
     private val musicRepository: MusicRepository,
-    private val playbackConnectionManager: PlaybackConnectionManager
+    private val playbackConnectionManager: PlaybackConnectionManager,
+    private val lyricsRepository: com.salmanlaghari.pulsemusicplayerai.data.repository.LyricsRepository,
+    private val premiumManager: com.salmanlaghari.pulsemusicplayerai.utils.PremiumManager
 ) : ViewModel() {
+
+    // Synced Lyrics state
+    private val _currentLyrics = MutableStateFlow<List<com.salmanlaghari.pulsemusicplayerai.data.repository.LyricLine>>(emptyList())
+    val currentLyrics: StateFlow<List<com.salmanlaghari.pulsemusicplayerai.data.repository.LyricLine>> = _currentLyrics.asStateFlow()
+
+    // Premium tier state
+    private val _activeTier = MutableStateFlow(com.salmanlaghari.pulsemusicplayerai.utils.UserTier.GUEST)
+    val activeTier: StateFlow<com.salmanlaghari.pulsemusicplayerai.utils.UserTier> = _activeTier.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            currentSong.collect { song ->
+                if (song != null) {
+                    try {
+                        _currentLyrics.value = lyricsRepository.getLyrics(song.title, song.artist, song.duration)
+                    } catch (e: Exception) {
+                        _currentLyrics.value = emptyList()
+                    }
+                } else {
+                    _currentLyrics.value = emptyList()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            combine(premiumManager.persistedTierFlow, premiumManager.sessionTier) { persisted, session ->
+                session ?: persisted
+            }.collect {
+                _activeTier.value = it
+            }
+        }
+    }
+
+    fun setPersistedTier(tier: com.salmanlaghari.pulsemusicplayerai.utils.UserTier) {
+        viewModelScope.launch {
+            premiumManager.setPersistedTier(tier)
+        }
+    }
+
+    fun setTemporarySessionTier(tier: com.salmanlaghari.pulsemusicplayerai.utils.UserTier?) {
+        premiumManager.setTemporarySessionTier(tier)
+    }
 
     // 1. Permission Granted State
     private val _isPermissionGranted = MutableStateFlow(false)
@@ -231,12 +275,14 @@ class MusicViewModel(
 
 class MusicViewModelFactory(
     private val musicRepository: MusicRepository,
-    private val playbackConnectionManager: PlaybackConnectionManager
+    private val playbackConnectionManager: PlaybackConnectionManager,
+    private val lyricsRepository: com.salmanlaghari.pulsemusicplayerai.data.repository.LyricsRepository,
+    private val premiumManager: com.salmanlaghari.pulsemusicplayerai.utils.PremiumManager
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MusicViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return MusicViewModel(musicRepository, playbackConnectionManager) as T
+            return MusicViewModel(musicRepository, playbackConnectionManager, lyricsRepository, premiumManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

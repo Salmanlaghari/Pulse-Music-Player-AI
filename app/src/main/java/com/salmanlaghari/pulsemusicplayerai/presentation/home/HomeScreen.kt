@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.palette.graphics.Palette
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -125,12 +127,13 @@ fun HomeScreenContent(
     val currentSong by viewModel.currentSong.collectAsState()
 
     // Dynamic color extraction for background ambience from active song artwork
-    var accentBgColor by remember { mutableStateOf(Color(0xFF0F0C1F)) }
+    var accentBgColor by remember { mutableStateOf(Color(0xFF09090F)) }
+    var vibrantBgColor by remember { mutableStateOf(Color(0xFF7C4DFF)) }
 
     LaunchedEffect(currentSong) {
         val song = currentSong
         if (song != null) {
-            val color = withContext(Dispatchers.IO) {
+            val colors = withContext(Dispatchers.IO) {
                 val cacheDir = File(context.cacheDir, "artwork_cache")
                 val cacheFile = File(cacheDir, "song_${song.id}.jpg")
                 if (cacheFile.exists() && cacheFile.length() > 0) {
@@ -138,22 +141,29 @@ fun HomeScreenContent(
                         val options = BitmapFactory.Options().apply { inSampleSize = 4 }
                         val bitmap = BitmapFactory.decodeFile(cacheFile.absolutePath, options)
                         if (bitmap != null) {
-                            val avg = getAverageColor(bitmap)
+                            val palette = Palette.from(bitmap).generate()
+                            val dom = palette.getDominantColor(0xFF09090F.toInt())
+                            val vib = palette.getVibrantColor(0xFF7C4DFF.toInt())
                             bitmap.recycle()
-                            Color(avg)
+                            Pair(Color(dom), Color(vib))
                         } else {
-                            generateFallbackColor(song)
+                            val domFallback = generateFallbackColor(song)
+                            Pair(domFallback, Color(0xFF7C4DFF))
                         }
                     } catch (e: Exception) {
-                        generateFallbackColor(song)
+                        val domFallback = generateFallbackColor(song)
+                        Pair(domFallback, Color(0xFF7C4DFF))
                     }
                 } else {
-                    generateFallbackColor(song)
+                    val domFallback = generateFallbackColor(song)
+                    Pair(domFallback, Color(0xFF7C4DFF))
                 }
             }
-            accentBgColor = color
+            accentBgColor = colors.first
+            vibrantBgColor = colors.second
         } else {
-            accentBgColor = Color(0xFF0F0C1F)
+            accentBgColor = Color(0xFF09090F)
+            vibrantBgColor = Color(0xFF7C4DFF)
         }
     }
 
@@ -162,6 +172,11 @@ fun HomeScreenContent(
         animationSpec = tween(1000),
         label = "HomeBgAccent"
     )
+    val animatedVibrantBgColor by animateColorAsState(
+        targetValue = vibrantBgColor,
+        animationSpec = tween(1000),
+        label = "HomeBgVibrant"
+    )
 
     Box(
         modifier = Modifier
@@ -169,7 +184,7 @@ fun HomeScreenContent(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        animatedAccentBgColor.copy(alpha = 0.35f),
+                        animatedAccentBgColor.copy(alpha = 0.25f),
                         MaterialTheme.colorScheme.background,
                         MaterialTheme.colorScheme.background
                     )

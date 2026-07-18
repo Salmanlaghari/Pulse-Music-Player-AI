@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import androidx.activity.compose.BackHandler
+import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,7 +85,10 @@ enum class StudioScreen {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AudioToolsScreen() {
+fun AudioToolsScreen(
+    musicViewModel: MusicViewModel,
+    onNavigateToTemplateStudio: () -> Unit
+) {
     val context = LocalContext.current
     val studioViewModel: AudioStudioViewModel = viewModel(
         factory = AudioStudioViewModelFactory(context.applicationContext)
@@ -150,6 +154,8 @@ fun AudioToolsScreen() {
                 VideoStudioScreen(
                     type = selectedVideoType,
                     viewModel = studioViewModel,
+                    musicViewModel = musicViewModel,
+                    onNavigateToTemplateStudio = onNavigateToTemplateStudio,
                     onNavigateBack = {
                         studioViewModel.clearSelection()
                         currentScreen = StudioScreen.MAIN_LIST
