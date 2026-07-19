@@ -77,15 +77,23 @@ class PlaybackConnectionManager(private val context: Context) {
     }
 
     private fun initializeController() {
-        val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        mediaControllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+        try {
+            val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+            mediaControllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
-        mediaControllerFuture?.addListener({
-            mediaController = mediaControllerFuture?.get()
-            mediaController?.addListener(PlayerListener())
-            updateStateFromController()
-            restoreLastPlayedState()
-        }, MoreExecutors.directExecutor())
+            mediaControllerFuture?.addListener({
+                try {
+                    mediaController = mediaControllerFuture?.get()
+                    mediaController?.addListener(PlayerListener())
+                    updateStateFromController()
+                    restoreLastPlayedState()
+                } catch (e: Exception) {
+                    android.util.Log.e("PlaybackConnection", "Failed to resolve MediaController: ${e.message}")
+                }
+            }, MoreExecutors.directExecutor())
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackConnection", "Failed to build SessionToken or MediaController: ${e.message}")
+        }
     }
 
     fun setAllSongsReference(songs: List<Song>) {

@@ -31,9 +31,13 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true) // Automatically pause playback on headphones unplug (Become-Noisy)
             .build()
 
-        // 2. Initialize Audio effects
-        exoPlayer?.let { player ->
-            audioEffectManager.initEffects(player.audioSessionId)
+        // 2. Initialize Audio effects with try-catch block to prevent service initialization crashes
+        try {
+            exoPlayer?.let { player ->
+                audioEffectManager.initEffects(player.audioSessionId)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackService", "Error initiating audio effects in service: ${e.message}")
         }
 
         // 3. Initialize Media3 MediaSession

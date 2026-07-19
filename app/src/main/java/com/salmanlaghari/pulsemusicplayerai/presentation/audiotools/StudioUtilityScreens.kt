@@ -2,16 +2,6 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
-import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
-import com.salmanlaghari.pulsemusicplayerai.utils.UserTier
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.PremiumUpgradeDialog
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -257,13 +247,9 @@ enum class VideoStudioType(val displayName: String, val description: String) {
 fun VideoStudioScreen(
     type: VideoStudioType,
     viewModel: AudioStudioViewModel,
-    musicViewModel: MusicViewModel,
-    onNavigateToTemplateStudio: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val selectedFiles by viewModel.selectedFiles.collectAsState()
-    val activeTier by musicViewModel.activeTier.collectAsState(initial = UserTier.GUEST)
-    var showPremiumUpgradeSheet by remember { mutableStateOf(false) }
 
     var outputFileName by remember { mutableStateOf("${type.name}_Visual_Studio_Export") }
     var selectedPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_BARS) }
@@ -290,33 +276,12 @@ fun VideoStudioScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
-
-            IconButton(onClick = {
-                val isLocked = activeTier != UserTier.PREMIUM
-                if (isLocked) {
-                    showPremiumUpgradeSheet = true
-                } else {
-                    onNavigateToTemplateStudio()
-                }
-            }) {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = "Template Studio",
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -493,37 +458,20 @@ fun VideoStudioScreen(
                 Text("Select Resolution", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("720p", "1080p", "4K").forEach { res ->
-                        val isSelected = selectedResolution == res
-                        val label = when (res) {
-                            "720p" -> "720p (HD)"
-                            "1080p" -> "1080p (Full HD) 👑"
-                            else -> "4K (Ultra HD) 👑"
-                        }
+                    listOf("720p (HD)", "1080p (Full HD)").forEach { res ->
+                        val isSelected = (res.startsWith("720p") && selectedResolution == "720p") || (res.startsWith("1080p") && selectedResolution == "1080p")
                         Card(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp)
-                                .clickable {
-                                    val isLocked = when (activeTier) {
-                                        UserTier.GUEST -> true
-                                        UserTier.BASIC -> res != "720p"
-                                        UserTier.PREMIUM -> false
-                                        else -> true
-                                    }
-                                    if (isLocked) {
-                                        showPremiumUpgradeSheet = true
-                                    } else {
-                                        selectedResolution = res
-                                    }
-                                },
+                                .clickable { selectedResolution = if (res.startsWith("720p")) "720p" else "1080p" },
                             shape = RoundedCornerShape(8.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             )
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                Text(res, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
@@ -532,13 +480,7 @@ fun VideoStudioScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
-                    onClick = {
-                        if (activeTier == UserTier.GUEST) {
-                            showPremiumUpgradeSheet = true
-                        } else {
-                            showSaveDialog = true
-                        }
-                    },
+                    onClick = { showSaveDialog = true },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -585,13 +527,6 @@ fun VideoStudioScreen(
             dismissButton = {
                 TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
             }
-        )
-    }
-
-    if (showPremiumUpgradeSheet) {
-        com.salmanlaghari.pulsemusicplayerai.presentation.ui.PremiumUpgradeDialog(
-            viewModel = musicViewModel,
-            onDismiss = { showPremiumUpgradeSheet = false }
         )
     }
 }
