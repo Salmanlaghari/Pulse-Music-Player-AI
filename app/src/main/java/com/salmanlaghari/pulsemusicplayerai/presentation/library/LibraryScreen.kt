@@ -1,7 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.library
 
 import androidx.compose.foundation.background
-import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,28 +15,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,47 +41,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
-import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.PermissionScreen
+import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
+import com.salmanlaghari.pulsemusicplayerai.theme.BgDeep
+import com.salmanlaghari.pulsemusicplayerai.theme.Pink
+import com.salmanlaghari.pulsemusicplayerai.theme.Purple
+import com.salmanlaghari.pulsemusicplayerai.theme.PurpleLight
+import com.salmanlaghari.pulsemusicplayerai.theme.TextDim
 
 @Composable
-fun LibraryScreen(viewModel: MusicViewModel) {
-    val isPermissionGranted by viewModel.isPermissionGranted.collectAsState()
-
-    if (!isPermissionGranted) {
-        PermissionScreen(onPermissionResult = { granted ->
-            viewModel.setPermissionGranted(granted)
-        })
-    } else {
-        LibraryScreenContent(viewModel = viewModel)
-    }
-}
-
-@Composable
-fun LibraryScreenContent(viewModel: MusicViewModel) {
+fun LibraryScreen() {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Songs", "Albums", "Artists", "Folders")
-
-    val songs by viewModel.allSongs.collectAsState()
-    val albums by viewModel.albums.collectAsState()
-    val artists by viewModel.artists.collectAsState()
-    val folders by viewModel.folders.collectAsState()
+    val tabs = listOf("Playlists", "Songs", "Artists", "Folders")
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(BgDeep, Color(0xFF120E24))
+                )
+            )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             // Header
             Row(
@@ -95,15 +83,15 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
             ) {
                 Text(
                     text = "Library",
-                    style = MaterialTheme.typography.headlineLarge,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
-                IconButton(onClick = { viewModel.loadMusicData() }) {
+                IconButton(onClick = {}) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Refresh Scan",
-                        tint = MaterialTheme.colorScheme.primary,
+                        contentDescription = "Add Playlist",
+                        tint = PurpleLight,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -111,15 +99,15 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tab selection row
+            // Premium Category Row / Tabs
             TabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.primary,
+                containerColor = Color.Transparent,
+                contentColor = PurpleLight,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
+                        color = PurpleLight
                     )
                 },
                 divider = {}
@@ -132,7 +120,8 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
                             Text(
                                 text = title,
                                 fontSize = 14.sp,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == index) Color.White else TextDim
                             )
                         }
                     )
@@ -141,251 +130,142 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Render local listings based on tab index
-            when (selectedTab) {
-                0 -> {
-                    if (songs.isEmpty()) {
-                        EmptyListPlaceholder("No songs found on local storage.")
-                    } else {
-                        LazySongsList(songs = songs, onSongClick = { viewModel.playSong(it, songs) })
-                    }
-                }
-                1 -> {
-                    if (albums.isEmpty()) {
-                        EmptyListPlaceholder("No albums found.")
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(albums) { album ->
-                                LibraryRowCard(
-                                    title = album.name,
-                                    subtitle = "${album.songsCount} songs • ${album.artist}",
-                                    icon = Icons.Default.Album,
-                                    onClick = {}
-                                )
-                            }
-                        }
-                    }
-                }
-                2 -> {
-                    if (artists.isEmpty()) {
-                        EmptyListPlaceholder("No artists found.")
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(artists) { artist ->
-                                LibraryRowCard(
-                                    title = artist.name,
-                                    subtitle = "${artist.songsCount} songs • ${artist.albumsCount} albums",
-                                    icon = Icons.Default.Person,
-                                    onClick = {}
-                                )
-                            }
-                        }
-                    }
-                }
-                3 -> {
-                    if (folders.isEmpty()) {
-                        EmptyListPlaceholder("No folders found.")
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(folders) { folder ->
-                                LibraryRowCard(
-                                    title = folder.name,
-                                    subtitle = "${folder.songsCount} songs • ${folder.path}",
-                                    icon = Icons.Default.Folder,
-                                    onClick = {}
-                                )
-                            }
-                        }
-                    }
+            // Dynamic items list based on selected category
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    0 -> LibraryItemsList(getPlaylists())
+                    1 -> LibraryItemsList(getSongs())
+                    2 -> LibraryItemsList(getArtists())
+                    3 -> LibraryItemsList(getFolders())
                 }
             }
 
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(160.dp)) // Safe padding for persistent floating components
         }
 
-        // Floating action button to scan or trigger fresh scan
+        // Floating button with gradient background to create playlists
         FloatingActionButton(
-            onClick = { viewModel.loadMusicData() },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            onClick = { },
+            containerColor = Color.Transparent,
+            elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 90.dp, end = 16.dp)
+                .padding(bottom = 175.dp, end = 20.dp) // Adjusted to float above floating player perfectly
+                .shadow(elevation = 12.dp, shape = CircleShape, clip = false, ambientColor = Purple, spotColor = Pink)
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Purple, Pink)
+                    )
+                )
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Rescan")
-        }
-    }
-}
-
-@Composable
-fun LazySongsList(
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit
-) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(songs) { song ->
-            LibrarySongRowCard(
-                song = song,
-                onClick = { onSongClick(song) }
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "New Playlist",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
 }
 
 @Composable
-fun LibrarySongRowCard(
-    song: Song,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+fun LibraryItemsList(items: List<LibraryItem>) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+        items(items) { item ->
+            GlassmorphicCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp),
+                shape = RoundedCornerShape(14.dp)
             ) {
-                SongArtwork(
-                    song = song,
+                Row(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    iconSize = 24.dp
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = song.title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${song.artist} • ${song.album}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More Options",
-                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun LibraryRowCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Purple.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.title,
+                                tint = PurpleLight,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = item.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = item.subtitle,
+                                fontSize = 12.sp,
+                                color = TextDim,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = {}) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = TextDim
+                        )
+                    }
                 }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = subtitle,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More Options",
-                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                )
             }
         }
     }
 }
 
-@Composable
-fun EmptyListPlaceholder(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(150.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = message,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
+data class LibraryItem(val title: String, val subtitle: String, val icon: ImageVector)
+
+private fun getPlaylists() = listOf(
+    LibraryItem("My AI Beats", "14 songs • Created by AI", Icons.Default.LibraryMusic),
+    LibraryItem("Liked Tracks", "320 songs • Local Library", Icons.Default.Favorite),
+    LibraryItem("Chill Vibes Only", "45 songs • Playlist", Icons.Default.LibraryMusic),
+    LibraryItem("Midnight Glow", "12 songs • Retro Synth", Icons.Default.LibraryMusic)
+)
+
+private fun getSongs() = listOf(
+    LibraryItem("Neural Symphony 1.0", "AI Mastermind • 3:45", Icons.Default.MusicNote),
+    LibraryItem("Neon Nights", "Retro Horizon • 4:12", Icons.Default.MusicNote),
+    LibraryItem("Synthesized Soul", "Acoustic Bot • 2:58", Icons.Default.MusicNote),
+    LibraryItem("Golden Future", "Humanized Synth • 3:20", Icons.Default.MusicNote)
+)
+
+private fun getArtists() = listOf(
+    LibraryItem("AI Mastermind", "5 local songs", Icons.Default.History),
+    LibraryItem("Retro Horizon", "2 local songs", Icons.Default.History),
+    LibraryItem("Acoustic Bot", "12 local songs", Icons.Default.History)
+)
+
+private fun getFolders() = listOf(
+    LibraryItem("Music", "/storage/emulated/0/Music", Icons.Default.Folder),
+    LibraryItem("Downloads", "/storage/emulated/0/Download", Icons.Default.Folder),
+    LibraryItem("WhatsApp Audio", "/storage/emulated/0/WhatsApp/Media", Icons.Default.Folder)
+)

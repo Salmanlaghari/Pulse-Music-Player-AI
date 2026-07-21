@@ -4,27 +4,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val GlassmorphicColorScheme = darkColorScheme(
-    primary = PurplePrimary,
-    secondary = CyanSecondary,
-    tertiary = Purple2,
-    background = BaseNearBlack,
-    surface = GlassBg,
-    surfaceVariant = DarkSurfaceVariant,
-    onPrimary = TextLight,
-    onSecondary = BaseNearBlack,
-    onBackground = TextLight,
-    onSurface = TextLight,
+private val PremiumColorScheme = darkColorScheme(
+    primary = Purple,
+    secondary = Pink,
+    tertiary = PurpleLight,
+    background = BgDeep,
+    surface = BgCard,
+    surfaceVariant = BgCard2,
+    onPrimary = Text,
+    onSecondary = BgDeep,
+    onBackground = Text,
+    onSurface = Text,
     onSurfaceVariant = TextDim
 )
 
 @Composable
 fun PulseMusicPlayerAITheme(
-    darkTheme: Boolean = true, // Consistently dark and premium app-wide
+    darkTheme: Boolean = true, // Force premium dark theme consistently
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = GlassmorphicColorScheme,
+        colorScheme = PremiumColorScheme,
         typography = Typography,
         content = content
     )

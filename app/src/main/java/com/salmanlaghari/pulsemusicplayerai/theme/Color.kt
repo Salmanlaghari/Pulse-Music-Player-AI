@@ -2,32 +2,31 @@ package com.salmanlaghari.pulsemusicplayerai.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Premium Design tokens from HTML source of truth
-val BaseNearBlack = Color(0xFF08060F)
-val BaseDeepPurple = Color(0xFF150D2B)
-val CyanGlow = Color(0xFF3FF0FF)
-val CyanGlowSoft = Color(0x803FF0FF) // rgba(63,240,255,0.5)
-val Purple1 = Color(0xFF8B5CF6)
-val Purple2 = Color(0xFF5B21B6)
-val Purple3 = Color(0xFF4C1FB0)
-val Pink = Color(0xFFEC4899) // Exact HTML value
-val TextDim = Color(0xFF9AA3BA)
-val TextLight = Color(0xFFF2F4FB)
-val GlassBg = Color(0x0DFFFFFF) // rgba(255,255,255,0.05)
-val GlassBorder = Color(0x1AFFFFFF) // rgba(255,255,255,0.1)
+// Design tokens from the HTML source of truth
+val BgDeep = Color(0xFF0C0A1A)
+val BgCard = Color(0xFF171429)
+val BgCard2 = Color(0xFF1D1836)
+val Purple = Color(0xFF7C3AED)
+val PurpleLight = Color(0xFFA78BFA)
+val Pink = Color(0xFFEC4899)
+val Blue = Color(0xFF3B82F6)
+val Green = Color(0xFF22C55E)
+val Text = Color(0xFFF5F3FF)
+val TextDim = Color(0xFF9D97B8)
+val BorderColor = Color(0x10FFFFFF) // rgba(255,255,255,0.06) is ~6%, 0x10 is ~6% (16/255)
 
-// Backward Compatibility Mapping
-val PurplePrimary = Purple1
-val CyanSecondary = CyanGlow
+// Backward compatibility or generic mapping colors
+val PurplePrimary = Purple
+val CyanSecondary = Pink
 
-val DarkBackground = BaseNearBlack
-val DarkSurface = GlassBg
-val DarkSurfaceVariant = Color(0xFF130E26)
-val DarkOnBackground = TextLight
-val DarkOnSurface = TextLight
+val DarkBackground = BgDeep
+val DarkSurface = BgCard
+val DarkSurfaceVariant = BgCard2
+val DarkOnBackground = Text
+val DarkOnSurface = Text
 
-val LightBackground = BaseNearBlack
-val LightSurface = GlassBg
-val LightSurfaceVariant = Color(0xFF130E26)
-val LightOnBackground = TextLight
-val LightOnSurface = TextLight
+val LightBackground = BgDeep
+val LightSurface = BgCard
+val LightSurfaceVariant = BgCard2
+val LightOnBackground = Text
+val LightOnSurface = Text
