@@ -1,0 +1,71 @@
+name: Android Automated Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build & Verify Android App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Run Gradle Verification & Checks
+        run: ./gradlew check --no-daemon
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build Signed Release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Build Signed Release AAB
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Rename and Prepare Build Artifacts
+        run: |
+          mkdir -p build-artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk build-artifacts/Pulse-Music-Player-AI-Debug.apk
+          cp app/build/outputs/apk/release/app-release.apk build-artifacts/Pulse-Music-Player-AI-Release.apk
+          cp app/build/outputs/bundle/release/app-release.aab build-artifacts/Pulse-Music-Player-AI-Release.aab
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Music-Player-AI-Debug
+          path: build-artifacts/Pulse-Music-Player-AI-Debug.apk
+          if-no-files-found: error
+
+      - name: Upload Signed Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Music-Player-AI-Release-APK
+          path: build-artifacts/Pulse-Music-Player-AI-Release.apk
+          if-no-files-found: error
+
+      - name: Upload Signed Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Music-Player-AI-Release-AAB
+          path: build-artifacts/Pulse-Music-Player-AI-Release.aab
+          if-no-files-found: error
