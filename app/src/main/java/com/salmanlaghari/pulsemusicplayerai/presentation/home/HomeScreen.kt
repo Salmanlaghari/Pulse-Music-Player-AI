@@ -2,479 +2,652 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.ElectricBolt
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
+import com.salmanlaghari.pulsemusicplayerai.theme.BgCard
+import com.salmanlaghari.pulsemusicplayerai.theme.BgCard2
+import com.salmanlaghari.pulsemusicplayerai.theme.BgDeep
+import com.salmanlaghari.pulsemusicplayerai.theme.BorderColor
+import com.salmanlaghari.pulsemusicplayerai.theme.Pink
+import com.salmanlaghari.pulsemusicplayerai.theme.Purple
+import com.salmanlaghari.pulsemusicplayerai.theme.PurpleLight
+import com.salmanlaghari.pulsemusicplayerai.theme.TextDim
 
 @Composable
 fun HomeScreen() {
     val scrollState = rememberScrollState()
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(scrollState)
-            .padding(16.dp)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(BgDeep, Color(0xFF120E24))
+                )
+            )
     ) {
-        // App title and branding at the top
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(bottom = 160.dp) // Spacing so it's not hidden by the floating mini player and bottom nav
+        ) {
+            // 1. Top Bar Section
+            TopbarSection()
+
+            // 2. Hero Section
+            HeroSection()
+
+            // 3. Continue Listening Section
+            ContinueListeningSection()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 4. Quick Access Grid
+            QuickAccessSection()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 5. Recently Added Section
+            RecentlyAddedSection()
+        }
+    }
+}
+
+@Composable
+fun TopbarSection() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Logo
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Pulse",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                letterSpacing = (-0.5).sp
+            )
+            Text(
+                text = "⚡",
+                fontSize = 22.sp,
+                color = PurpleLight,
+                modifier = Modifier.shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    clip = false,
+                    ambientColor = PurpleLight,
+                    spotColor = PurpleLight
+                )
+            )
+        }
+
+        // Top Icons: Search & Avatar
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(BgCard)
+                    .clickable { },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = TextDim,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(Purple, Pink)
+                        )
+                    )
+                    .clickable { },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🎧",
+                    fontSize = 16.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HeroSection() {
+    // Recreating the radial gradient style with a custom design background
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .height(190.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xFF14102B))
+    ) {
+        // Gradient blobs/highlights overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Pink.copy(alpha = 0.45f), Color.Transparent),
+                        radius = 400f
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color(0xCC0C0A1A))
+                    )
+                )
+        )
+
+        // Hero Content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(22.dp),
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            Text(
+                text = "Good Evening 👋",
+                fontSize = 13.sp,
+                color = TextDim,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Feel the Music,\nFeel the Pulse.",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                lineHeight = 28.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Your local audio engine is live. Play, create and enjoy without limits.",
+                fontSize = 12.5.sp,
+                color = TextDim,
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(240.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ContinueListeningSection() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Pulse",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
+                text = "Continue Listening",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
-            Icon(
-                imageVector = Icons.Default.ElectricBolt,
-                contentDescription = "Pulse Energy",
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(28.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgCard)
+                    .clickable { }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "View All",
+                    fontSize = 12.sp,
+                    color = TextDim,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 1. Welcome Card
-        WelcomeCard()
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Quick Access Grid Header
-        SectionHeader(title = "Quick Access")
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Quick Access Cards Grid/Rows
-        QuickAccessRow()
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 2. Recently Played Placeholder
-        SectionHeader(title = "Recently Played")
-        Spacer(modifier = Modifier.height(12.dp))
-        RecentlyPlayedList()
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 3. Trending Playlist Placeholder
-        SectionHeader(title = "Trending Playlist")
-        Spacer(modifier = Modifier.height(12.dp))
-        TrendingPlaylistList()
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Extra spacing so content is not blocked by mini player
-        Spacer(modifier = Modifier.height(80.dp))
-    }
-}
-
-@Composable
-fun WelcomeCard() {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(140.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
-                .padding(20.dp),
-            contentAlignment = Alignment.CenterStart
+        // Continue Card
+        GlassmorphicCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp)
         ) {
-            Column {
-                Text(
-                    text = "Welcome to Pulse AI",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Experience a smarter way to listen, create, and refine your favorite music. Complete foundation session 1 is live!",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Gradient Thumb
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Pink, Purple)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🎵", fontSize = 18.sp)
+                }
+
+                // Track Info
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "In The End",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Linkin Park • Hybrid Theory",
+                        fontSize = 12.sp,
+                        color = TextDim
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Progress Row
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2A2545))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.7f)
+                                    .fillMaxHeight()
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Purple, PurpleLight)
+                                        )
+                                    )
+                            )
+                        }
+                        Text(
+                            text = "2:45 / 3:36",
+                            fontSize = 10.sp,
+                            color = TextDim
+                        )
+                    }
+                }
+
+                // Play circle
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = CircleShape,
+                            clip = false,
+                            ambientColor = Purple,
+                            spotColor = Purple
+                        )
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Purple, Color(0xFF5B21B6))
+                            )
+                        )
+                        .clickable { },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "▶",
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+fun QuickAccessSection() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
     ) {
         Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
+            text = "Quick Access",
+            fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = Color.White,
+            modifier = Modifier.padding(bottom = 12.dp)
         )
-        Text(
-            text = "See All",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { }
+
+        val items = listOf(
+            QuickAccessItem("AI Assistant", "Smart Audio Tools", "🤖", Brush.linearGradient(listOf(Purple.copy(alpha = 0.25f), Purple.copy(alpha = 0.05f)))),
+            QuickAccessItem("My Favorites", "Your Liked Tracks", "❤️", Brush.linearGradient(listOf(Pink.copy(alpha = 0.25f), Pink.copy(alpha = 0.05f)))),
+            QuickAccessItem("Library", "Songs, Albums, Artists", "🎵", Brush.linearGradient(listOf(Color(0xFF3B82F6).copy(alpha = 0.25f), Color(0xFF3B82F6).copy(alpha = 0.05f)))),
+            QuickAccessItem("Equalizer", "Sound Perfected", "📶", Brush.linearGradient(listOf(Color(0xFF22C55E).copy(alpha = 0.25f), Color(0xFF22C55E).copy(alpha = 0.05f))))
         )
-    }
-}
 
-@Composable
-fun QuickAccessRow() {
-    val items = listOf(
-        QuickAccessItem("AI Assistant", Icons.Default.AutoAwesome, MaterialTheme.colorScheme.primary),
-        QuickAccessItem("My Favorites", Icons.Default.Favorite, MaterialTheme.colorScheme.secondary),
-        QuickAccessItem("Library", Icons.Default.LibraryMusic, MaterialTheme.colorScheme.primary),
-        QuickAccessItem("Equalizer", Icons.Default.Equalizer, MaterialTheme.colorScheme.secondary)
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.take(2).forEach { item ->
-            QuickAccessCard(item, modifier = Modifier.weight(1f))
-        }
-    }
-    Spacer(modifier = Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.takeLast(2).forEach { item ->
-            QuickAccessCard(item, modifier = Modifier.weight(1f))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                QuickAccessCard(items[0], modifier = Modifier.weight(1f))
+                QuickAccessCard(items[1], modifier = Modifier.weight(1f))
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                QuickAccessCard(items[2], modifier = Modifier.weight(1f))
+                QuickAccessCard(items[3], modifier = Modifier.weight(1f))
+            }
         }
     }
 }
 
-data class QuickAccessItem(val title: String, val icon: ImageVector, val color: Color)
+data class QuickAccessItem(
+    val title: String,
+    val sub: String,
+    val icon: String,
+    val brush: Brush
+)
 
 @Composable
 fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.height(60.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    GlassmorphicCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        backgroundBrush = item.brush
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = item.icon,
+                fontSize = 20.sp
+            )
+            Column {
+                Text(
+                    text = item.title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = item.sub,
+                    fontSize = 10.5.sp,
+                    color = TextDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentlyAddedSection() {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.title,
-                tint = item.color,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = item.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                text = "Recently Added",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
-        }
-    }
-}
-
-@Composable
-fun RecentlyPlayedList() {
-    val list = listOf(
-        PlayItem("Cyberpunk Beats", "Synthwave Core", Icons.Default.MusicNote),
-        PlayItem("Acoustic Dreams", "Lofi Melodies", Icons.Default.MusicNote),
-        PlayItem("AI Generated Symph", "Neural Orchestra", Icons.Default.AutoAwesome),
-        PlayItem("Late Night Drive", "Midnight Retro", Icons.Default.MusicNote)
-    )
-
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(end = 12.dp)
-    ) {
-        items(list) { item ->
-            Card(
+            Box(
                 modifier = Modifier
-                    .width(130.dp)
-                    .height(170.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgCard)
+                    .clickable { }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
+                Text(
+                    text = "View All",
+                    fontSize = 12.sp,
+                    color = TextDim,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Horizontal Scroll list
+        val recentItems = listOf(
+            RecentSongItem("Believer", "Imagine Dragons", Brush.linearGradient(listOf(Pink, Purple))),
+            RecentSongItem("Perfect", "Ed Sheeran", Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))),
+            RecentSongItem("Hasi Ban Gaye", "Ami Mishra", Brush.linearGradient(listOf(Color(0xFF3B1D1D), Color(0xFF0F0A0A)))),
+            RecentSongItem("Photograph", "Ed Sheeran", Brush.linearGradient(listOf(Color(0xFF1F2937), Color(0xFF111827))))
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            recentItems.forEach { item ->
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.width(100.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(80.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
-                                    )
-                                )
-                            ),
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(item.brush)
+                            .clickable { },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
+                        Text(
+                            text = "▶",
+                            fontSize = 20.sp,
+                            color = Color.White
                         )
                     }
-                    Column {
-                        Text(
-                            text = item.title,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = item.subtitle,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = item.name,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = item.artist,
+                        fontSize = 10.5.sp,
+                        color = TextDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
     }
 }
 
-@Composable
-fun TrendingPlaylistList() {
-    val list = listOf(
-        PlayItem("Electro Pulse 2025", "Curated by AI", Icons.Default.Bookmark),
-        PlayItem("Coding Waves", "Focus Instrumental", Icons.Default.Bookmark),
-        PlayItem("Sunset Horizon", "Chill Lounge Beats", Icons.Default.Bookmark)
-    )
+data class RecentSongItem(
+    val name: String,
+    val artist: String,
+    val brush: Brush
+)
 
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(end = 12.dp)
-    ) {
-        items(list) { item ->
-            Card(
-                modifier = Modifier
-                    .width(180.dp)
-                    .height(110.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = item.title,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = item.subtitle,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-data class PlayItem(val title: String, val subtitle: String, val icon: ImageVector)
-
-// 4. Mini Player Placeholder
 @Composable
 fun MiniPlayerPlaceholder() {
-    Card(
+    GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .padding(horizontal = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-        )
+            .padding(horizontal = 14.dp),
+        shape = RoundedCornerShape(18.dp),
+        containerColor = Color(0xF2171429) // rgba(23,20,41,0.95)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Spinning logo / Glowing square placeholder
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "Mini Player Logo",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Pink, Purple)
+                            )
+                        )
+                )
 
                 Column {
                     Text(
-                        text = "Pulse Music AI Player",
-                        fontSize = 14.sp,
+                        text = "Believer",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "AI Music Assistant System • Ready",
+                        text = "Imagine Dragons",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        color = TextDim,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            // Controls Row
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Skip Previous",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-                IconButton(
-                    onClick = { },
+            // Controls
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "⏮",
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    modifier = Modifier.clickable { }
+                )
+                Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.primary)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Purple)
+                        .clickable { },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play",
-                        tint = Color.White
+                    Text(
+                        text = "⏸",
+                        fontSize = 11.sp,
+                        color = Color.White
                     )
                 }
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Skip Next",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+                Text(
+                    text = "⏭",
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    modifier = Modifier.clickable { }
+                )
+                Text(
+                    text = "☰",
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    modifier = Modifier.clickable { }
+                )
             }
         }
     }

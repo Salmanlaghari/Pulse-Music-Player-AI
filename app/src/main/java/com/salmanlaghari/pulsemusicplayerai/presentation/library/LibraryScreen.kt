@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -23,12 +25,9 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -42,11 +41,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
+import com.salmanlaghari.pulsemusicplayerai.theme.BgDeep
+import com.salmanlaghari.pulsemusicplayerai.theme.Pink
+import com.salmanlaghari.pulsemusicplayerai.theme.Purple
+import com.salmanlaghari.pulsemusicplayerai.theme.PurpleLight
+import com.salmanlaghari.pulsemusicplayerai.theme.TextDim
 
 @Composable
 fun LibraryScreen() {
@@ -56,12 +64,16 @@ fun LibraryScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(BgDeep, Color(0xFF120E24))
+                )
+            )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             // Header
             Row(
@@ -71,15 +83,15 @@ fun LibraryScreen() {
             ) {
                 Text(
                     text = "Library",
-                    style = MaterialTheme.typography.headlineLarge,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
                 IconButton(onClick = {}) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Add Playlist",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = PurpleLight,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -90,12 +102,12 @@ fun LibraryScreen() {
             // Premium Category Row / Tabs
             TabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.primary,
+                containerColor = Color.Transparent,
+                contentColor = PurpleLight,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
+                        color = PurpleLight
                     )
                 },
                 divider = {}
@@ -108,7 +120,8 @@ fun LibraryScreen() {
                             Text(
                                 text = title,
                                 fontSize = 14.sp,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == index) Color.White else TextDim
                             )
                         }
                     )
@@ -118,26 +131,40 @@ fun LibraryScreen() {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Dynamic items list based on selected category
-            when (selectedTab) {
-                0 -> LibraryItemsList(getPlaylists())
-                1 -> LibraryItemsList(getSongs())
-                2 -> LibraryItemsList(getArtists())
-                3 -> LibraryItemsList(getFolders())
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    0 -> LibraryItemsList(getPlaylists())
+                    1 -> LibraryItemsList(getSongs())
+                    2 -> LibraryItemsList(getArtists())
+                    3 -> LibraryItemsList(getFolders())
+                }
             }
 
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(160.dp)) // Safe padding for persistent floating components
         }
 
-        // Floating button to create playlists
+        // Floating button with gradient background to create playlists
         FloatingActionButton(
             onClick = { },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = Color.Transparent,
+            elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 90.dp, end = 16.dp)
+                .padding(bottom = 175.dp, end = 20.dp) // Adjusted to float above floating player perfectly
+                .shadow(elevation = 12.dp, shape = CircleShape, clip = false, ambientColor = Purple, spotColor = Pink)
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Purple, Pink)
+                    )
+                )
         ) {
-            Icon(Icons.Default.Add, contentDescription = "New Playlist")
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "New Playlist",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
@@ -148,12 +175,11 @@ fun LibraryItemsList(items: List<LibraryItem>) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(items) { item ->
-            Card(
+            GlassmorphicCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(72.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                shape = RoundedCornerShape(14.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -169,15 +195,15 @@ fun LibraryItemsList(items: List<LibraryItem>) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Purple.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.title,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                tint = PurpleLight,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
@@ -188,7 +214,7 @@ fun LibraryItemsList(items: List<LibraryItem>) {
                                 text = item.title,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -196,7 +222,7 @@ fun LibraryItemsList(items: List<LibraryItem>) {
                             Text(
                                 text = item.subtitle,
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                color = TextDim,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -207,7 +233,7 @@ fun LibraryItemsList(items: List<LibraryItem>) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More options",
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            tint = TextDim
                         )
                     }
                 }
