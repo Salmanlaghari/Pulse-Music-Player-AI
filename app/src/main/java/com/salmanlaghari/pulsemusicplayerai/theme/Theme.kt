@@ -1,52 +1,30 @@
 package com.salmanlaghari.pulsemusicplayerai.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PurplePrimary,
-    secondary = CyanSecondary,
-    tertiary = PurplePrimary,
-    background = DarkBackground,
-    surface = DarkSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onPrimary = DarkOnSurface,
-    onSecondary = DarkBackground,
-    onBackground = DarkOnBackground,
-    onSurface = DarkOnSurface,
-    onSurfaceVariant = DarkOnBackground
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = PurplePrimary,
-    secondary = CyanSecondary,
-    tertiary = PurplePrimary,
-    background = LightBackground,
-    surface = LightSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onPrimary = LightBackground,
-    onSecondary = LightOnSurface,
-    onBackground = LightOnBackground,
-    onSurface = LightOnSurface,
-    onSurfaceVariant = LightOnBackground
+private val GlassmorphicColorScheme = darkColorScheme(
+    primary = PurpleAccent,
+    secondary = BlueAccent,
+    tertiary = CyanGlow,
+    background = BaseNavyBlue,
+    surface = CardNavy,
+    surfaceVariant = CardNavy2,
+    onPrimary = TextLight,
+    onSecondary = BaseNavyBlue,
+    onBackground = TextLight,
+    onSurface = TextLight,
+    onSurfaceVariant = TextDim
 )
 
 @Composable
 fun PulseMusicPlayerAITheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Force premium dark theme consistently
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) {
-        DarkColorScheme
-    } else {
-        LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = GlassmorphicColorScheme,
         typography = Typography,
         content = content
     )
