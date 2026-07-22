@@ -2,31 +2,33 @@ package com.salmanlaghari.pulsemusicplayerai.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Design tokens from the HTML source of truth
-val BgDeep = Color(0xFF0C0A1A)
-val BgCard = Color(0xFF171429)
-val BgCard2 = Color(0xFF1D1836)
-val Purple = Color(0xFF7C3AED)
-val PurpleLight = Color(0xFFA78BFA)
-val Pink = Color(0xFFEC4899)
-val Blue = Color(0xFF3B82F6)
-val Green = Color(0xFF22C55E)
-val Text = Color(0xFFF5F3FF)
-val TextDim = Color(0xFF9D97B8)
-val BorderColor = Color(0x10FFFFFF) // rgba(255,255,255,0.06) is ~6%, 0x10 is ~6% (16/255)
+// Navy Blue Base (#0a1128) + Purple Accent shade
+val BaseNavyBlue = Color(0xFF0A1128)
+val BaseDeepNavy = Color(0xFF070B1E)
+val CardNavy = Color(0xFF111E47)
+val CardNavy2 = Color(0xFF16275C)
+val PurpleAccent = Color(0xFF8B5CF6)
+val BlueAccent = Color(0xFF3B82F6)
+val CyanGlow = Color(0xFF3FF0FF)
+val CyanGlowSoft = Color(0x803FF0FF)
 
-// Backward compatibility or generic mapping colors
-val PurplePrimary = Purple
-val CyanSecondary = Pink
+val TextLight = Color(0xFFF5F3FF)
+val TextDim = Color(0xFF9AA3BA)
+val GlassBg = Color(0x11FFFFFF) // rgba(255,255,255,0.06)
+val GlassBorder = Color(0x1AFFFFFF) // rgba(255,255,255,0.1)
 
-val DarkBackground = BgDeep
-val DarkSurface = BgCard
-val DarkSurfaceVariant = BgCard2
-val DarkOnBackground = Text
-val DarkOnSurface = Text
+// Backward Compatibility Mapping
+val PurplePrimary = PurpleAccent
+val CyanSecondary = BlueAccent
 
-val LightBackground = BgDeep
-val LightSurface = BgCard
-val LightSurfaceVariant = BgCard2
-val LightOnBackground = Text
-val LightOnSurface = Text
+val DarkBackground = BaseNavyBlue
+val DarkSurface = CardNavy
+val DarkSurfaceVariant = CardNavy2
+val DarkOnBackground = TextLight
+val DarkOnSurface = TextLight
+
+val LightBackground = BaseNavyBlue
+val LightSurface = CardNavy
+val LightSurfaceVariant = CardNavy2
+val LightOnBackground = TextLight
+val LightOnSurface = TextLight
