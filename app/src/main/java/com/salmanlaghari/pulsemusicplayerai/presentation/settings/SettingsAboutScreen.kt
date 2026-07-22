@@ -146,7 +146,7 @@ fun SettingsAboutScreen(onNavigateBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Version 1.5.0 (Session 5 Stable)",
+                    text = "v1.06.0 Stable (Session 8)",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )

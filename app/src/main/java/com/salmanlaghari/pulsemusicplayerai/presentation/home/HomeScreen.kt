@@ -417,7 +417,7 @@ fun ContinueListeningCard(
 
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(48.dp) // Large touch target
                     .clip(CircleShape)
                     .shadow(8.dp, CircleShape, ambientColor = PurplePrimary, spotColor = CardNavy2)
                     .background(
@@ -432,7 +432,7 @@ fun ContinueListeningCard(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Resume",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -677,7 +677,7 @@ private fun generateFallbackColor(song: Song): Color {
     return Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.6f, 0.35f)))
 }
 
-// Float player card styled with premium 3D Glassmorphism
+// Float player card styled with premium 3D Glassmorphism and Large Tappable Targets
 @Composable
 fun MiniPlayer(
     viewModel: MusicViewModel,
@@ -694,7 +694,7 @@ fun MiniPlayer(
         onClick = onExpand,
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .height(76.dp) // Height increased slightly for better tap target balance
             .padding(horizontal = 14.dp)
             .shadow(12.dp, RoundedCornerShape(18.dp), clip = false),
         shape = RoundedCornerShape(18.dp),
@@ -713,15 +713,12 @@ fun MiniPlayer(
                     modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
+                    SongArtwork(
+                        song = song,
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(PurplePrimary, CyanSecondary)
-                                )
-                            )
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                        iconSize = 22.dp
                     )
 
                     Column {
@@ -743,36 +740,47 @@ fun MiniPlayer(
                     }
                 }
 
+                // Spacious high-fidelity play controls with explicit 48dp touch targets
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "⏮",
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        modifier = Modifier.clickable { viewModel.skipToPrevious() }
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(PurplePrimary)
-                            .clickable { viewModel.togglePlayPause() },
-                        contentAlignment = Alignment.Center
+                    IconButton(
+                        onClick = { viewModel.skipToPrevious() },
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        Text(
-                            text = if (isPlaying) "⏸" else "▶",
-                            fontSize = 11.sp,
-                            color = Color.White
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous Song",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    Text(
-                        text = "⏭",
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        modifier = Modifier.clickable { viewModel.skipToNext() }
-                    )
+                    IconButton(
+                        onClick = { viewModel.togglePlayPause() },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(PurplePrimary)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play or Pause",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.skipToNext() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next Song",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
 
