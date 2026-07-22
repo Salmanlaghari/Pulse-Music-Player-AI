@@ -18,6 +18,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val debugConfig = getByName("debug")
+            storeFile = debugConfig.storeFile
+            storePassword = debugConfig.storePassword
+            keyAlias = debugConfig.keyAlias
+            keyPassword = debugConfig.keyPassword
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -25,6 +35,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Fix install issue by signing the release build with the same key
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
