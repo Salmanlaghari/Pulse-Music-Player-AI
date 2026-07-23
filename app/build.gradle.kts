@@ -12,20 +12,10 @@ android {
         applicationId = "com.salmanlaghari.pulsemusicplayerai"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.5.0"
+        versionCode = 10600
+        versionName = "1.06.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    signingConfigs {
-        create("release") {
-            // High-security developer certificate for Google Play Protect validation
-            storeFile = file("release.keystore")
-            storePassword = "pulsepassword"
-            keyAlias = "pulseKey"
-            keyPassword = "pulsepassword"
-        }
     }
 
     buildTypes {
@@ -35,7 +25,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

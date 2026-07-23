@@ -36,36 +36,25 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Build Signed Release APK
+      - name: Build Unsigned Release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Build Signed Release AAB
-        run: ./gradlew bundleRelease --no-daemon
-
-      - name: Rename and Prepare Build Artifacts
+      - name: Rename and Prepare APKs
         run: |
-          mkdir -p build-artifacts
-          cp app/build/outputs/apk/debug/app-debug.apk build-artifacts/Pulse-Music-Player-AI-Debug.apk
-          cp app/build/outputs/apk/release/app-release.apk build-artifacts/Pulse-Music-Player-AI-Release.apk
-          cp app/build/outputs/bundle/release/app-release.aab build-artifacts/Pulse-Music-Player-AI-Release.aab
+          mkdir -p build-apks
+          cp app/build/outputs/apk/debug/app-debug.apk build-apks/Pulse-Music-Player-AI-Debug.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk build-apks/Pulse-Music-Player-AI-Release.apk
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Pulse-Music-Player-AI-Debug
-          path: build-artifacts/Pulse-Music-Player-AI-Debug.apk
+          path: build-apks/Pulse-Music-Player-AI-Debug.apk
           if-no-files-found: error
 
-      - name: Upload Signed Release APK Artifact
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Pulse-Music-Player-AI-Release-APK
-          path: build-artifacts/Pulse-Music-Player-AI-Release.apk
-          if-no-files-found: error
-
-      - name: Upload Signed Release AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Pulse-Music-Player-AI-Release-AAB
-          path: build-artifacts/Pulse-Music-Player-AI-Release.aab
+          name: Pulse-Music-Player-AI-Release
+          path: build-apks/Pulse-Music-Player-AI-Release.apk
           if-no-files-found: error
