@@ -2,20 +2,33 @@ package com.salmanlaghari.pulsemusicplayerai.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Premium modern music app design colors
-val PurplePrimary = Color(0xFF7C4DFF)
-val CyanSecondary = Color(0xFF00E5FF)
+// Navy Blue Base (#0a1128) + Purple Accent shade
+val BaseNavyBlue = Color(0xFF0A1128)
+val BaseDeepNavy = Color(0xFF070B1E)
+val CardNavy = Color(0xFF111E47)
+val CardNavy2 = Color(0xFF16275C)
+val PurpleAccent = Color(0xFF8B5CF6)
+val BlueAccent = Color(0xFF3B82F6)
+val CyanGlow = Color(0xFF3FF0FF)
+val CyanGlowSoft = Color(0x803FF0FF)
 
-// Dark Theme: Black / Dark Gray with glowing purple accents
-val DarkBackground = Color(0xFF09090F)
-val DarkSurface = Color(0xFF121220)
-val DarkSurfaceVariant = Color(0xFF1E1E30)
-val DarkOnBackground = Color(0xFFF1F1F7)
-val DarkOnSurface = Color(0xFFFFFFFF)
+val TextLight = Color(0xFFF5F3FF)
+val TextDim = Color(0xFF9AA3BA)
+val GlassBg = Color(0x11FFFFFF) // rgba(255,255,255,0.06)
+val GlassBorder = Color(0x1AFFFFFF) // rgba(255,255,255,0.1)
 
-// Light Theme: Clean white with purple accents
-val LightBackground = Color(0xFFFFFFFF)
-val LightSurface = Color(0xFFF5F5FA)
-val LightSurfaceVariant = Color(0xFFEAEAF3)
-val LightOnBackground = Color(0xFF121220)
-val LightOnSurface = Color(0xFF09090F)
+// Backward Compatibility Mapping
+val PurplePrimary = PurpleAccent
+val CyanSecondary = BlueAccent
+
+val DarkBackground = BaseNavyBlue
+val DarkSurface = CardNavy
+val DarkSurfaceVariant = CardNavy2
+val DarkOnBackground = TextLight
+val DarkOnSurface = TextLight
+
+val LightBackground = BaseNavyBlue
+val LightSurface = CardNavy
+val LightSurfaceVariant = CardNavy2
+val LightOnBackground = TextLight
+val LightOnSurface = TextLight
