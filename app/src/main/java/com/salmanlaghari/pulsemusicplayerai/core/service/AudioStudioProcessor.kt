@@ -227,7 +227,12 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = timeUs - startUs
-                bufferInfo.flags = extractor.sampleFlags
+                bufferInfo.flags = extractor.sampleFlags and (
+                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                    )
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -330,7 +335,12 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = extractor.sampleFlags
+                bufferInfo.flags = extractor.sampleFlags and (
+                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                    )
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -399,7 +409,12 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = extractor.sampleFlags
+                bufferInfo.flags = extractor.sampleFlags and (
+                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                    )
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -476,7 +491,12 @@ class AudioStudioProcessor(private val context: Context) {
                     bufferInfo.offset = 0
                     bufferInfo.size = sampleSize
                     bufferInfo.presentationTimeUs = extractor.sampleTime
-                    bufferInfo.flags = extractor.sampleFlags
+                    bufferInfo.flags = extractor.sampleFlags and (
+                        MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                        MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
                     muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 }
                 extractor.advance()
@@ -549,7 +569,12 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = (extractor.sampleTime * speedFactor).toLong()
-                bufferInfo.flags = extractor.sampleFlags
+                bufferInfo.flags = extractor.sampleFlags and (
+                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                    )
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -773,7 +798,12 @@ class AudioStudioProcessor(private val context: Context) {
                     audioBufferInfo.offset = 0
                     audioBufferInfo.size = sampleSize
                     audioBufferInfo.presentationTimeUs = audioExtractor.sampleTime
-                    audioBufferInfo.flags = audioExtractor.sampleFlags
+                    audioBufferInfo.flags = audioExtractor.sampleFlags and (
+                        MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME or
+                        MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
 
                     muxer.writeSampleData(audioMuxerTrackIndex, audioBuffer, audioBufferInfo)
                     audioExtractor.advance()
@@ -999,7 +1029,7 @@ class AudioStudioProcessor(private val context: Context) {
             put(MediaStore.Video.Media.ALBUM, "Visualizer Video Exports")
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$musicFolder")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/PulseAudioStudio")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -1055,8 +1085,8 @@ class AudioStudioProcessor(private val context: Context) {
                         path = path,
                         uriString = itemUri.toString(),
                         size = size,
-                        duration = if (duration > 0) duration else 30000L,
-                        format = "MP4",
+                        duration = if (duration > 0) duration else 24000L,
+                        format = extension.uppercase(),
                         dateAdded = dateAdded * 1000L
                     )
                 }
@@ -1073,12 +1103,11 @@ class AudioStudioProcessor(private val context: Context) {
     private fun getMimeTypeFromExtension(ext: String): String {
         return when (ext.lowercase()) {
             "mp3" -> "audio/mpeg"
-            "wav" -> "audio/wav"
-            "aac" -> "audio/aac"
-            "flac" -> "audio/flac"
-            "ogg" -> "audio/ogg"
             "m4a" -> "audio/mp4"
-            else -> "audio/*"
+            "mp4" -> "video/mp4"
+            "wav" -> "audio/wav"
+            "flac" -> "audio/flac"
+            else -> "audio/mpeg"
         }
     }
 }
