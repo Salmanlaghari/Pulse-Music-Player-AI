@@ -27,10 +27,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
+import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.aihub.AIHubScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.HomeScreen
-import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayerPlaceholder
+import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayer
 import com.salmanlaghari.pulsemusicplayerai.presentation.library.LibraryScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsAboutScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsFeedbackScreen
@@ -38,6 +39,10 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivac
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsTermsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.SplashScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.FullPlayerScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.QueueScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.SearchScreen
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem(Screen.Home.route, "Home", Icons.Default.Home)
@@ -49,7 +54,8 @@ sealed class BottomNavItem(val route: String, val title: String, val icon: Image
 
 @Composable
 fun AppNavigation(
-    viewModel: MainViewModel,
+    mainViewModel: MainViewModel,
+    musicViewModel: MusicViewModel,
     isDarkTheme: Boolean
 ) {
     val navController = rememberNavController()
@@ -79,7 +85,10 @@ fun AppNavigation(
             if (showNavigationAndPlayer) {
                 Column {
                     // Modern Mini Player Floating over Bottom Navigation
-                    MiniPlayerPlaceholder()
+                    MiniPlayer(
+                        viewModel = musicViewModel,
+                        onExpand = { navController.navigate(Screen.FullPlayer.route) }
+                    )
 
                     NavigationBar(
                         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
@@ -140,10 +149,38 @@ fun AppNavigation(
                 })
             }
             composable(Screen.Home.route) {
-                HomeScreen()
+                HomeScreen(
+                    viewModel = musicViewModel,
+                    onNavigateToSearch = { navController.navigate(Screen.Search.route) },
+                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
+                    onNavigateToAIHub = {
+                        navController.navigate(Screen.AIHub.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToFavorites = {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToLibrary = {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToEqualizer = {
+                        navController.navigate(Screen.Equalizer.route)
+                    }
+                )
             }
             composable(Screen.Library.route) {
-                LibraryScreen()
+                LibraryScreen(viewModel = musicViewModel)
             }
             composable(Screen.AudioTools.route) {
                 AudioToolsScreen()
@@ -155,7 +192,7 @@ fun AppNavigation(
                 SettingsScreen(
                     isDarkTheme = isDarkTheme,
                     onDarkThemeChanged = { enabled ->
-                        viewModel.setDarkTheme(enabled)
+                        mainViewModel.setDarkTheme(enabled)
                     },
                     onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                     onNavigateToPrivacy = { navController.navigate(Screen.SettingsPrivacy.route) },
@@ -174,6 +211,34 @@ fun AppNavigation(
             }
             composable(Screen.SettingsFeedback.route) {
                 SettingsFeedbackScreen(onNavigateBack = { navController.popBackStack() })
+            }
+
+            // Playback routes
+            composable(Screen.FullPlayer.route) {
+                FullPlayerScreen(
+                    viewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onShowQueue = { navController.navigate(Screen.Queue.route) },
+                    onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
+                )
+            }
+            composable(Screen.Equalizer.route) {
+                EqualizerScreen(
+                    viewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Search.route) {
+                SearchScreen(
+                    viewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Queue.route) {
+                QueueScreen(
+                    viewModel = musicViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
         }
     }

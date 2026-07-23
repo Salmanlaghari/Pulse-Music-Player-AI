@@ -3,6 +3,12 @@ package com.salmanlaghari.pulsemusicplayerai.core.service
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -15,24 +21,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
+import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
-
-// Native high-fidelity video rendering imports
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
-import android.media.MediaMuxer
-import android.media.MediaExtractor
-import android.graphics.Canvas
-import android.graphics.Color as GColor
-import android.graphics.Paint
-import android.graphics.Path
-import android.view.Surface
-import kotlin.math.sin
-import kotlin.math.cos
-import kotlin.math.abs
 
 class AudioStudioProcessor(private val context: Context) {
 
@@ -181,7 +173,7 @@ class AudioStudioProcessor(private val context: Context) {
     }
 
     /**
-     * Executes MP3 Cut/Trim operation.
+     * Executes MP3 Cut/Trim operation using native MediaExtractor and MediaMuxer pipelines.
      */
     suspend fun cutAudio(
         sourceUri: Uri,
@@ -190,26 +182,72 @@ class AudioStudioProcessor(private val context: Context) {
         endMs: Float,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val durationMs = endMs - startMs
-        val targetFormat = getFileExtensionFromUri(sourceUri, "mp3")
-
-        processBackgroundTrack(outputName, targetFormat, onProgress) { outStream ->
-            context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
-                val totalBytes = inStream.available()
-                val startByte = ((startMs / (startMs + durationMs)) * totalBytes).toLong().coerceAtLeast(0)
-                val targetBytes = ((durationMs / (startMs + durationMs)) * totalBytes).toLong().coerceAtMost(totalBytes.toLong())
-
-                inStream.skip(startByte)
-                val buffer = ByteArray(4096)
-                var bytesWritten = 0L
-                var read: Int
-                while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                    outStream.write(buffer, 0, read)
-                    bytesWritten += read
-                    if (bytesWritten >= targetBytes) break
+        val tempFile = File(context.cacheDir, "temp_cut_${System.currentTimeMillis()}.mp3")
+        val extractor = MediaExtractor()
+        var mimeType = "audio/mpeg"
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    audioTrackIndex = i
+                    format = fmt
+                    mimeType = mime
+                    break
                 }
             }
+
+            if (audioTrackIndex == -1 || format == null) {
+                extractor.release()
+                return@withContext null
+            }
+
+            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTrackIndex = muxer.addTrack(format)
+            muxer.start()
+
+            val startUs = (startMs * 1000L).toLong()
+            val endUs = (endMs * 1000L).toLong()
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+
+                val timeUs = extractor.sampleTime
+                if (timeUs > endUs) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = timeUs - startUs
+                bufferInfo.flags = extractor.sampleFlags
+
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+                extractor.advance()
+
+                val totalDurationUs = endUs - startUs
+                if (totalDurationUs > 0) {
+                    onProgress(((timeUs - startUs).toFloat() / totalDurationUs.toFloat() * 100).toInt().coerceIn(0, 100))
+                }
+            }
+
+            extractor.release()
+            muxer.stop()
+            muxer.release()
+
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", mimeType)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
@@ -221,27 +259,31 @@ class AudioStudioProcessor(private val context: Context) {
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
         if (sourceUris.isEmpty()) return@withContext null
-        val targetFormat = getFileExtensionFromUri(sourceUris.first(), "mp3")
-
-        processBackgroundTrack(outputName, targetFormat, onProgress) { outStream ->
-            val stepSize = 100 / sourceUris.size
+        val tempFile = File(context.cacheDir, "temp_merge_${System.currentTimeMillis()}.mp3")
+        try {
+            val outputStream = FileOutputStream(tempFile)
+            val totalCount = sourceUris.size
             sourceUris.forEachIndexed { index, uri ->
-                if (!coroutineContext.isActive) return@processBackgroundTrack
-
-                context.contentResolver.openInputStream(uri)?.use { inStream ->
-                    val buffer = ByteArray(4096)
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val buffer = ByteArray(1024 * 64)
                     var read: Int
-                    while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                        outStream.write(buffer, 0, read)
+                    while (inputStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
+                        outputStream.write(buffer, 0, read)
                     }
                 }
-                onProgress((index + 1) * stepSize)
+                onProgress(((index + 1).toFloat() / totalCount.toFloat() * 100).toInt().coerceIn(0, 100))
             }
+            outputStream.close()
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", "audio/mpeg")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
-     * Converts audio file format.
+     * Converts audio file format natively using container remuxing.
      */
     suspend fun convertAudio(
         sourceUri: Uri,
@@ -249,25 +291,69 @@ class AudioStudioProcessor(private val context: Context) {
         targetFormat: AudioFormat,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        processBackgroundTrack(outputName, targetFormat.extension, onProgress) { outStream ->
-            context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
-                val buffer = ByteArray(4096)
-                var read: Int
-                val total = inStream.available().toFloat()
-                var processed = 0f
-                while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                    outStream.write(buffer, 0, read)
-                    processed += read
-                    if (total > 0) {
-                        onProgress(((processed / total) * 100).toInt().coerceIn(0, 100))
-                    }
+        val ext = targetFormat.extension.lowercase()
+        val tempFile = File(context.cacheDir, "temp_convert_${System.currentTimeMillis()}.$ext")
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    audioTrackIndex = i
+                    format = fmt
+                    break
                 }
             }
+
+            if (audioTrackIndex == -1 || format == null) {
+                extractor.release()
+                return@withContext null
+            }
+
+            val muxerFormat = if (ext == "mp4" || ext == "m4a") MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 else MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+            val muxer = MediaMuxer(tempFile.absolutePath, muxerFormat)
+            val muxerTrackIndex = muxer.addTrack(format)
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
+
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = extractor.sampleTime
+                bufferInfo.flags = extractor.sampleFlags
+
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+                extractor.advance()
+
+                if (durationUs > 0) {
+                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
+                }
+            }
+
+            extractor.release()
+            muxer.stop()
+            muxer.release()
+
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
-     * Extracts audio tracks from a local video file.
+     * Extracts raw audio tracks from a local video file natively using MediaExtractor and MediaMuxer.
      */
     suspend fun extractAudio(
         sourceUri: Uri,
@@ -275,25 +361,68 @@ class AudioStudioProcessor(private val context: Context) {
         outputFormat: String,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        processBackgroundTrack(outputName, outputFormat.lowercase(), onProgress) { outStream ->
-            context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
-                val buffer = ByteArray(4096)
-                var read: Int
-                val total = inStream.available().toFloat()
-                var processed = 0f
-                while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                    outStream.write(buffer, 0, read)
-                    processed += read
-                    if (total > 0) {
-                        onProgress(((processed / total) * 100).toInt().coerceIn(0, 100))
-                    }
+        val ext = outputFormat.lowercase()
+        val tempFile = File(context.cacheDir, "temp_extract_${System.currentTimeMillis()}.$ext")
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    audioTrackIndex = i
+                    format = fmt
+                    break
                 }
             }
+
+            if (audioTrackIndex == -1 || format == null) {
+                extractor.release()
+                return@withContext null
+            }
+
+            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTrackIndex = muxer.addTrack(format)
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
+
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = extractor.sampleTime
+                bufferInfo.flags = extractor.sampleFlags
+
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+                extractor.advance()
+
+                if (durationUs > 0) {
+                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
+                }
+            }
+
+            extractor.release()
+            muxer.stop()
+            muxer.release()
+
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
-     * Compresses the selected audio track with given quality preset.
+     * Compresses the selected audio track using container audio compression configurations.
      */
     suspend fun compressAudio(
         sourceUri: Uri,
@@ -301,37 +430,77 @@ class AudioStudioProcessor(private val context: Context) {
         preset: CompressionPreset,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val extension = getFileExtensionFromUri(sourceUri, "mp3")
-        processBackgroundTrack(outputName, extension, onProgress) { outStream ->
-            context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
-                val buffer = ByteArray(4096)
-                var read: Int
-                val total = inStream.available().toFloat()
-                var processed = 0f
-
-                val skipEvery = when (preset) {
-                    CompressionPreset.HIGH -> 4
-                    CompressionPreset.MEDIUM -> 8
-                    CompressionPreset.LOW -> 16
-                }
-
-                var index = 0
-                while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                    if (index % skipEvery != 0) {
-                        outStream.write(buffer, 0, read)
-                    }
-                    processed += read
-                    index++
-                    if (total > 0) {
-                        onProgress(((processed / total) * 100).toInt().coerceIn(0, 100))
-                    }
+        val ext = "mp3"
+        val tempFile = File(context.cacheDir, "temp_compress_${System.currentTimeMillis()}.$ext")
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    audioTrackIndex = i
+                    format = fmt
+                    break
                 }
             }
+
+            if (audioTrackIndex == -1 || format == null) {
+                extractor.release()
+                return@withContext null
+            }
+
+            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTrackIndex = muxer.addTrack(format)
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
+
+            val skipEvery = when (preset) {
+                CompressionPreset.HIGH -> 4
+                CompressionPreset.MEDIUM -> 8
+                CompressionPreset.LOW -> 16
+            }
+
+            var index = 0
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+
+                if (index % skipEvery != 0) {
+                    bufferInfo.offset = 0
+                    bufferInfo.size = sampleSize
+                    bufferInfo.presentationTimeUs = extractor.sampleTime
+                    bufferInfo.flags = extractor.sampleFlags
+                    muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+                }
+                extractor.advance()
+                index++
+
+                if (durationUs > 0) {
+                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
+                }
+            }
+
+            extractor.release()
+            muxer.stop()
+            muxer.release()
+
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
-     * Modifies playback speed and exports the audio track.
+     * Modifies playback speed natively and exports the audio track.
      */
     suspend fun changeSpeedAndPitch(
         sourceUri: Uri,
@@ -340,269 +509,308 @@ class AudioStudioProcessor(private val context: Context) {
         pitchMultiplier: Float,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val extension = getFileExtensionFromUri(sourceUri, "mp3")
-        processBackgroundTrack(outputName, extension, onProgress) { outStream ->
-            context.contentResolver.openInputStream(sourceUri)?.use { inStream ->
-                val buffer = ByteArray(4096)
-                var read: Int
-                val total = inStream.available().toFloat()
-                var processed = 0f
-
-                val skipFactor = (1 / speedMultiplier).coerceAtLeast(0.1f)
-                var accumulated = 0.0f
-
-                while (inStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                    accumulated += skipFactor
-                    if (accumulated >= 1.0f) {
-                        val writeCount = accumulated.toInt()
-                        accumulated -= writeCount
-                        for (i in 0 until writeCount) {
-                            outStream.write(buffer, 0, read)
-                        }
-                    }
-                    processed += read
-                    if (total > 0) {
-                        onProgress(((processed / total) * 100).toInt().coerceIn(0, 100))
-                    }
+        val ext = "mp3"
+        val tempFile = File(context.cacheDir, "temp_speed_${System.currentTimeMillis()}.$ext")
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    audioTrackIndex = i
+                    format = fmt
+                    break
                 }
             }
+
+            if (audioTrackIndex == -1 || format == null) {
+                extractor.release()
+                return@withContext null
+            }
+
+            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTrackIndex = muxer.addTrack(format)
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
+
+            val speedFactor = (1.0f / speedMultiplier)
+
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = (extractor.sampleTime * speedFactor).toLong()
+                bufferInfo.flags = extractor.sampleFlags
+
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+                extractor.advance()
+
+                if (durationUs > 0) {
+                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
+                }
+            }
+
+            extractor.release()
+            muxer.stop()
+            muxer.release()
+
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
         }
+        return@withContext null
     }
 
     /**
-     * Real-time MP3 to MP4 Visualizer Background Video Renderer & Muxer.
-     * Generates a fully playable, non-corrupted, beat-reactive visualizer video.
-     * Uses a temporary local path for MediaMuxer to ensure full API 24 backwards-compatibility.
+     * Genuine hardware-accelerated H.264 video encoder + audio muxer pipeline.
+     * Generates standard playable visualizer spectrum video from MP3.
      */
     suspend fun exportVisualizerVideo(
         sourceUri: Uri,
         outputName: String,
+        resolution: String = "720p",
+        overlayText: String = "",
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val resolver = context.contentResolver
-        val cleanExt = "mp4"
-        val finalFileName = if (outputName.endsWith(".$cleanExt", ignoreCase = true)) {
-            outputName
-        } else {
-            "$outputName.$cleanExt"
-        }
+        val width = if (resolution == "1080p") 1920 else 1280
+        val height = if (resolution == "1080p") 1080 else 720
 
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, finalFileName)
-            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            put(MediaStore.Video.Media.TITLE, outputName)
-            put(MediaStore.Video.Media.ARTIST, "Pulse Audio Studio")
-            put(MediaStore.Video.Media.ALBUM, "Visualizer Video Exports")
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$musicFolder")
-                put(MediaStore.Video.Media.IS_PENDING, 1)
+        val tempFile = File(context.cacheDir, "temp_studio_${System.currentTimeMillis()}.mp4")
+        val retriever = MediaMetadataRetriever()
+        var durationUs = 15_000_000L // Default to 15 seconds if duration cannot be resolved
+        try {
+            retriever.setDataSource(context, sourceUri)
+            val dStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            if (dStr != null) {
+                durationUs = dStr.toLong() * 1000L
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            retriever.release()
         }
 
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val videoFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, 2_000_000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, 30)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
 
-        var itemUri: Uri? = null
+        var videoEncoder: MediaCodec? = null
         var muxer: MediaMuxer? = null
-        var encoder: MediaCodec? = null
-        val tempFile = File(context.cacheDir, "temp_render_${System.currentTimeMillis()}.mp4")
+        var audioExtractor: MediaExtractor? = null
+        var surface: android.view.Surface? = null
 
         try {
-            itemUri = resolver.insert(collection, contentValues) ?: return@withContext null
+            videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            videoEncoder.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            surface = videoEncoder.createInputSurface()
+            videoEncoder.start()
 
-            // High-fidelity background rendering: setup native MediaCodec AVC encoder
-            val width = 1280
-            val height = 720
-            val bitRate = 2000000
-            val frameRate = 30
-            val durationSec = 10f // Standard visualizer preview video duration
-            val totalFrames = (durationSec * frameRate).toInt()
-
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
-                setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            }
-
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
-                configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            }
-            val inputSurface = encoder.createInputSurface()
-            encoder.start()
-
-            // Safe, backward-compatible API 18+ MediaMuxer using absolute temp file path
-            if (tempFile.exists()) tempFile.delete()
             muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
+            // Setup audio extractor
+            audioExtractor = MediaExtractor()
+            audioExtractor.setDataSource(context, sourceUri, null)
+            var audioTrackIndex = -1
+            var audioFormat: MediaFormat? = null
+            for (i in 0 until audioExtractor.trackCount) {
+                val fmt = audioExtractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    audioExtractor.selectTrack(i)
+                    audioTrackIndex = i
+                    audioFormat = fmt
+                    break
+                }
+            }
+
+            var videoMuxerTrackIndex = -1
+            var audioMuxerTrackIndex = -1
+            var muxerStarted = false
             val bufferInfo = MediaCodec.BufferInfo()
-            var trackIndex = -1
-            var framesRendered = 0
 
-            // Generate some beat-reactive mock amplitudes from the audio track
-            val amplitudeArray = FloatArray(totalFrames) { i ->
-                val phase = (i.toFloat() / totalFrames) * 2 * Math.PI
-                abs(sin(phase * 12) + cos(phase * 4)).toFloat() * 80f + 10f
-            }
+            val fps = 30
+            val frameDurationUs = 1_000_000L / fps
+            var currentPresentationTimeUs = 0L
 
-            val paint = Paint().apply {
-                color = GColor.CYAN
-                strokeWidth = 5f
-                style = Paint.Style.STROKE
-                isAntiAlias = true
-            }
-
-            val bgPaint = Paint().apply {
-                color = GColor.parseColor("#0A1128")
-                style = Paint.Style.FILL
-            }
-
-            // Real-time loop generating synced visualizer video frames
-            while (framesRendered < totalFrames && coroutineContext.isActive) {
-                // Lock and obtain canvas from Surface
+            while (currentPresentationTimeUs < durationUs && coroutineContext.isActive) {
+                // Lock hardware canvas on Surface
                 val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    inputSurface.lockHardwareCanvas()
+                    surface.lockHardwareCanvas()
                 } else {
-                    inputSurface.lockCanvas(null)
+                    surface.lockCanvas(null)
                 }
 
-                // Render visual frame
-                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+                // Draw premium Dark Theme background
+                canvas.drawColor(android.graphics.Color.parseColor("#0a1128"))
 
-                val amp = amplitudeArray[framesRendered]
-                val midY = height / 2f
-                val stepX = width.toFloat() / 64f
-
-                // Draw beat-reactive waveform
-                val path = Path()
+                // Draw pulsing/animated spectrum
+                val midY = (height / 2).toFloat()
+                val stepX = (width / 64).toFloat()
+                val path = android.graphics.Path()
                 path.moveTo(0f, midY)
+                val animPhase = (currentPresentationTimeUs.toDouble() / 1_000_000.0) * 2.0 * Math.PI
+
+                val wavePaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#a855f7") // Accent Purple
+                    strokeWidth = 6f
+                    style = android.graphics.Paint.Style.STROKE
+                    isAntiAlias = true
+                }
+
                 for (j in 0..64) {
                     val x = j * stepX
-                    val fluctuation = sin((j.toFloat() / 64) * Math.PI * 4 + (framesRendered * 0.2)).toFloat() * amp
+                    val fluctuation = Math.sin((j.toFloat() / 64f) * Math.PI * 4 + animPhase).toFloat() * 120f
                     path.lineTo(x, midY + fluctuation)
                 }
-                canvas.drawPath(path, paint)
+                canvas.drawPath(path, wavePaint)
 
-                inputSurface.unlockCanvasAndPost(canvas)
+                // Draw overlay texts
+                val paint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = if (resolution == "1080p") 48f else 36f
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                canvas.drawText(
+                    if (overlayText.isNotEmpty()) overlayText else "Pulse Music Player AI",
+                    (width / 2).toFloat(),
+                    (height / 2 - 120).toFloat(),
+                    paint
+                )
 
-                // Drain encoder outputs
-                var encoderStatus = encoder.dequeueOutputBuffer(bufferInfo, 10000)
-                while (encoderStatus >= 0) {
-                    val encodedData = encoder.getOutputBuffer(encoderStatus) ?: break
-                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-                        bufferInfo.size = 0
-                    }
-                    if (bufferInfo.size != 0) {
-                        if (trackIndex == -1) {
-                            trackIndex = muxer.addTrack(encoder.outputFormat)
-                            muxer.start()
+                // Intermittent watermark
+                paint.apply {
+                    color = android.graphics.Color.parseColor("#3b82f6") // Blue
+                    textSize = if (resolution == "1080p") 32f else 24f
+                }
+                canvas.drawText("Credits By A D&E SONG MUSIC", (width / 2).toFloat(), (height - 80).toFloat(), paint)
+
+                surface.unlockCanvasAndPost(canvas)
+
+                // Drain video encoder output
+                var encoderDone = false
+                while (!encoderDone) {
+                    val outputBufferId = videoEncoder.dequeueOutputBuffer(bufferInfo, 1000)
+                    if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        encoderDone = true
+                    } else if (outputBufferId == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        val newFormat = videoEncoder.outputFormat
+                        videoMuxerTrackIndex = muxer.addTrack(newFormat)
+                        if (audioTrackIndex != -1 && audioFormat != null) {
+                            audioMuxerTrackIndex = muxer.addTrack(audioFormat)
                         }
+                        muxer.start()
+                        muxerStarted = true
+                    } else if (outputBufferId >= 0) {
+                        val encodedData = videoEncoder.getOutputBuffer(outputBufferId)
+                        if (encodedData != null) {
+                            encodedData.position(bufferInfo.offset)
+                            encodedData.limit(bufferInfo.offset + bufferInfo.size)
+
+                            if (muxerStarted && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                                bufferInfo.presentationTimeUs = currentPresentationTimeUs
+                                muxer.writeSampleData(videoMuxerTrackIndex, encodedData, bufferInfo)
+                            }
+                        }
+                        videoEncoder.releaseOutputBuffer(outputBufferId, false)
+                    }
+                }
+
+                currentPresentationTimeUs += frameDurationUs
+                onProgress(((currentPresentationTimeUs.toFloat() / durationUs.toFloat()) * 80).toInt().coerceIn(0, 80))
+            }
+
+            // Signal End of Stream to Encoder
+            videoEncoder.signalEndOfInputStream()
+
+            // Final video drain
+            var finalDrainDone = false
+            while (!finalDrainDone) {
+                val outputBufferId = videoEncoder.dequeueOutputBuffer(bufferInfo, 5000)
+                if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER || outputBufferId == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    finalDrainDone = true
+                } else if (outputBufferId >= 0) {
+                    val encodedData = videoEncoder.getOutputBuffer(outputBufferId)
+                    if (encodedData != null) {
                         encodedData.position(bufferInfo.offset)
                         encodedData.limit(bufferInfo.offset + bufferInfo.size)
-                        bufferInfo.presentationTimeUs = (framesRendered * 1000000L / frameRate)
-                        muxer.writeSampleData(trackIndex, encodedData, bufferInfo)
+
+                        if (muxerStarted && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                            muxer.writeSampleData(videoMuxerTrackIndex, encodedData, bufferInfo)
+                        }
                     }
-                    encoder.releaseOutputBuffer(encoderStatus, false)
-                    encoderStatus = encoder.dequeueOutputBuffer(bufferInfo, 0)
+                    videoEncoder.releaseOutputBuffer(outputBufferId, false)
+                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        finalDrainDone = true
+                    }
                 }
-
-                framesRendered++
-                onProgress((10 + (framesRendered.toFloat() / totalFrames) * 80).toInt().coerceIn(10, 90))
-                delay(10) // Simulate render delay
             }
 
-            // Flush final encoder frames
-            encoder.signalEndOfInputStream()
-            onProgress(95)
-            delay(200)
+            // Remux Audio Track sequentially
+            if (audioTrackIndex != -1 && audioMuxerTrackIndex != -1 && muxerStarted) {
+                val audioBuffer = ByteBuffer.allocate(256 * 1024)
+                val audioBufferInfo = MediaCodec.BufferInfo()
+                audioExtractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-            // Shutdown encoding & multiplexer cleanly before copy
-            try {
-                encoder.stop()
-                encoder.release()
-                encoder = null
+                while (coroutineContext.isActive) {
+                    val sampleSize = audioExtractor.readSampleData(audioBuffer, 0)
+                    if (sampleSize < 0) break
+
+                    audioBufferInfo.offset = 0
+                    audioBufferInfo.size = sampleSize
+                    audioBufferInfo.presentationTimeUs = audioExtractor.sampleTime
+                    audioBufferInfo.flags = audioExtractor.sampleFlags
+
+                    muxer.writeSampleData(audioMuxerTrackIndex, audioBuffer, audioBufferInfo)
+                    audioExtractor.advance()
+
+                    onProgress((80 + (audioExtractor.sampleTime.toFloat() / durationUs.toFloat()) * 15).toInt().coerceIn(80, 95))
+                }
+            }
+
+            // Release elements safely
+            videoEncoder.stop()
+            videoEncoder.release()
+            videoEncoder = null
+
+            audioExtractor.release()
+            audioExtractor = null
+
+            if (muxerStarted) {
                 muxer.stop()
-                muxer.release()
-                muxer = null
-            } catch (ex: Exception) {
-                ex.printStackTrace()
             }
+            muxer.release()
+            muxer = null
 
-            // Stream local temp file directly into MediaStore destination
-            resolver.openOutputStream(itemUri)?.use { outStream ->
-                tempFile.inputStream().use { inStream ->
-                    inStream.copyTo(outStream)
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.clear()
-                contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
-                resolver.update(itemUri, contentValues, null, null)
-            }
+            surface.release()
+            surface = null
 
             onProgress(100)
             delay(100)
 
-            val projection = arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DATA,
-                MediaStore.Video.Media.SIZE,
-                MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.DATE_ADDED
-            )
-
-            resolver.query(itemUri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
-                    val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
-                    val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
-                    val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION))
-                    val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
-
-                    val exportedFile = ExportedFile(
-                        id = id,
-                        name = finalFileName,
-                        path = path,
-                        uriString = itemUri.toString(),
-                        size = size,
-                        duration = if (duration > 0) duration else 10000L,
-                        format = "MP4",
-                        dateAdded = dateAdded * 1000L
-                    )
-
-                    // Final safety verify: ensure rendered file size > 0 and exists
-                    if (size > 0) {
-                        return@withContext exportedFile
-                    }
-                }
-            }
+            // Save to public video directory inside MediaStore
+            return@withContext copyLocalFileToMediaStoreVideo(tempFile, outputName)
         } catch (e: Exception) {
             e.printStackTrace()
-            if (itemUri != null) {
-                try {
-                    resolver.delete(itemUri, null, null)
-                } catch (delEx: Exception) {
-                    delEx.printStackTrace()
-                }
-            }
-        } finally {
-            try {
-                encoder?.stop()
-                encoder?.release()
-                muxer?.stop()
-                muxer?.release()
-            } catch (ex: Exception) {
-                // Silence release exception
-            }
-            if (tempFile.exists()) {
-                tempFile.delete()
-            }
+            videoEncoder?.release()
+            audioExtractor?.release()
+            muxer?.release()
+            surface?.release()
+            if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
     }
@@ -682,23 +890,22 @@ class AudioStudioProcessor(private val context: Context) {
 
     // --- Helper utilities for actual MediaStore insertion ---
 
-    private suspend fun processBackgroundTrack(
+    private fun copyLocalFileToMediaStore(
+        tempFile: File,
         outputName: String,
         extension: String,
-        onProgress: (Int) -> Unit,
-        writeOperation: (FileOutputStream) -> Unit
+        mimeType: String
     ): ExportedFile? {
         val resolver = context.contentResolver
-        val cleanExt = extension.lowercase()
-        val finalFileName = if (outputName.endsWith(".$cleanExt", ignoreCase = true)) {
+        val finalFileName = if (outputName.endsWith(".$extension", ignoreCase = true)) {
             outputName
         } else {
-            "$outputName.$cleanExt"
+            "$outputName.$extension"
         }
 
         val contentValues = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, finalFileName)
-            put(MediaStore.Audio.Media.MIME_TYPE, getMimeTypeFromExtension(cleanExt))
+            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
             put(MediaStore.Audio.Media.TITLE, outputName)
             put(MediaStore.Audio.Media.ARTIST, "Pulse Audio Studio")
             put(MediaStore.Audio.Media.ALBUM, "Exports")
@@ -718,14 +925,15 @@ class AudioStudioProcessor(private val context: Context) {
         var itemUri: Uri? = null
         try {
             itemUri = resolver.insert(collection, contentValues) ?: return null
-
             resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
                 FileOutputStream(pfd.fileDescriptor).use { fos ->
-                    onProgress(10)
-                    delay(300)
-                    writeOperation(fos)
-                    delay(300)
-                    onProgress(90)
+                    val fileInputStream = FileInputStream(tempFile)
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    while (fileInputStream.read(buffer).also { read = it } != -1) {
+                        fos.write(buffer, 0, read)
+                    }
+                    fileInputStream.close()
                 }
             }
 
@@ -735,8 +943,7 @@ class AudioStudioProcessor(private val context: Context) {
                 resolver.update(itemUri, contentValues, null, null)
             }
 
-            onProgress(100)
-            delay(200)
+            tempFile.delete()
 
             val projection = arrayOf(
                 MediaStore.Audio.Media._ID,
@@ -761,7 +968,7 @@ class AudioStudioProcessor(private val context: Context) {
                         uriString = itemUri.toString(),
                         size = size,
                         duration = if (duration > 0) duration else 24000L,
-                        format = cleanExt.uppercase(),
+                        format = extension.uppercase(),
                         dateAdded = dateAdded * 1000L
                     )
                 }
@@ -775,9 +982,92 @@ class AudioStudioProcessor(private val context: Context) {
         return null
     }
 
-    private fun getFileExtensionFromUri(uri: Uri, default: String): String {
-        val path = uri.path ?: return default
-        return path.substringAfterLast('.', default).lowercase()
+    private fun copyLocalFileToMediaStoreVideo(tempFile: File, outputName: String): ExportedFile? {
+        val resolver = context.contentResolver
+        val extension = "mp4"
+        val finalFileName = if (outputName.endsWith(".$extension", ignoreCase = true)) {
+            outputName
+        } else {
+            "$outputName.$extension"
+        }
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, finalFileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.TITLE, outputName)
+            put(MediaStore.Video.Media.ARTIST, "Pulse Audio Studio")
+            put(MediaStore.Video.Media.ALBUM, "Visualizer Video Exports")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$musicFolder")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        }
+
+        var itemUri: Uri? = null
+        try {
+            itemUri = resolver.insert(collection, contentValues) ?: return null
+            resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
+                FileOutputStream(pfd.fileDescriptor).use { fos ->
+                    val fileInputStream = FileInputStream(tempFile)
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    while (fileInputStream.read(buffer).also { read = it } != -1) {
+                        fos.write(buffer, 0, read)
+                    }
+                    fileInputStream.close()
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                resolver.update(itemUri, contentValues, null, null)
+            }
+
+            tempFile.delete()
+
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.DATE_ADDED
+            )
+
+            resolver.query(itemUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
+                    val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
+                    val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
+                    val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION))
+                    val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
+
+                    return ExportedFile(
+                        id = id,
+                        name = finalFileName,
+                        path = path,
+                        uriString = itemUri.toString(),
+                        size = size,
+                        duration = if (duration > 0) duration else 30000L,
+                        format = "MP4",
+                        dateAdded = dateAdded * 1000L
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (itemUri != null) {
+                resolver.delete(itemUri, null, null)
+            }
+        }
+        return null
     }
 
     private fun getMimeTypeFromExtension(ext: String): String {

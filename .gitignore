@@ -6,9 +6,6 @@ app/build/
 # Gradle files
 .gradle/
 **/.gradle/
-gradlew
-gradlew.bat
-gradle/wrapper/
 
 # Android Studio / IntelliJ IDEA
 .idea/
@@ -22,3 +19,7 @@ local.properties
 # OS files
 .DS_Store
 Thumbs.db
+
+# Keystore secrets
+*.keystore
+*.jks

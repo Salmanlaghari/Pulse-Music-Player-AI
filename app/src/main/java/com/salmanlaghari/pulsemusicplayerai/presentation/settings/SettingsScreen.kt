@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 @Composable
 fun SettingsScreen(
     isDarkTheme: Boolean,
@@ -197,13 +198,13 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Release Build 1.0.0 (Session 1 Stable)",
+                        text = "Release Build v1.06.0 Stable (Session 8)",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
                 Text(
-                    text = "v1.0.0",
+                    text = "v1.06.0",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
