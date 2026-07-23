@@ -390,7 +390,7 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Flagship Large Album Art Box (Increased size to 300dp) with dynamic glowing blue-to-green borders
+                    // Flagship Large Album Art Box (Increased size to 300dp) with dynamic glowing borders
                     Box(
                         modifier = Modifier
                             .size(300.dp)
@@ -400,9 +400,9 @@ fun FullPlayerScreen(
                                     2.dp,
                                     Brush.sweepGradient(
                                         colors = listOf(
-                                            Color(0xFF3B82F6), // Beautiful Blue
-                                            Color(0xFF10B981), // Beautiful Green
-                                            Color(0xFF3B82F6)  // Beautiful Blue
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.secondary,
+                                            MaterialTheme.colorScheme.primary
                                         )
                                     )
                                 ),
@@ -435,9 +435,9 @@ fun FullPlayerScreen(
                                         .background(
                                             brush = Brush.sweepGradient(
                                                 colors = listOf(
-                                                    Color(0xFF3B82F6),
-                                                    Color(0xFF10B981),
-                                                    Color(0xFF3B82F6)
+                                                    MaterialTheme.colorScheme.primary,
+                                                    MaterialTheme.colorScheme.secondary,
+                                                    MaterialTheme.colorScheme.primary
                                                 )
                                             )
                                         ),
@@ -458,50 +458,80 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // First row: control icons row (Visualizer toggle, EQ, Rotate, Fullscreen)
+                    // Studio Visualizer Action Dock Panel
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 32.dp),
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Visualizer toggle
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showVisualizer = !showVisualizer
                             },
                             modifier = Modifier.background(
-                                if (showVisualizer) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = CircleShape
-                            ).size(48.dp)
+                                if (showVisualizer) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            ).size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GraphicEq,
                                 contentDescription = "Toggle Visualizer",
-                                tint = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(24.dp)
+                                tint = if (showVisualizer) Color.White else MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // EQ
+                        // Preset Selector: Opens the Premium Visualizer Studio Menu Bottom Sheet
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), shape = RoundedCornerShape(10.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showVisualizerMenu = true
+                                }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (showVisualizer) currentPreset.displayName else "Visualizer Off",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
                         IconButton(
                             onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onNavigateToEqualizer()
+                                if (showVisualizer) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    sensitivityScale = when (sensitivityScale) {
+                                        1.0f -> 1.5f
+                                        1.5f -> 2.0f
+                                        2.0f -> 0.5f
+                                        else -> 1.0f
+                                    }
+                                }
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(38.dp),
+                            enabled = showVisualizer
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
-                                contentDescription = "Equalizer Studio",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = "Sensitivity",
+                                tint = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // Rotate
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -509,95 +539,83 @@ fun FullPlayerScreen(
                             },
                             modifier = Modifier.background(
                                 if (isOrientationLocked) MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = CircleShape
-                            ).size(48.dp)
+                                shape = RoundedCornerShape(10.dp)
+                            ).size(38.dp)
                         ) {
                             Icon(
                                 imageVector = if (isOrientationLocked) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
-                                contentDescription = "Orientation Settings",
+                                contentDescription = "Orientation Lock",
                                 tint = if (isOrientationLocked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // Fullscreen
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 isImmersiveFullscreen = true
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(38.dp),
+                            enabled = showVisualizer
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Fullscreen,
-                                contentDescription = "Enter Immersive Mode",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(26.dp)
+                                contentDescription = "Enter Fullscreen",
+                                tint = if (showVisualizer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Second row: secondary row (bar chart icon, speed icon, sleep timer icon)
+                    // Extra Interactive Row: Equalizer, Speed and Sleep Timer triggers
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 48.dp),
+                            .padding(horizontal = 32.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Bar chart icon (Visualizer Presets Menu)
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showVisualizerMenu = true
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onNavigateToEqualizer()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Equalizer,
-                                contentDescription = "Visualizer Presets Menu",
+                                contentDescription = "Equalizer",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        // Speed icon
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showAdjustmentsSheet = true
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showAdjustmentsSheet = true
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Speed,
                                 contentDescription = "Playback Parameters",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        // Sleep timer icon
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showSleepTimerSheet = true
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showSleepTimerSheet = true
+                        }) {
                             Box(contentAlignment = Alignment.TopEnd) {
                                 Icon(
                                     imageVector = Icons.Default.Timer,
                                     contentDescription = "Sleep Timer",
                                     tint = if (sleepTimerMs > 0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                                 if (sleepTimerMs > 0) {
                                     Box(
                                         modifier = Modifier
-                                            .size(6.dp)
+                                            .size(8.dp)
                                             .clip(CircleShape)
                                             .background(MaterialTheme.colorScheme.secondary)
                                     )

@@ -329,9 +329,9 @@ fun VideoPreviewEditScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Render details:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("Filename: ${file.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("Duration: ${formatTime(file.duration)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                Text("Filesize: ${formatBytes(file.size)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text("Filename: ${file.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Duration: ${formatTime(file.duration)}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                Text("Filesize: ${formatBytes(file.size)}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
             }
         }
 
