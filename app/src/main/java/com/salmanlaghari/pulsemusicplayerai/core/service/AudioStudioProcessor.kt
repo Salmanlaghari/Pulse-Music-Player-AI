@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
@@ -29,6 +30,29 @@ import kotlin.coroutines.coroutineContext
 class AudioStudioProcessor(private val context: Context) {
 
     private val musicFolder = "PulseAudioStudio"
+
+    @IntDef(
+        MediaCodec.BUFFER_FLAG_SYNC_FRAME,
+        MediaCodec.BUFFER_FLAG_KEY_FRAME,
+        MediaCodec.BUFFER_FLAG_CODEC_CONFIG,
+        MediaCodec.BUFFER_FLAG_END_OF_STREAM,
+        flag = true
+    )
+    @Retention(AnnotationRetention.SOURCE)
+    private annotation class BufferFlags
+
+    /**
+     * Sanitizes extractor flags to only include valid MediaCodec buffer flags.
+     */
+    @BufferFlags
+    private fun sanitizeFlags(extractorFlags: Int): Int {
+        return extractorFlags and (
+            MediaCodec.BUFFER_FLAG_SYNC_FRAME or
+            MediaCodec.BUFFER_FLAG_KEY_FRAME or
+            MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
+            MediaCodec.BUFFER_FLAG_END_OF_STREAM
+            )
+    }
 
     /**
      * Scans the MediaStore for any files (audio and video) exported into the PulseAudioStudio directory.
@@ -227,12 +251,7 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = timeUs - startUs
-                bufferInfo.flags = extractor.sampleFlags and (
-                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                    )
+                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -335,12 +354,7 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = extractor.sampleFlags and (
-                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                    )
+                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -409,12 +423,7 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = extractor.sampleFlags and (
-                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                    )
+                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -491,12 +500,7 @@ class AudioStudioProcessor(private val context: Context) {
                     bufferInfo.offset = 0
                     bufferInfo.size = sampleSize
                     bufferInfo.presentationTimeUs = extractor.sampleTime
-                    bufferInfo.flags = extractor.sampleFlags and (
-                        MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                        MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                        MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        )
+                    bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
                     muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 }
                 extractor.advance()
@@ -569,12 +573,7 @@ class AudioStudioProcessor(private val context: Context) {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = (extractor.sampleTime * speedFactor).toLong()
-                bufferInfo.flags = extractor.sampleFlags and (
-                    MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                    MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                    )
+                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
 
                 muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
@@ -798,12 +797,7 @@ class AudioStudioProcessor(private val context: Context) {
                     audioBufferInfo.offset = 0
                     audioBufferInfo.size = sampleSize
                     audioBufferInfo.presentationTimeUs = audioExtractor.sampleTime
-                    audioBufferInfo.flags = audioExtractor.sampleFlags and (
-                        MediaCodec.BUFFER_FLAG_SYNC_FRAME or
-                        MediaCodec.BUFFER_FLAG_KEY_FRAME or
-                        MediaCodec.BUFFER_FLAG_CODEC_CONFIG or
-                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        )
+                    audioBufferInfo.flags = sanitizeFlags(audioExtractor.sampleFlags)
 
                     muxer.writeSampleData(audioMuxerTrackIndex, audioBuffer, audioBufferInfo)
                     audioExtractor.advance()
