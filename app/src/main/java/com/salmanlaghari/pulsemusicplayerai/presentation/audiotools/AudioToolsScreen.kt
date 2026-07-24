@@ -25,10 +25,10 @@ import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MergeType
+import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SlowMotionVideo
-import androidx.compose.material.icons.filled.SpeakerNotes
+import androidx.compose.material.icons.automirrored.filled.SpeakerNotes
 import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material.icons.filled.Transform
 import androidx.compose.material3.AlertDialog
@@ -420,10 +420,10 @@ fun AudioToolsMainList(
 ) {
     val toolsList = listOf(
         AudioToolData("MP3 Cutter", "Cut, trim, and make ringtones out of any sound file.", Icons.Default.ContentCut, StudioScreen.CUTTER),
-        AudioToolData("Audio Merger", "Merge two or more MP3 files together easily.", Icons.Default.MergeType, StudioScreen.MERGER),
+        AudioToolData("Audio Merger", "Merge two or more MP3 files together easily.", Icons.AutoMirrored.Filled.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert audio files to any format (MP3, WAV, FLAC, etc.)", Icons.Default.Transform, StudioScreen.CONVERTER),
         AudioToolData("Video Studio Pro", "Convert MP3 files into 10+ premium animated video templates.", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
-        AudioToolData("Extract Audio", "Pull high quality music track files directly from video files.", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
+        AudioToolData("Extract Audio", "Pull high quality music track files directly from video files.", Icons.AutoMirrored.Filled.SpeakerNotes, StudioScreen.EXTRACTOR),
         AudioToolData("Compressor", "Reduce file size without sacrificing beautiful acoustic details.", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
         AudioToolData("Speed Changer", "Alter speed/pitch of any audio track easily.", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)
     )
