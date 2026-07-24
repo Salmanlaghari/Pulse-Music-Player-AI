@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -56,7 +56,7 @@ fun SettingsAboutScreen(onNavigateBack: () -> Unit) {
         ) {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.primary
                 )

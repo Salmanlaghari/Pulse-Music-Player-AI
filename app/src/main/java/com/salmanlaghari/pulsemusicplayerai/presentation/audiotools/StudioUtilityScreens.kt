@@ -116,7 +116,7 @@ fun ConverterToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Audio Converter Studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -202,7 +202,7 @@ fun ConverterToolScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = null, tint = Color.White)
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.CompareArrows, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Convert Audio File", fontWeight = FontWeight.Bold, color = Color.White)
                 }
@@ -303,7 +303,7 @@ fun VideoPreviewEditScreen(
             IconButton(onClick = {
                 onNavigateBackToStudio()
             }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Preview & Edit Video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -600,7 +600,7 @@ fun VideoStudioScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1008,7 +1008,7 @@ fun ExtractorToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Extract Audio from Video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1147,7 +1147,7 @@ fun CompressorToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Acoustic Compressor", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1162,7 +1162,7 @@ fun CompressorToolScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("Select Audio to Compress", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
@@ -1218,7 +1218,7 @@ fun CompressorToolScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White)
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Compress File Size", fontWeight = FontWeight.Bold, color = Color.White)
                 }
@@ -1291,7 +1291,7 @@ fun SpeedPitchToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Speed & Pitch Lab", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

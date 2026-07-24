@@ -13,8 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,7 +54,7 @@ fun SettingsFeedbackScreen(onNavigateBack: () -> Unit) {
         ) {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -139,7 +139,7 @@ fun SettingsFeedbackScreen(onNavigateBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "Submit")
+                        Icon(imageVector = Icons.Default.Send, contentDescription = "Submit")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = "Submit Feedback")
                     }

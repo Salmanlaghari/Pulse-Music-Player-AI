@@ -21,13 +21,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.automirrored.filled.MergeType
+import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -87,7 +87,7 @@ fun MergerToolScreen(
         ) {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -318,7 +318,7 @@ fun MergerToolScreen(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.MergeType,
+                        imageVector = Icons.Default.MergeType,
                         contentDescription = null,
                         tint = if (selectedFiles.size >= 2) Color.White else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f)
                     )

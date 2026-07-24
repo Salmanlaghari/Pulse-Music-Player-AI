@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,7 +85,9 @@ enum class StudioScreen {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AudioToolsScreen() {
+fun AudioToolsScreen(
+    onNavigateToPreview: (com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile) -> Unit = {}
+) {
     val context = LocalContext.current
     val studioViewModel: AudioStudioViewModel = viewModel(
         factory = AudioStudioViewModelFactory(context.applicationContext)
@@ -257,15 +260,21 @@ fun AudioToolsScreen() {
         // 2. Success or Failure dialog
         if (showResultDialog != null) {
             val (success, file) = showResultDialog!!
-            AlertDialog(
-                onDismissRequest = { studioViewModel.closeResultDialog() },
-                title = {
-                    Text(
-                        text = if (success) "Export Successful! 🎉" else "Process Failed ❌",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                },
+            if (success && file != null && file.format.equals("MP4", ignoreCase = true)) {
+                LaunchedEffect(file) {
+                    onNavigateToPreview(file)
+                    studioViewModel.closeResultDialog()
+                }
+            } else {
+                AlertDialog(
+                    onDismissRequest = { studioViewModel.closeResultDialog() },
+                    title = {
+                        Text(
+                            text = if (success) "Export Successful! 🎉" else "Process Failed ❌",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    },
                 text = {
                     if (success && file != null) {
                         Column {
@@ -316,6 +325,7 @@ fun AudioToolsScreen() {
                     }
                 }
             )
+          }
         }
 
         // --- 10 Dedicated Video Studio Templates Selector Sheet ---

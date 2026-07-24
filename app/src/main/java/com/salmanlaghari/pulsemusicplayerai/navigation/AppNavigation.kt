@@ -22,11 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoPreviewEditScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioStudioViewModel
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioStudioViewModelFactory
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.aihub.AIHubScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
@@ -183,7 +190,9 @@ fun AppNavigation(
                 LibraryScreen(viewModel = musicViewModel)
             }
             composable(Screen.AudioTools.route) {
-                AudioToolsScreen()
+                AudioToolsScreen(onNavigateToPreview = { file ->
+                    navController.navigate("video_preview_edit?videoUri=${file.uriString}&outputName=${file.name}&duration=${file.duration}&size=${file.size}")
+                })
             }
             composable(Screen.AIHub.route) {
                 AIHubScreen()
@@ -238,6 +247,47 @@ fun AppNavigation(
                 QueueScreen(
                     viewModel = musicViewModel,
                     onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "video_preview_edit?videoUri={videoUri}&outputName={outputName}&duration={duration}&size={size}",
+                arguments = listOf(
+                    navArgument("videoUri") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("outputName") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("duration") { type = NavType.LongType; defaultValue = 30000L },
+                    navArgument("size") { type = NavType.LongType; defaultValue = 0L }
+                )
+            ) { backStackEntry ->
+                val videoUri = backStackEntry.arguments?.getString("videoUri") ?: ""
+                val outputName = backStackEntry.arguments?.getString("outputName") ?: ""
+                val duration = backStackEntry.arguments?.getLong("duration") ?: 30000L
+                val size = backStackEntry.arguments?.getLong("size") ?: 0L
+
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val studioViewModel: AudioStudioViewModel = viewModel(
+                    factory = AudioStudioViewModelFactory(context.applicationContext)
+                )
+
+                val file = ExportedFile(
+                    id = 0L,
+                    name = outputName,
+                    path = "",
+                    uriString = videoUri,
+                    size = size,
+                    duration = duration,
+                    format = "MP4",
+                    dateAdded = System.currentTimeMillis()
+                )
+
+                VideoPreviewEditScreen(
+                    file = file,
+                    viewModel = studioViewModel,
+                    onNavigateBackToStudio = { navController.popBackStack() },
+                    onNavigateToLibrary = {
+                        navController.navigate(Screen.Library.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+                        }
+                    }
                 )
             }
         }
