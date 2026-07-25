@@ -6,6 +6,11 @@ import androidx.compose.ui.graphics.Color
 val PurplePrimary = Color(0xFF7C4DFF)
 val CyanSecondary = Color(0xFF00E5FF)
 
+// Glassmorphic and Cyan Glow Colors
+val CyanGlow = Color(0xFF3FF0FF)
+val GlassBg = Color(0x11FFFFFF)
+val GlassBorder = Color(0x1AFFFFFF)
+
 // Dark Theme: Black / Dark Gray with glowing purple accents
 val DarkBackground = Color(0xFF09090F)
 val DarkSurface = Color(0xFF121220)
