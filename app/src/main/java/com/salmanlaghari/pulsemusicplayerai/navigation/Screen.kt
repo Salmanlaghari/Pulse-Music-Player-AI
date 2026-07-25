@@ -19,7 +19,4 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object Queue : Screen("queue")
     object Equalizer : Screen("equalizer")
-
-    // Studio Video Preview and Edit Screen Route
-    object VideoPreviewEdit : Screen("video_preview_edit?videoUri={videoUri}&outputName={outputName}&duration={duration}&size={size}")
 }

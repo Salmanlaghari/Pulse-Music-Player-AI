@@ -19,7 +19,3 @@ local.properties
 # OS files
 .DS_Store
 Thumbs.db
-
-# Keystore secrets
-*.keystore
-*.jks

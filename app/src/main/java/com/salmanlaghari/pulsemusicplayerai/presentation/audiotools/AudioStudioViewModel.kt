@@ -230,7 +230,7 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun exportVisualizerVideo(sourceUri: Uri, outputName: String, resolution: String = "720p", overlayText: String = "") {
+    fun exportVisualizerVideo(sourceUri: Uri, outputName: String) {
         if (_isProcessing.value) return
         _isProcessing.value = true
         _progress.value = 0
@@ -238,7 +238,7 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
 
         activeJob = viewModelScope.launch {
             try {
-                val result = processor.exportVisualizerVideo(sourceUri, outputName, resolution, overlayText) { prog ->
+                val result = processor.exportVisualizerVideo(sourceUri, outputName) { prog ->
                     _progress.value = prog
                     _statusMessage.value = "Exporting MP4 Spectrum Video: $prog%"
                 }

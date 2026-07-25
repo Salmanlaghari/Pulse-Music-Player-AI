@@ -198,13 +198,13 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Release Build v1.06.0 Stable (Session 8)",
+                        text = "Release Build 1.5.0 (Session 5 Stable)",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
                 Text(
-                    text = "v1.06.0",
+                    text = "v1.0.0",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

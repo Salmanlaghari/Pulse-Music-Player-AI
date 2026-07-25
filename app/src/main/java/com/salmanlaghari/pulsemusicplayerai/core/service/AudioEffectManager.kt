@@ -1,16 +1,44 @@
 package com.salmanlaghari.pulsemusicplayerai.core.service
 
-import android.media.audiofx.BassBoost
-import android.media.audiofx.Equalizer
+import android.media.audiofx.BassBoost as AndroidBassBoost
+import android.media.audiofx.Equalizer as AndroidEqualizer
 import android.media.audiofx.LoudnessEnhancer
-import android.media.audiofx.Virtualizer
+import android.media.audiofx.Virtualizer as AndroidVirtualizer
 import android.util.Log
+
+// --- Helper Factory Objects for AudioEffects ---
+object BassBoost {
+    fun create(audioSessionId: Int, priority: Int): AndroidBassBoost {
+        return AndroidBassBoost(priority.toShort().toInt(), audioSessionId)
+    }
+}
+
+object Virtualizer {
+    fun create(audioSessionId: Int, priority: Int): AndroidVirtualizer {
+        return AndroidVirtualizer(priority.toShort().toInt(), audioSessionId)
+    }
+}
+
+object Equalizer {
+    fun create(priority: Int, audioSessionId: Int): AndroidEqualizer {
+        return AndroidEqualizer(priority.toShort().toInt(), audioSessionId)
+    }
+}
+
+// --- Extension Functions for AudioEffects to support Float strength ---
+fun AndroidBassBoost.setStrength(strength: Float) {
+    this.setStrength((strength * 1000).toInt().toShort())
+}
+
+fun AndroidVirtualizer.setStrength(strength: Float) {
+    this.setStrength((strength * 1000).toInt().toShort())
+}
 
 class AudioEffectManager {
 
-    private var equalizer: Equalizer? = null
-    private var bassBoost: BassBoost? = null
-    private var virtualizer: Virtualizer? = null
+    private var equalizer: AndroidEqualizer? = null
+    private var bassBoost: AndroidBassBoost? = null
+    private var virtualizer: AndroidVirtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
 
     var isEqSupported = false
@@ -37,7 +65,7 @@ class AudioEffectManager {
 
         // 1. Equalizer Init
         try {
-            equalizer = Equalizer(0, audioSessionId).apply {
+            equalizer = Equalizer.create(0, audioSessionId).apply {
                 enabled = true
             }
             isEqSupported = true
@@ -54,7 +82,7 @@ class AudioEffectManager {
 
         // 2. Bass Boost Init
         try {
-            bassBoost = BassBoost(0, audioSessionId).apply {
+            bassBoost = BassBoost.create(audioSessionId, 0).apply {
                 enabled = true
             }
             isBassSupported = true
@@ -66,7 +94,7 @@ class AudioEffectManager {
 
         // 3. Virtualizer Init
         try {
-            virtualizer = Virtualizer(0, audioSessionId).apply {
+            virtualizer = Virtualizer.create(audioSessionId, 0).apply {
                 enabled = true
             }
             isVirtualizerSupported = true

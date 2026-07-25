@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -40,11 +39,6 @@ import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +59,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,21 +67,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.Path
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
-import android.media.MediaMetadataRetriever
-import kotlinx.coroutines.delay
 
 // --- 1. AUDIO CONVERTER SCREEN ---
 
@@ -116,7 +96,7 @@ fun ConverterToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Audio Converter Studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -202,7 +182,7 @@ fun ConverterToolScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.CompareArrows, contentDescription = null, tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Convert Audio File", fontWeight = FontWeight.Bold, color = Color.White)
                 }
@@ -248,158 +228,6 @@ fun ConverterToolScreen(
     }
 }
 
-// Helper time formatter for preview screen
-private fun formatTime(milliseconds: Long): String {
-    val totalSeconds = (milliseconds / 1000).coerceAtLeast(0)
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
-}
-
-// Helper bytes size formatter for preview screen
-private fun formatBytes(bytes: Long): String {
-    val sizeMb = bytes.toDouble() / (1024.0 * 1024.0)
-    return String.format(java.util.Locale.getDefault(), "%.2f MB", sizeMb)
-}
-
-@Composable
-fun VideoPreviewEditScreen(
-    file: com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile,
-    viewModel: AudioStudioViewModel,
-    onNavigateBackToStudio: () -> Unit,
-    onNavigateToLibrary: () -> Unit
-) {
-    val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-
-    // Initialize ExoPlayer to play the newly generated MP4 video file
-    val videoUri = Uri.parse(file.uriString)
-    val exoPlayer = remember {
-        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
-            setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUri))
-            prepare()
-            playWhenReady = true
-            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            exoPlayer.release()
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
-    ) {
-        // Title Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                onNavigateBackToStudio()
-            }) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Preview & Edit Video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Professional ExoPlayer View container
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Black),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { ctx ->
-                        androidx.media3.ui.PlayerView(ctx).apply {
-                            player = exoPlayer
-                            useController = true
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Video Metadata details panel
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Render details:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(6.dp))
-                Text("Filename: ${file.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("Duration: ${formatTime(file.duration)}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-                Text("Filesize: ${formatBytes(file.size)}", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Premium action buttons row: Save, Share, Discard/Re-render
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Discard/Re-render
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.deleteExport(file)
-                    onNavigateBackToStudio()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Discard", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-            }
-
-            // Share
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.shareExport(file)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.weight(1.2f).height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Share", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            }
-
-            // Save to Device
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onNavigateToLibrary()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.weight(1.5f).height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Save to Device", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-    }
-}
-
 // --- 5. PREMIUM VIDEO STUDIO COMPONENT ---
 
 enum class VideoStudioType(val displayName: String, val description: String) {
@@ -421,7 +249,6 @@ fun VideoStudioScreen(
     viewModel: AudioStudioViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val context = LocalContext.current
     val selectedFiles by viewModel.selectedFiles.collectAsState()
 
     var outputFileName by remember { mutableStateOf("${type.name}_Visual_Studio_Export") }
@@ -437,159 +264,10 @@ fun VideoStudioScreen(
     var statusCardStyle by remember { mutableStateOf("Retro Vinyl") }
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    // Live 16:9 Preview Player State variables
-    var isPreviewPlaying by remember { mutableStateOf(false) }
-    var previewTimeMs by remember { mutableStateOf(0L) }
-    var loopPreview by remember { mutableStateOf(true) }
-    var isPreviewFullscreen by remember { mutableStateOf(false) }
-    var audioDurationMs by remember { mutableStateOf(30_000L) }
-
-    // Asynchronously resolve song track duration and details
-    LaunchedEffect(selectedFiles) {
-        val uri = selectedFiles.firstOrNull()
-        if (uri != null) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, uri)
-                val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                if (durationStr != null) {
-                    audioDurationMs = durationStr.toLong()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                retriever.release()
-            }
-        }
-    }
-
-    // Drives the real-time preview animation phase & seek position progress
-    var previewAnimPhase by remember { mutableStateOf(0f) }
-    LaunchedEffect(isPreviewPlaying) {
-        while (isPreviewPlaying) {
-            delay(33) // ~30 fps
-            previewTimeMs += 33
-            previewAnimPhase += 0.15f
-            if (previewTimeMs >= audioDurationMs) {
-                if (loopPreview) {
-                    previewTimeMs = 0
-                } else {
-                    isPreviewPlaying = false
-                }
-            }
-        }
-    }
-
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) viewModel.selectFiles(listOf(uri))
-    }
-
-    // Live Video Preview drawing canvas helper logic
-    @Composable
-    fun LivePreviewCanvas(modifier: Modifier = Modifier) {
-        val sourceSongName = selectedFiles.firstOrNull()?.lastPathSegment ?: "Pulse Acoustic Track"
-        Canvas(modifier = modifier) {
-            val width = size.width
-            val height = size.height
-            val midY = height / 2f
-            val stepX = width / 64f
-
-            // 1. Draw beautiful canvas background style
-            when (selectedBgStyle) {
-                "Solid Color" -> {
-                    drawRect(color = Color(0xFF0F172A))
-                }
-                "Gradient" -> {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color(0xFF1E1B4B), Color(0xFF0F172A))
-                        )
-                    )
-                }
-                else -> {
-                    // Album Art rotation background mock simulation
-                    drawRect(color = Color(0xFF030712))
-                    val radius = height * 0.28f
-                    val angle = if (rotateAlbumArt && isPreviewPlaying) (previewAnimPhase * 5) % 360 else 0f
-                    drawCircle(
-                        color = Color(0xFF3B82F6),
-                        radius = radius,
-                        center = center,
-                        style = Stroke(width = 4f)
-                    )
-                    drawCircle(
-                        color = Color(0xFF1E1B4B),
-                        radius = radius - 8f,
-                        center = center
-                    )
-                }
-            }
-
-            // 2. Draw dynamic visualizer wave responsive to the preview state and sines
-            val path = Path()
-            path.moveTo(0f, midY)
-            val configAmp = if (type == VideoStudioType.WAVEFORM) waveThickness * 8f else 50f
-            val liveAmp = if (isPreviewPlaying) configAmp + kotlin.math.sin(previewAnimPhase.toDouble()).toFloat() * 15f else configAmp
-
-            for (j in 0..64) {
-                val x = j * stepX
-                val fluctuation = kotlin.math.sin(((j.toFloat() / 64f) * Math.PI * 4 + previewAnimPhase).toDouble()).toFloat() * liveAmp
-                path.lineTo(x, midY + fluctuation)
-            }
-            drawPath(path = path, color = Color.Cyan, style = Stroke(width = waveThickness.coerceAtLeast(1.0f)))
-
-            // 3. Repeating Watermark Overlay System (10-second repeating patterns)
-            val currentPosSec = previewTimeMs / 1000
-            val songOverlayVisible = (currentPosSec % 10) < 3
-            val customTextOverlayVisible = ((currentPosSec + 5) % 10) < 3
-
-            // Always display custom constant text watermark in corner
-            drawContext.canvas.nativeCanvas.drawText(
-                "Watermark: ${lyricText}",
-                30f,
-                50f,
-                android.graphics.Paint().apply {
-                    color = android.graphics.Color.WHITE
-                    textSize = 24f
-                    isAntiAlias = true
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                }
-            )
-
-            // Repeating Song Info Overlay (fades in every 10 seconds)
-            if (songOverlayVisible) {
-                drawContext.canvas.nativeCanvas.drawText(
-                    "Track info: ${sourceSongName}",
-                    width / 2f,
-                    height - 60f,
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.CYAN
-                        textSize = 28f
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                        typeface = android.graphics.Typeface.DEFAULT_BOLD
-                    }
-                )
-            }
-
-            // Repeating Custom Overlay Text (e.g. "A D&E SONG MUSIC" repeating every 10 seconds)
-            if (customTextOverlayVisible) {
-                drawContext.canvas.nativeCanvas.drawText(
-                    "A D&E SONG MUSIC",
-                    width / 2f,
-                    height - 120f,
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.MAGENTA
-                        textSize = 28f
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                        typeface = android.graphics.Typeface.DEFAULT_BOLD
-                    }
-                )
-            }
-        }
     }
 
     Column(
@@ -600,7 +278,7 @@ fun VideoStudioScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -636,108 +314,6 @@ fun VideoStudioScreen(
                         Icon(Icons.Default.AudioFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // HIGH-FIDELITY LIVE 16:9 PREVIEW PLAYER AT THE TOP
-                Text("Live 16:9 Preview Player", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        LivePreviewCanvas(modifier = Modifier.fillMaxSize())
-
-                        // Interactive controller overlay
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                IconButton(
-                                    onClick = { isPreviewFullscreen = !isPreviewFullscreen },
-                                    modifier = Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPreviewFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                        contentDescription = "Fullscreen Toggle",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            // Progress, seek slider, and controls row
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                                    .padding(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    IconButton(
-                                        onClick = { isPreviewPlaying = !isPreviewPlaying },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                            contentDescription = "PlayPause",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Slider(
-                                        value = previewTimeMs.toFloat(),
-                                        onValueChange = { previewTimeMs = it.toLong() },
-                                        valueRange = 0f..audioDurationMs.toFloat().coerceAtLeast(1f),
-                                        colors = SliderDefaults.colors(
-                                            thumbColor = MaterialTheme.colorScheme.primary,
-                                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                        ),
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    IconButton(
-                                        onClick = { loopPreview = !loopPreview },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Repeat,
-                                            contentDescription = "Loop Toggle",
-                                            tint = if (loopPreview) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(formatTime(previewTimeMs), fontSize = 10.sp, color = Color.White)
-                                    Text(formatTime(audioDurationMs), fontSize = 10.sp, color = Color.White)
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -941,7 +517,7 @@ fun VideoStudioScreen(
                         showSaveDialog = false
                         val uri = selectedFiles.firstOrNull()
                         if (uri != null) {
-                            viewModel.exportVisualizerVideo(uri, outputFileName, selectedResolution, lyricText)
+                            viewModel.exportVisualizerVideo(uri, outputFileName)
                         }
                     }
                 ) {
@@ -952,33 +528,6 @@ fun VideoStudioScreen(
                 TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
             }
         )
-    }
-
-    // Direct Fullscreen overlay preview
-    if (isPreviewFullscreen) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        ) {
-            LivePreviewCanvas(modifier = Modifier.fillMaxSize())
-
-            IconButton(
-                onClick = { isPreviewFullscreen = false },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-                    .size(44.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FullscreenExit,
-                    contentDescription = "Exit Fullscreen",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
     }
 }
 
@@ -1008,7 +557,7 @@ fun ExtractorToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Extract Audio from Video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1147,7 +696,7 @@ fun CompressorToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Acoustic Compressor", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1162,7 +711,7 @@ fun CompressorToolScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("Select Audio to Compress", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
@@ -1218,7 +767,7 @@ fun CompressorToolScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Compress File Size", fontWeight = FontWeight.Bold, color = Color.White)
                 }
@@ -1291,7 +840,7 @@ fun SpeedPitchToolScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onNavigateBack) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Speed & Pitch Lab", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
