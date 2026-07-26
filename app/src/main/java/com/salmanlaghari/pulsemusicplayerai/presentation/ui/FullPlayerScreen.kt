@@ -29,7 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Equalizer
@@ -41,8 +41,8 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.HeartBroken
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -308,7 +308,7 @@ fun FullPlayerScreen(
                                 modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(56.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.AutoMirrored.Filled.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
                                     modifier = Modifier.size(28.dp)
@@ -352,7 +352,7 @@ fun FullPlayerScreen(
                             onNavigateBack()
                         }) {
                             Icon(
-                                imageVector = Icons.Default.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Collapse Player",
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
@@ -381,7 +381,7 @@ fun FullPlayerScreen(
                             onShowQueue()
                         }) {
                             Icon(
-                                imageVector = Icons.Default.QueueMusic,
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                 contentDescription = "Open Queue",
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
@@ -758,7 +758,7 @@ fun FullPlayerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.AutoMirrored.Filled.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
                                 modifier = Modifier.size(40.dp)

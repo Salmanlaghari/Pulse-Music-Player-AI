@@ -25,8 +25,8 @@ import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.SpeakerNotes
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.SpeakerNotes
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -45,10 +45,10 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun AIHubScreen() {
     val aiCards = listOf(
-        AICardItem("AI Prompt Library", "Explore custom audio prompt libraries & presets.", Icons.Default.SpeakerNotes, false),
+        AICardItem("AI Prompt Library", "Explore custom audio prompt libraries & presets.", Icons.AutoMirrored.Filled.SpeakerNotes, false),
         AICardItem("AI Prompt Generator", "Let AI construct premium prompt scripts.", Icons.Default.AutoAwesome, false),
         AICardItem("AI Music Assistant", "Instant conversational intelligent chatbot.", Icons.Default.Mic, false),
-        AICardItem("AI Playlist Generator", "Enter a mood and let AI build custom playlists.", Icons.Default.QueueMusic, false),
+        AICardItem("AI Playlist Generator", "Enter a mood and let AI build custom playlists.", Icons.AutoMirrored.Filled.QueueMusic, false),
         AICardItem("AI Lyrics Assistant", "Generate matching lyrics for any melody or theme.", Icons.Default.Lyrics, false),
         AICardItem("AI Image Generator", "Visualize custom backdrops using AI art technology.", Icons.Default.Image, true),
         AICardItem("AI Video Generator", "Turn track files into custom dynamic MP4 music videos.", Icons.Default.Movie, true),
