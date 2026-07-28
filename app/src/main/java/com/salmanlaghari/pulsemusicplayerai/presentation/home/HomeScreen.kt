@@ -37,7 +37,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -438,7 +438,7 @@ fun ContinueListeningCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    imageVector = Icons.AutoMirrored.Filled.PlayArrow,
                     contentDescription = "Resume",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
@@ -773,7 +773,7 @@ fun MiniPlayer(
                             .background(PurplePrimary)
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.AutoMirrored.Filled.PlayArrow,
                             contentDescription = "Play or Pause",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
