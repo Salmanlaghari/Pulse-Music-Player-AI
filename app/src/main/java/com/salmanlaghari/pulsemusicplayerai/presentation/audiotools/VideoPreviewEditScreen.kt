@@ -200,7 +200,7 @@ fun VideoPreviewEditScreen(
                                     style = Stroke(width = 2.dp.toPx())
                                 )
                             }
-                            VisualizerPreset.WAVEFORM -> {
+                            VisualizerPreset.FLUID_WAVE -> {
                                 val points = 100
                                 val path = androidx.compose.ui.graphics.Path()
                                 for (i in 0 until points) {
@@ -228,7 +228,7 @@ fun VideoPreviewEditScreen(
                                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                                 )
                             }
-                            VisualizerPreset.BARS -> {
+                            VisualizerPreset.NEON_BARS -> {
                                 val barCount = 32
                                 val barWidth = w / (barCount * 1.5f)
                                 val gap = barWidth * 0.5f
@@ -244,7 +244,7 @@ fun VideoPreviewEditScreen(
                                     )
                                 }
                             }
-                            VisualizerPreset.SPECTRUM -> {
+                            VisualizerPreset.SPECTRUM_X -> {
                                 val cols = 64
                                 val colWidth = w / cols
                                 for (i in 0 until cols) {
@@ -259,7 +259,7 @@ fun VideoPreviewEditScreen(
                                     )
                                 }
                             }
-                            VisualizerPreset.NEON_PULSE -> {
+                            VisualizerPreset.FIRE_SPECTRUM -> {
                                 val pulseRadius = (80 + 40 * sin(p * 2 * Math.PI * 3).coerceIn(-1f, 1f)).dp.toPx()
                                 // Outer glow
                                 drawCircle(
