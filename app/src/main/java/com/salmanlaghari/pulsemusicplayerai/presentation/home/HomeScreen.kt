@@ -30,10 +30,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.automirrored.filled.PlayArrow
@@ -85,7 +87,8 @@ fun HomeScreen(
     onNavigateToAIHub: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToEqualizer: () -> Unit
+    onNavigateToEqualizer: () -> Unit,
+    onNavigateToVideoStudio: () -> Unit = {}
 ) {
     val isPermissionGranted by viewModel.isPermissionGranted.collectAsState()
 
@@ -101,7 +104,8 @@ fun HomeScreen(
             onNavigateToAIHub = onNavigateToAIHub,
             onNavigateToFavorites = onNavigateToFavorites,
             onNavigateToLibrary = onNavigateToLibrary,
-            onNavigateToEqualizer = onNavigateToEqualizer
+            onNavigateToEqualizer = onNavigateToEqualizer,
+            onNavigateToVideoStudio = onNavigateToVideoStudio
         )
     }
 }
@@ -114,7 +118,8 @@ fun HomeScreenContent(
     onNavigateToAIHub: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToEqualizer: () -> Unit
+    onNavigateToEqualizer: () -> Unit,
+    onNavigateToVideoStudio: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -225,6 +230,16 @@ fun HomeScreenContent(
             // 1. Premium Welcome Card with subtle border and gradient overlay
             WelcomeCard()
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Premium AI Assistant Banner
+            PremiumAssistBanner(onNavigateToAIHub = onNavigateToAIHub)
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Video Studio Quick Access
+            VideoStudioQuickCard(onNavigateToVideoStudio = onNavigateToVideoStudio)
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // 2. Continue Listening Section with Dynamic Artwork background
@@ -253,7 +268,7 @@ fun HomeScreenContent(
 
             // 3. Recently Added list
             if (recentlyAdded.isNotEmpty()) {
-                SectionHeader(title = "Recently Added") { viewModel.loadMusicData() }
+                SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = recentlyAdded, onSongClick = { viewModel.playSong(it, recentlyAdded) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -261,7 +276,7 @@ fun HomeScreenContent(
 
             // 4. Favorite Songs list
             if (favoriteSongs.isNotEmpty()) {
-                SectionHeader(title = "Favorite Songs") {}
+                SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = favoriteSongs, onSongClick = { viewModel.playSong(it, favoriteSongs) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -269,7 +284,7 @@ fun HomeScreenContent(
 
             // 5. Recently Played
             if (allSongs.isNotEmpty()) {
-                SectionHeader(title = "Recently Played") {}
+                SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = allSongs.take(5), onSongClick = { viewModel.playSong(it) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -277,7 +292,7 @@ fun HomeScreenContent(
 
             // 6. Most Played placeholder
             if (allSongs.isNotEmpty()) {
-                SectionHeader(title = "Most Played") {}
+                SectionHeader(title = "Most Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = allSongs.sortedBy { it.title.length }.take(5), onSongClick = { viewModel.playSong(it) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -428,11 +443,157 @@ fun SectionHeader(
         )
         if (showSeeAll) {
             Text(
-                text = "Scan Music",
+                text = "See All",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable { onSeeAllClick() }
+            )
+        }
+    }
+}
+
+// Premium AI Assistant Banner
+@Composable
+fun PremiumAssistBanner(onNavigateToAIHub: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    InteractiveCard(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onNavigateToAIHub()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        containerColor = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF6C3CE1),
+                            Color(0xFF9B59B6),
+                            Color(0xFFE74C8D)
+                        )
+                    )
+                )
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Premium AI Assist",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Smart music recommendations, auto-mix, voice commands & more",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "AI",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Video Studio Quick Access Card
+@Composable
+fun VideoStudioQuickCard(onNavigateToVideoStudio: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    InteractiveCard(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onNavigateToVideoStudio()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = "Video Studio",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = "MP3 → MP4 Video Studio",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "Create visualizer videos with live preview",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Open",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
             )
         }
     }

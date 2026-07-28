@@ -1,17 +1,16 @@
-name: Android Automated Build
+name: Android Automated Build & Release
 
 on:
   push:
     branches:
       - main
-      - 'feature/**'
   pull_request:
     branches:
       - main
 
 jobs:
   build:
-    name: Build & Verify Android App
+    name: Build, Sign & Release Android App
     runs-on: ubuntu-latest
 
     steps:
@@ -30,31 +29,67 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Run Gradle Verification & Checks
-        run: ./gradlew check --no-daemon
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Build Unsigned Release APK
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Rename and Prepare APKs
+      - name: Generate Release Keystore
         run: |
-          mkdir -p build-apks
-          cp app/build/outputs/apk/debug/app-debug.apk build-apks/Pulse-Music-Player-AI-Debug.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk build-apks/Pulse-Music-Player-AI-Release.apk
+          keytool -genkey -v \
+            -keystore release-keystore.jks \
+            -alias pulse-release \
+            -keyalg RSA -keysize 2048 \
+            -validity 10000 \
+            -storepass pulse123456 \
+            -keypass pulse123456 \
+            -dname "CN=Salman Laghari, OU=Mobile, O=Pulse Music, L=Islamabad, S=Federal, C=PK"
 
-      - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Pulse-Music-Player-AI-Debug
-          path: build-apks/Pulse-Music-Player-AI-Debug.apk
-          if-no-files-found: error
+      - name: Build Signed Release APK
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          KEYSTORE_FILE: release-keystore.jks
+          KEYSTORE_PASSWORD: pulse123456
+          KEY_ALIAS: pulse-release
+          KEY_PASSWORD: pulse123456
+
+      - name: Get Version Info
+        id: version
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Rename APK
+        run: |
+          mkdir -p release-output
+          cp app/build/outputs/apk/release/app-release.apk release-output/Pulse-Music-Player-AI-${{ steps.version.outputs.version }}.apk
+          ls -lh release-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Pulse-Music-Player-AI-Release
-          path: build-apks/Pulse-Music-Player-AI-Release.apk
+          name: Pulse-Music-Player-AI-${{ steps.version.outputs.version }}
+          path: release-output/Pulse-Music-Player-AI-${{ steps.version.outputs.version }}.apk
           if-no-files-found: error
+
+      - name: Create GitHub Release (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Pulse Music Player AI v${{ steps.version.outputs.version }}"
+          body: |
+            ## Pulse Music Player AI ${{ steps.version.outputs.version }}
+
+            ### What's New
+            - MP3 → MP4 Video Studio with Live Visualizer Preview
+            - Premium AI Assistant Banner
+            - Fixed "See All" navigation buttons
+            - 10 Visualizer presets with real-time animation
+            - Background style selector (Gradient, Dark, Neon)
+            - 720p & 1080p video export resolution
+            - Performance improvements & bug fixes
+
+            ### Download
+            Download the APK below and install on your Android device.
+          files: release-output/Pulse-Music-Player-AI-${{ steps.version.outputs.version }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
