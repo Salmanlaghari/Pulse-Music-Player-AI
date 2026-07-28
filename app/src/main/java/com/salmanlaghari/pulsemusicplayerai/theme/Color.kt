@@ -8,6 +8,7 @@ val CyanSecondary = Color(0xFF00E5FF)
 
 // Glassmorphic and Cyan Glow Colors
 val CyanGlow = Color(0xFF3FF0FF)
+val CyanGlowSoft = Color(0xFF3FF0FF).copy(alpha = 0.3f)
 val GlassBg = Color(0x11FFFFFF)
 val GlassBorder = Color(0x1AFFFFFF)
 
