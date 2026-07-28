@@ -172,7 +172,7 @@ fun VideoPreviewEditScreen(
                                 val radius = minOf(w, h) * 0.28f
                                 for (i in 0 until barCount) {
                                     val angle = (i.toFloat() / barCount) * 2 * Math.PI.toFloat() - Math.PI / 2
-                                    val barHeight = (30 + 60 * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0f, 1f)).dp.toPx()
+                                    val barHeight = (30 + 60 * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0.0, 1.0).toFloat()).dp.toPx()
                                     val startX = centerX + radius * cos(angle)
                                     val startY = centerY + radius * sin(angle)
                                     val endX = centerX + (radius + barHeight) * cos(angle)
@@ -205,7 +205,7 @@ fun VideoPreviewEditScreen(
                                 val path = androidx.compose.ui.graphics.Path()
                                 for (i in 0 until points) {
                                     val x = (i.toFloat() / points) * w
-                                    val amplitude = h * 0.2f * sin(p * 2 * Math.PI + i * 0.15f).coerceIn(-1f, 1f)
+                                    val amplitude = h * 0.2f * sin(p * 2 * Math.PI + i * 0.15f).coerceIn(-1.0, 1.0).toFloat()
                                     val y = centerY + amplitude
                                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                                 }
@@ -218,7 +218,7 @@ fun VideoPreviewEditScreen(
                                 val mirrorPath = androidx.compose.ui.graphics.Path()
                                 for (i in 0 until points) {
                                     val x = (i.toFloat() / points) * w
-                                    val amplitude = h * 0.12f * sin(p * 2 * Math.PI + i * 0.15f + 1f).coerceIn(-1f, 1f)
+                                    val amplitude = h * 0.12f * sin(p * 2 * Math.PI + i * 0.15f + 1f).coerceIn(-1.0, 1.0).toFloat()
                                     val y = centerY - amplitude
                                     if (i == 0) mirrorPath.moveTo(x, y) else mirrorPath.lineTo(x, y)
                                 }
@@ -233,7 +233,7 @@ fun VideoPreviewEditScreen(
                                 val barWidth = w / (barCount * 1.5f)
                                 val gap = barWidth * 0.5f
                                 for (i in 0 until barCount) {
-                                    val barHeight = (40 + 100 * sin(p * 2 * Math.PI + i * 0.25f).coerceIn(0f, 1f)).dp.toPx()
+                                    val barHeight = (40 + 100 * sin(p * 2 * Math.PI + i * 0.25f).coerceIn(0.0, 1.0).toFloat()).dp.toPx()
                                     val x = i * (barWidth + gap) + gap
                                     drawRect(
                                         brush = Brush.verticalGradient(
@@ -248,7 +248,7 @@ fun VideoPreviewEditScreen(
                                 val cols = 64
                                 val colWidth = w / cols
                                 for (i in 0 until cols) {
-                                    val intensity = sin(p * 2 * Math.PI + i * 0.2f).coerceIn(0f, 1f)
+                                    val intensity = sin(p * 2 * Math.PI + i * 0.2f).coerceIn(0.0, 1.0).toFloat()
                                     val colHeight = h * 0.6f * intensity
                                     val hue = (i.toFloat() / cols) * 360f
                                     val color = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.8f, 0.9f)))
@@ -260,7 +260,7 @@ fun VideoPreviewEditScreen(
                                 }
                             }
                             VisualizerPreset.FIRE_SPECTRUM -> {
-                                val pulseRadius = (80 + 40 * sin(p * 2 * Math.PI * 3).coerceIn(-1f, 1f)).dp.toPx()
+                                val pulseRadius = (80 + 40 * sin(p * 2 * Math.PI * 3).coerceIn(-1.0, 1.0).toFloat()).dp.toPx()
                                 // Outer glow
                                 drawCircle(
                                     color = Color(0xFF7C5CFF).copy(alpha = 0.15f),
@@ -292,10 +292,10 @@ fun VideoPreviewEditScreen(
                                 val barCount = 24
                                 val barWidth = w / (barCount * 1.5f)
                                 for (i in 0 until barCount) {
-                                    val barHeight = (30 + 80 * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0f, 1f)).dp.toPx()
+                                    val barHeight = (30 + 80 * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0.0, 1.0).toFloat()).dp.toPx()
                                     val x = i * (barWidth + barWidth * 0.5f) + barWidth * 0.5f
                                     drawRect(
-                                        color = Color(0xFF00E5FF).copy(alpha = 0.6f + 0.4f * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0f, 1f)),
+                                        color = Color(0xFF00E5FF).copy(alpha = 0.6f + 0.4f * sin(p * 2 * Math.PI + i * 0.3f).coerceIn(0.0, 1.0).toFloat()),
                                         topLeft = Offset(x, centerY - barHeight / 2),
                                         size = androidx.compose.ui.geometry.Size(barWidth, barHeight)
                                     )
