@@ -30,15 +30,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.automirrored.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -59,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,10 +70,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
 import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.PermissionScreen
+import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -130,7 +132,7 @@ fun HomeScreenContent(
     val currentSong by viewModel.currentSong.collectAsState()
 
     // Dynamic color extraction for background ambience from active song artwork
-    var accentBgColor by remember { mutableStateOf(Color(0xFF0F0C1F)) }
+    var accentBgColor by remember { mutableStateOf(CardNavy) }
 
     LaunchedEffect(currentSong) {
         val song = currentSong
@@ -158,7 +160,7 @@ fun HomeScreenContent(
             }
             accentBgColor = color
         } else {
-            accentBgColor = Color(0xFF0F0C1F)
+            accentBgColor = CardNavy
         }
     }
 
@@ -168,19 +170,39 @@ fun HomeScreenContent(
         label = "HomeBgAccent"
     )
 
+    // Base background with Navy Blue base and radial glows
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(
-                        animatedAccentBgColor.copy(alpha = 0.35f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.background
-                    )
+                    colors = listOf(BaseDeepNavy, BaseNavyBlue, BaseNavyBlue)
                 )
             )
     ) {
+        // Glowing dynamic accent radial overlay (Artwork color mapped smoothly)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(animatedAccentBgColor.copy(alpha = 0.22f), Color.Transparent),
+                        radius = 900f
+                    )
+                )
+        )
+        // Glowing Purple radial overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(PurplePrimary.copy(alpha = 0.15f), Color.Transparent),
+                        radius = 800f
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -196,17 +218,22 @@ fun HomeScreenContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "Pulse",
-                        style = MaterialTheme.typography.headlineLarge,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = (-1).sp
+                        color = Color.White,
+                        letterSpacing = (-0.5).sp
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Default.ElectricBolt,
-                        contentDescription = "Pulse Energy",
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(28.dp)
+                    Text(
+                        text = "⚡",
+                        fontSize = 20.sp,
+                        modifier = Modifier.shadow(
+                            elevation = 12.dp,
+                            shape = CircleShape,
+                            clip = false,
+                            ambientColor = CyanGlowSoft,
+                            spotColor = CyanGlow
+                        )
                     )
                 }
 
@@ -219,30 +246,25 @@ fun HomeScreenContent(
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
+                        tint = CyanGlow,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 1. Premium Welcome Card with subtle border and gradient overlay
+            // 1. Premium Welcome Card with 3D Tilt and Shine
             WelcomeCard()
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Premium AI Assistant Banner
-            PremiumAssistBanner(onNavigateToAIHub = onNavigateToAIHub)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Video Studio Quick Access
+            // MP3 → MP4 Video Studio Quick Access
             VideoStudioQuickCard(onNavigateToVideoStudio = onNavigateToVideoStudio)
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 2. Continue Listening Section with Dynamic Artwork background
+            // 2. Continue Listening Section (Connected to Playback Engine)
             val songToContinue = currentSong ?: allSongs.firstOrNull()
             if (songToContinue != null) {
                 SectionHeader(title = "Continue Listening", showSeeAll = false) {}
@@ -266,7 +288,7 @@ fun HomeScreenContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 3. Recently Added list
+            // 3. Recently Added list (Functional MediaStore integration)
             if (recentlyAdded.isNotEmpty()) {
                 SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -274,7 +296,7 @@ fun HomeScreenContent(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // 4. Favorite Songs list
+            // 4. Favorite Songs list (Functional persistent cache)
             if (favoriteSongs.isNotEmpty()) {
                 SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -282,7 +304,7 @@ fun HomeScreenContent(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // 5. Recently Played
+            // 5. Recently Played (Functional stream load)
             if (allSongs.isNotEmpty()) {
                 SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -305,34 +327,26 @@ fun HomeScreenContent(
 
 @Composable
 fun WelcomeCard() {
-    Card(
+    GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp)
-            .border(
-                1.dp,
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
-                    )
-                ),
-                shape = RoundedCornerShape(24.dp)
+            .shadow(
+                elevation = 18.dp,
+                shape = RoundedCornerShape(22.dp),
+                ambientColor = PurplePrimary.copy(alpha = 0.45f),
+                spotColor = CyanGlow
             ),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        shape = RoundedCornerShape(22.dp),
+        is3D = true,
+        hasShine = true,
+        backgroundBrush = Brush.linearGradient(
+            colors = listOf(PurplePrimary, CardNavy2, CyanSecondary)
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.85f)
-                        )
-                    )
-                )
                 .padding(20.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -340,14 +354,14 @@ fun WelcomeCard() {
                 Text(
                     text = "Welcome to Pulse AI Pro",
                     color = Color.White,
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Your flagship acoustic universe. Discover live spectrum visualizers, professional audio studio workflows, and intuitive music controls.",
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 12.5.sp,
                     lineHeight = 17.sp
                 )
             }
@@ -360,17 +374,22 @@ fun ContinueListeningCard(
     song: Song,
     onClick: () -> Unit
 ) {
-    InteractiveCard(
+    GlassmorphicCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(18.dp),
+                clip = false
+            ),
+        shape = RoundedCornerShape(18.dp),
+        containerColor = GlassBg
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
+                .fillMaxWidth()
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -378,27 +397,27 @@ fun ContinueListeningCard(
                 SongArtwork(
                     song = song,
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    iconSize = 28.dp
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp)),
+                    iconSize = 26.dp
                 )
 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
                 Column {
                     Text(
                         text = song.title,
-                        fontSize = 15.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Last listened • ${song.artist}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        fontSize = 11.5.sp,
+                        color = TextDim,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -407,16 +426,22 @@ fun ContinueListeningCard(
 
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp) // Large touch target
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .shadow(8.dp, CircleShape, ambientColor = PurplePrimary, spotColor = CardNavy2)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(PurplePrimary, CardNavy2)
+                        )
+                    )
+                    .clickable { onClick() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.PlayArrow,
+                    imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Resume",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -430,170 +455,24 @@ fun SectionHeader(
     onSeeAllClick: () -> Unit = {}
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.onBackground,
-            letterSpacing = (-0.5).sp
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDim,
+            letterSpacing = 1.8.sp
         )
         if (showSeeAll) {
             Text(
-                text = "See All",
-                fontSize = 13.sp,
+                text = "Scan Music",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color = CyanGlow,
                 modifier = Modifier.clickable { onSeeAllClick() }
-            )
-        }
-    }
-}
-
-// Premium AI Assistant Banner
-@Composable
-fun PremiumAssistBanner(onNavigateToAIHub: () -> Unit) {
-    val haptic = LocalHapticFeedback.current
-    InteractiveCard(
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onNavigateToAIHub()
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp),
-        containerColor = Color.Transparent
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFF6C3CE1),
-                            Color(0xFF9B59B6),
-                            Color(0xFFE74C8D)
-                        )
-                    )
-                )
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color(0xFFFFD700),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Premium AI Assist",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Smart music recommendations, auto-mix, voice commands & more",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "AI",
-                        tint = Color(0xFFFFD700),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Video Studio Quick Access Card
-@Composable
-fun VideoStudioQuickCard(onNavigateToVideoStudio: () -> Unit) {
-    val haptic = LocalHapticFeedback.current
-    InteractiveCard(
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onNavigateToVideoStudio()
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Movie,
-                        contentDescription = "Video Studio",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
-                    Text(
-                        text = "MP3 → MP4 Video Studio",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "Create visualizer videos with live preview",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    )
-                }
-            }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Open",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -601,8 +480,7 @@ fun VideoStudioQuickCard(onNavigateToVideoStudio: () -> Unit) {
 
 data class QuickAccessItem(
     val title: String,
-    val icon: ImageVector,
-    val color: Color,
+    val icon: String,
     val onClick: () -> Unit
 )
 
@@ -614,10 +492,10 @@ fun QuickAccessRow(
     onNavigateToEqualizer: () -> Unit
 ) {
     val items = listOf(
-        QuickAccessItem("AI Assistant", Icons.Default.AutoAwesome, MaterialTheme.colorScheme.primary, onNavigateToAIHub),
-        QuickAccessItem("My Favorites", Icons.Default.Favorite, MaterialTheme.colorScheme.secondary, onNavigateToFavorites),
-        QuickAccessItem("Library", Icons.Default.LibraryMusic, MaterialTheme.colorScheme.primary, onNavigateToLibrary),
-        QuickAccessItem("Equalizer", Icons.Default.Equalizer, MaterialTheme.colorScheme.secondary, onNavigateToEqualizer)
+        QuickAccessItem("AI Assistant", "✨", onNavigateToAIHub),
+        QuickAccessItem("My Favorites", "🩵", onNavigateToFavorites),
+        QuickAccessItem("Library", "🎧", onNavigateToLibrary),
+        QuickAccessItem("Equalizer", "📊", onNavigateToEqualizer)
     )
 
     Row(
@@ -641,29 +519,42 @@ fun QuickAccessRow(
 
 @Composable
 fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
-    InteractiveCard(
+    GlassmorphicCard(
         onClick = item.onClick,
-        modifier = modifier.height(64.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        modifier = modifier
+            .height(72.dp)
+            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false),
+        shape = RoundedCornerShape(18.dp),
+        containerColor = GlassBg
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.title,
-                tint = item.color,
-                modifier = Modifier.size(26.dp)
-            )
-            Spacer(modifier = Modifier.width(14.dp))
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(PurplePrimary.copy(alpha = 0.35f), CyanSecondary.copy(alpha = 0.2f))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = item.icon,
+                    fontSize = 17.sp
+                )
+            }
             Text(
                 text = item.title,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -680,13 +571,14 @@ fun SongHorizontalLazyRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(end = 12.dp)
     ) {
-        items(songs) { song ->
-            InteractiveCard(
+        items(songs, key = { it.id }) { song ->
+            GlassmorphicCard(
                 onClick = { onSongClick(song) },
                 modifier = Modifier
                     .width(135.dp)
                     .height(175.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                shape = RoundedCornerShape(14.dp),
+                containerColor = GlassBg
             ) {
                 Column(
                     modifier = Modifier
@@ -707,7 +599,7 @@ fun SongHorizontalLazyRow(
                             text = song.title,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onBackground,
+                            color = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -715,7 +607,7 @@ fun SongHorizontalLazyRow(
                         Text(
                             text = song.artist,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            color = TextDim,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -731,14 +623,14 @@ fun SongHorizontalLazyRow(
 fun InteractiveCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    containerColor: Color = GlassBg,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.94f else 1f, label = "ScaleTransition")
 
-    Card(
+    GlassmorphicCard(
         modifier = modifier
             .scale(scale)
             .pointerInput(Unit) {
@@ -755,8 +647,7 @@ fun InteractiveCard(
                 )
             },
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        containerColor = containerColor
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             content()
@@ -795,7 +686,7 @@ private fun generateFallbackColor(song: Song): Color {
     return Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.6f, 0.35f)))
 }
 
-// Float player card
+// Float player card styled with premium 3D Glassmorphism and Large Tappable Targets
 @Composable
 fun MiniPlayer(
     viewModel: MusicViewModel,
@@ -808,13 +699,15 @@ fun MiniPlayer(
 
     val song = currentSong ?: return
 
-    InteractiveCard(
+    GlassmorphicCard(
         onClick = onExpand,
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
-            .padding(horizontal = 8.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+            .height(76.dp) // Height increased slightly for better tap target balance
+            .padding(horizontal = 14.dp)
+            .shadow(12.dp, RoundedCornerShape(18.dp), clip = false),
+        shape = RoundedCornerShape(18.dp),
+        containerColor = CardNavy // Frosted dark blue backing
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -826,65 +719,74 @@ fun MiniPlayer(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     SongArtwork(
                         song = song,
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
                             .clip(RoundedCornerShape(10.dp)),
-                        iconSize = 24.dp
+                        iconSize = 22.dp
                     )
-
-                    Spacer(modifier = Modifier.width(14.dp))
 
                     Column {
                         Text(
                             text = song.title,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
+                            color = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = song.artist,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            color = TextDim,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.skipToPrevious() }) {
+                // Spacious high-fidelity play controls with explicit 48dp touch targets
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = { viewModel.skipToPrevious() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Prev",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            contentDescription = "Previous Song",
+                            tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                     IconButton(
                         onClick = { viewModel.togglePlayPause() },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(PurplePrimary)
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.AutoMirrored.Filled.PlayArrow,
-                            contentDescription = "Play/Pause",
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play or Pause",
                             tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    IconButton(onClick = { viewModel.skipToNext() }) {
+                    IconButton(
+                        onClick = { viewModel.skipToNext() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            contentDescription = "Next Song",
+                            tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -896,14 +798,60 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f))
+                    .background(Color(0xFF2A2545))
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(progress.coerceIn(0f, 1f))
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(PurplePrimary, CyanSecondary)
+                            )
+                        )
                 )
+            }
+        }
+    }
+}
+
+// MP3 → MP4 Video Studio Quick Access Card
+@Composable
+fun VideoStudioQuickCard(onNavigateToVideoStudio: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    InteractiveCard(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onNavigateToVideoStudio()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)))),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = "Video Studio",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text("MP3 → MP4 Video Studio", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text("Create visualizer videos with live preview", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                }
             }
         }
     }
