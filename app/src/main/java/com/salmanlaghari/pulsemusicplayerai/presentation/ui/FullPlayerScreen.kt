@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -84,6 +85,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +94,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.data.ads.RewardedAdSheet
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerCanvas
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
@@ -105,6 +111,7 @@ fun FullPlayerScreen(
     onNavigateToEqualizer: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     val currentSong by viewModel.currentSong.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -125,6 +132,7 @@ fun FullPlayerScreen(
     // Bottom sheet dialog states for Audio adjustments and Sleep Timer
     var showAdjustmentsSheet by remember { mutableStateOf(false) }
     var showSleepTimerSheet by remember { mutableStateOf(false) }
+    var showRewardedSheet by remember { mutableStateOf(false) }
 
     // Visualizer control states
     var showVisualizer by remember { mutableStateOf(false) }
@@ -622,6 +630,19 @@ fun FullPlayerScreen(
                                 }
                             }
                         }
+
+                        // Rewards button
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showRewardedSheet = true
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.CardGiftcard,
+                                contentDescription = "Rewards",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -816,6 +837,12 @@ fun FullPlayerScreen(
                             textAlign = TextAlign.Center
                         )
                     }
+
+                    // AdMob Banner at bottom of Now Playing
+                    AdMobBanner(
+                        adUnitId = AdManager.getBannerNowPlayingId(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -1157,6 +1184,14 @@ fun FullPlayerScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
+        }
+
+        // Rewarded Ad Sheet
+        if (showRewardedSheet) {
+            RewardedAdSheet(
+                activity = context as Activity,
+                onDismiss = { showRewardedSheet = false }
+            )
         }
     }
 }

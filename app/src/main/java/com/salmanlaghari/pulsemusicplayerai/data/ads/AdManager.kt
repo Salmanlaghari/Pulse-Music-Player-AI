@@ -399,6 +399,12 @@ object AdManager {
         }
     }
 
+    /** Increment song change counter (call from ViewModel). Returns true if ad should show. */
+    fun incrementSongChangeCount(): Boolean {
+        songChangeCount++
+        return songChangeCount % 3 == 0
+    }
+
     // ═══ HELPERS ═══
     private fun isAdFreeHour(): Boolean {
         return isAdFreeHourActive && System.currentTimeMillis() < adFreeHourExpiryMs

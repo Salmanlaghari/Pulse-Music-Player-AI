@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 
 @Composable
 fun QueueScreen(
@@ -210,6 +212,55 @@ fun QueueScreen(
                                         imageVector = Icons.Default.DeleteOutline,
                                         contentDescription = "Remove",
                                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Show native ad placeholder after every 5th item
+                    if ((index + 1) % 5 == 0 && index < currentQueue.size - 1) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Sponsored",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                    )
+                                    Text(
+                                        text = "Ad • Native Ad Unit",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
                                     )
                                 }
                             }

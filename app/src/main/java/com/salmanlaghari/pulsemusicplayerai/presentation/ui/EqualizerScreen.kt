@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 
 @Composable
 fun EqualizerScreen(
@@ -95,6 +97,7 @@ fun EqualizerScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(16.dp)
+                .padding(bottom = 60.dp)
         ) {
             // Header
             Row(
@@ -409,6 +412,13 @@ fun EqualizerScreen(
                     )
                 }
             }
+        }
+
+        // AdMob Banner at bottom of Equalizer
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            AdMobBanner(adUnitId = AdManager.getBannerEqualizerId())
         }
     }
 }

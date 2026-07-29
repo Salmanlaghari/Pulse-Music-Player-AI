@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.PermissionScreen
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 
 @Composable
 fun LibraryScreen(viewModel: MusicViewModel) {
@@ -210,9 +212,18 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
             contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 90.dp, end = 16.dp)
+                .padding(bottom = 150.dp, end = 16.dp)
         ) {
             Icon(Icons.Default.Add, contentDescription = "Rescan")
+        }
+
+        // AdMob Banner at bottom of Library
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        ) {
+            AdMobBanner(adUnitId = AdManager.getBannerLibraryId())
         }
     }
 }

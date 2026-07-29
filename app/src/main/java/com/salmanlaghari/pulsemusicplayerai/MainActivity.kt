@@ -26,6 +26,7 @@ import coil.ImageLoader
 import com.salmanlaghari.pulsemusicplayerai.theme.PulseMusicPlayerAITheme
 import com.salmanlaghari.pulsemusicplayerai.utils.ThemePreferenceManager
 import com.salmanlaghari.pulsemusicplayerai.utils.SongArtworkFetcher
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 
 class MainActivity : ComponentActivity() {
 
@@ -51,6 +52,9 @@ class MainActivity : ComponentActivity() {
             }
             .build()
         Coil.setImageLoader(imageLoader)
+
+        // Show App Open Ad on launch
+        AdManager.showAppOpen(this)
 
         setContent {
             val userDarkModePreference by mainViewModel.isDarkTheme.collectAsState()
@@ -79,5 +83,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Show interstitial ad when returning from background
+        AdManager.showInterstitialResume(this)
     }
 }

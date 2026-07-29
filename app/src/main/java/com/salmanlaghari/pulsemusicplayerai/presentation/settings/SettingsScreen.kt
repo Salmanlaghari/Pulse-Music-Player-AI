@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -39,6 +40,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
 import com.salmanlaghari.pulsemusicplayerai.theme.*
+import com.salmanlaghari.pulsemusicplayerai.data.ads.RewardedAdSheet
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 
 @Composable
 fun SettingsScreen(
@@ -50,6 +59,8 @@ fun SettingsScreen(
     onNavigateToFeedback: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    var showRewardedSheet by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -133,7 +144,65 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Preference Section 2: Info & Support
+            // Preference Section 2: Rewards
+            Text(
+                text = "REWARDS",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = PurplePrimary,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column {
+                    SettingsClickableItem(
+                        title = "🎁 Watch & Unlock",
+                        subtitle = "Watch ads to unlock premium features temporarily",
+                        icon = Icons.Default.AutoAwesome,
+                        onClick = { showRewardedSheet = true }
+                    )
+                    // Ad-free status
+                    if (AdManager.isAdFreeHourActive) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "✅ Ad-free mode active",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyanGlow
+                            )
+                        }
+                    }
+                    // Unlimited skip status
+                    if (AdManager.isUnlimitedSkipActive) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "✅ Unlimited skips active",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyanGlow
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Preference Section 3: Info & Support
             Text(
                 text = "INFO & SUPPORT",
                 fontSize = 11.sp,
@@ -221,6 +290,14 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(140.dp))
+        }
+
+        // Rewarded Ad Sheet
+        if (showRewardedSheet) {
+            RewardedAdSheet(
+                activity = context as Activity,
+                onDismiss = { showRewardedSheet = false }
+            )
         }
     }
 }

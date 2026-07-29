@@ -9,6 +9,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.Album
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Artist
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Folder
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -136,6 +137,8 @@ class MusicViewModel(
     }
 
     fun skipToNext() {
+        // Track song change for interstitial ad (every 3 songs)
+        AdManager.incrementSongChangeCount()
         playbackConnectionManager.next()
     }
 
