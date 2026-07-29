@@ -5,7 +5,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 
 /**
- * Represents a song from YouTube (Piped API).
+ * Represents a song from YouTube (Piped/Invidious API).
  * Compatible with the existing playback system.
  */
 data class YouTubeSong(
@@ -19,28 +19,32 @@ data class YouTubeSong(
 ) {
     /**
      * Convert to a MediaItem for ExoPlayer playback.
-     * Uses the audio stream URL directly.
+     * Only call this when audioUrl is validated as non-empty and valid HTTP(S) URL.
      */
     fun toMediaItem(): MediaItem {
+        val safeUrl = audioUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
+        val safeThumb = thumbnailUrl.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$id/default.jpg"
+
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
-            .setArtworkUri(Uri.parse(thumbnailUrl))
+            .setArtworkUri(Uri.parse(safeThumb))
             .build()
 
         return MediaItem.Builder()
             .setMediaId("yt_$id")
-            .setUri(audioUrl)
+            .setUri(safeUrl)
             .setMediaMetadata(metadata)
             .build()
     }
 
     /**
      * Convert to a local Song model for compatibility with existing UI.
-     * Handles empty/null audioUrl gracefully.
+     * Returns null if audioUrl is invalid — caller must check.
      */
-    fun toSong(): Song {
-        val safeAudioUrl = audioUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
+    fun toSong(): Song? {
+        if (!hasValidAudio()) return null
+        val safeAudioUrl = audioUrl.trim()
         val safeThumbnail = thumbnailUrl.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$id/default.jpg"
         return Song(
             id = id.hashCode().toLong(),
@@ -49,7 +53,7 @@ data class YouTubeSong(
             album = "YouTube Music",
             duration = duration * 1000, // convert to ms
             path = safeAudioUrl,
-            uri = if (safeAudioUrl.isNotEmpty()) Uri.parse(safeAudioUrl) else Uri.EMPTY,
+            uri = Uri.parse(safeAudioUrl),
             dateAdded = System.currentTimeMillis(),
             artUri = Uri.parse(safeThumbnail)
         )
@@ -59,6 +63,8 @@ data class YouTubeSong(
      * Check if this song has a valid playable audio URL.
      */
     fun hasValidAudio(): Boolean {
-        return audioUrl.isNotBlank() && (audioUrl.startsWith("http://") || audioUrl.startsWith("https://"))
+        return audioUrl.isNotBlank() &&
+                audioUrl.trim().length > 10 &&
+                (audioUrl.startsWith("http://") || audioUrl.startsWith("https://"))
     }
 }

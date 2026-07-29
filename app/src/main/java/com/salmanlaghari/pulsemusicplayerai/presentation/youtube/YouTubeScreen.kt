@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,9 +70,18 @@ fun YouTubeScreen(
     val isTrendingLoading by viewModel.isTrendingLoading.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
+    val playbackReady by viewModel.playbackReady.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+
+    // Navigate to player ONLY when playback is actually ready
+    LaunchedEffect(playbackReady) {
+        if (playbackReady) {
+            viewModel.resetPlaybackReady()
+            onNavigateToPlayer()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -259,7 +269,6 @@ fun YouTubeScreen(
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = {
                                     viewModel.playSong(song, searchResults)
-                                    onNavigateToPlayer()
                                 }
                             )
                         }
@@ -324,7 +333,6 @@ fun YouTubeScreen(
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = {
                                     viewModel.playSong(song, trendingSongs)
-                                    onNavigateToPlayer()
                                 }
                             )
                         }
@@ -350,7 +358,6 @@ fun YouTubeScreen(
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = {
                                     viewModel.playSong(song, trendingSongs)
-                                    onNavigateToPlayer()
                                 }
                             )
                         }
