@@ -126,7 +126,8 @@ class MusicViewModel(
     // 6. Playback Control Handlers
     fun playSong(song: Song, customQueue: List<Song> = _allSongs.value) {
         try {
-            playbackConnectionManager.playSong(song, customQueue)
+            val queue = if (customQueue.isEmpty()) listOf(song) else customQueue
+            playbackConnectionManager.playSong(song, queue)
         } catch (e: Exception) {
             android.util.Log.e("MusicVM", "playSong failed", e)
         }

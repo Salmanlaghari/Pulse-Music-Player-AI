@@ -157,12 +157,15 @@ class PlaybackConnectionManager(private val context: Context) {
             controller.stop()
             controller.clearMediaItems()
 
+            // Ensure queue is not empty
+            val safeQueue = if (playQueue.isEmpty()) listOf(song) else playQueue
+
             // Set references and load items
-            _currentQueue.value = playQueue
-            val mediaItems = playQueue.map { it.toMediaItem() }
+            _currentQueue.value = safeQueue
+            val mediaItems = safeQueue.map { it.toMediaItem() }
             controller.addMediaItems(mediaItems)
 
-            val targetIndex = playQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+            val targetIndex = safeQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
             controller.seekTo(targetIndex, 0L)
             controller.prepare()
             controller.play()
