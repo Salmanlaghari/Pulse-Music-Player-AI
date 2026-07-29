@@ -68,6 +68,7 @@ fun YouTubeScreen(
     val isSearching by viewModel.isSearching.collectAsState()
     val isTrendingLoading by viewModel.isTrendingLoading.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
+    val isPlayLoading by viewModel.isPlayLoading.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -81,6 +82,33 @@ fun YouTubeScreen(
                 )
             )
     ) {
+        // Loading overlay when resolving audio
+        if (isPlayLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = CyanGlow, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Loading audio...",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Trying multiple sources",
+                        color = TextDim,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
