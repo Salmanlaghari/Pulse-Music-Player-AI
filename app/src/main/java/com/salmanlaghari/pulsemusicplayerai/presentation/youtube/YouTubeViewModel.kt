@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackConnectionManager
 import com.salmanlaghari.pulsemusicplayerai.data.repository.YouTubeRepository
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -106,6 +107,9 @@ class YouTubeViewModel(
     fun playSong(song: YouTubeSong, queue: List<YouTubeSong>) {
         viewModelScope.launch {
             try {
+                // Track song change for interstitial ad
+                AdManager.incrementSongChangeCount()
+
                 // If audio URL not resolved yet, resolve it
                 val resolvedSong = if (song.audioUrl.isEmpty()) {
                     youTubeRepository.getAudioStream(song.id) ?: song

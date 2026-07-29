@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 
 @Composable
@@ -327,6 +329,12 @@ fun YouTubeScreen(
                     }
                 }
             }
+
+            // AdMob Banner at bottom of YouTube
+            AdMobBanner(
+                adUnitId = AdManager.getBannerLibraryId(),
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(80.dp))
         }
