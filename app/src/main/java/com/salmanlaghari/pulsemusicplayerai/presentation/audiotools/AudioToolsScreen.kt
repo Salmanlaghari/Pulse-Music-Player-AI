@@ -459,6 +459,7 @@ fun AudioToolsMainList(
         AudioToolData("MP3 Cutter", "Cut, trim, and make ringtones out of any sound file.", Icons.Default.ContentCut, StudioScreen.CUTTER),
         AudioToolData("Audio Merger", "Merge two or more MP3 files together seamlessly", Icons.Default.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert audio files to any format (MP3, WAV, AAC...)", Icons.Default.Transform, StudioScreen.CONVERTER),
+        AudioToolData("MP3-HD Video", "Convert MP3 to HD video with visualizer — ready to post", Icons.Default.OndemandVideo, StudioScreen.VIDEO_STUDIO),
         AudioToolData("Video Studio Pro", "Turn MP3 into MP4 with live spectrum/waveform visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
         AudioToolData("Extract Audio", "Pull high quality music track directly from video files", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
         AudioToolData("Compressor", "Reduce file size while preserving audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
@@ -605,7 +606,12 @@ fun AudioToolsMainList(
                         } else null,
                         onClick = {
                             if (tool.targetScreen == StudioScreen.VIDEO_STUDIO) {
-                                onOpenVideoStudio()
+                                if (tool.name == "MP3-HD Video") {
+                                    selectedVideoType = VideoStudioType.MP3_HD
+                                    currentScreen = StudioScreen.VIDEO_STUDIO
+                                } else {
+                                    onOpenVideoStudio()
+                                }
                             } else {
                                 onNavigateToTool(tool.targetScreen)
                             }

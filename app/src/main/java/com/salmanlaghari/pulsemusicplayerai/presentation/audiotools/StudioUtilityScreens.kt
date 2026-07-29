@@ -389,6 +389,7 @@ fun VideoPreviewEditScreen(
 
 enum class VideoStudioType(val displayName: String, val description: String) {
     MP3_TO_MP4("MP3 → MP4 Visualizer", "Standard spectrum visualizer video from MP3 files."),
+    MP3_HD("MP3-HD Video", "Convert MP3 to HD video with album art and visualizer — instant export."),
     ALBUM_ART("Album Art Video", "Overlay rotating or static album artwork in the center of the video."),
     LYRICS("Lyrics Video", "Incorporate synced text/lrc lyric sheets with beautiful backdrop flows."),
     WAVEFORM("Waveform Video", "Horizontal linear fluid waveforms drawing across the screen."),
@@ -480,7 +481,7 @@ fun VideoStudioScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 when (type) {
-                    VideoStudioType.MP3_TO_MP4 -> {
+                    VideoStudioType.MP3_TO_MP4, VideoStudioType.MP3_HD -> {
                         Text("Visualizer Preset", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
