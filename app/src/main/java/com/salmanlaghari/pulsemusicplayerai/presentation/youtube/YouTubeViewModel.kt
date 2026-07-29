@@ -120,7 +120,7 @@ class YouTubeViewModel(
                     if (attempts >= MAX_FORCE_RETRIES) break
                     attempts++
 
-                    val audioUrl = if (candidate.audioUrl.isNotEmpty()) {
+                    val audioUrl = if (candidate.hasValidAudio()) {
                         candidate.audioUrl
                     } else {
                         // Resolve audio stream from all APIs
@@ -132,7 +132,7 @@ class YouTubeViewModel(
                         }
                     }
 
-                    if (!audioUrl.isNullOrEmpty()) {
+                    if (!audioUrl.isNullOrEmpty() && audioUrl.startsWith("http")) {
                         resolvedSong = candidate.copy(audioUrl = audioUrl)
                         break
                     } else {
@@ -141,7 +141,7 @@ class YouTubeViewModel(
                 }
 
                 // If still no resolved song, show error
-                if (resolvedSong == null || resolvedSong.audioUrl.isEmpty()) {
+                if (resolvedSong == null || resolvedSong.audioUrl.isBlank()) {
                     Toast.makeText(
                         getApplication(),
                         "Could not load any audio. Check your internet and try again.",
@@ -151,6 +151,20 @@ class YouTubeViewModel(
                     _isPlayLoading.value = false
                     return@launch
                 }
+
+                // Validate audio URL is actually playable
+                val audioUrl = resolvedSong.audioUrl.trim()
+                if (!audioUrl.startsWith("http://") && !audioUrl.startsWith("https://")) {
+                    Toast.makeText(
+                        getApplication(),
+                        "Invalid audio source. Try another song.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    Log.e(TAG, "Invalid audio URL: $audioUrl")
+                    _isPlayLoading.value = false
+                    return@launch
+                }
+                resolvedSong = resolvedSong.copy(audioUrl = audioUrl)
 
                 _currentlyPlaying.value = resolvedSong
 

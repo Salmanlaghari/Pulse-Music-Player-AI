@@ -37,18 +37,28 @@ data class YouTubeSong(
 
     /**
      * Convert to a local Song model for compatibility with existing UI.
+     * Handles empty/null audioUrl gracefully.
      */
     fun toSong(): Song {
+        val safeAudioUrl = audioUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
+        val safeThumbnail = thumbnailUrl.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$id/default.jpg"
         return Song(
             id = id.hashCode().toLong(),
             title = title,
             artist = artist,
             album = "YouTube Music",
             duration = duration * 1000, // convert to ms
-            path = audioUrl,
-            uri = Uri.parse(audioUrl),
+            path = safeAudioUrl,
+            uri = if (safeAudioUrl.isNotEmpty()) Uri.parse(safeAudioUrl) else Uri.EMPTY,
             dateAdded = System.currentTimeMillis(),
-            artUri = Uri.parse(thumbnailUrl)
+            artUri = Uri.parse(safeThumbnail)
         )
+    }
+
+    /**
+     * Check if this song has a valid playable audio URL.
+     */
+    fun hasValidAudio(): Boolean {
+        return audioUrl.isNotBlank() && (audioUrl.startsWith("http://") || audioUrl.startsWith("https://"))
     }
 }

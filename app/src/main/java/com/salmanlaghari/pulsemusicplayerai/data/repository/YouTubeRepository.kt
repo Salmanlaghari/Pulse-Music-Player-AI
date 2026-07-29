@@ -17,37 +17,37 @@ class YouTubeRepository {
 
         // ═══ MASSIVE Invidious instances list ═══
         private val INVIDIOUS_INSTANCES = listOf(
-            "https://inv.nadeko.net",
-            "https://invidious.fdn.fr",
-            "https://vid.puffyan.us",
             "https://yewtu.be",
             "https://inv.tux.pizza",
-            "https://invidious.privacyredirect.com",
-            "https://invidious.nerdvpn.de",
-            "https://inv.in.projectsegfault.com",
-            "https://invidious.lunar.icu",
+            "https://invidious.fdn.fr",
             "https://iv.ggtyler.dev",
             "https://invidious.protokolla.fi",
-            "https://inv.us.projectsegfault.com",
-            "https://invidious.io.lol",
-            "https://yt.artemislena.eu",
             "https://invidious.futo.org",
             "https://invidious.perennialte.ch",
-            "https://invidious.drgns.space"
+            "https://vid.puffyan.us",
+            "https://invidious.privacyredirect.com",
+            "https://invidious.nerdvpn.de",
+            "https://inv.nadeko.net",
+            "https://invidious.lunar.icu",
+            "https://invidious.io.lol",
+            "https://yt.artemislena.eu",
+            "https://invidious.drgns.space",
+            "https://inv.in.projectsegfault.com",
+            "https://inv.us.projectsegfault.com"
         )
 
         // ═══ MASSIVE Piped instances list ═══
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
             "https://pipedapi.adminforge.de",
-            "https://api.piped.projectsegfault.com",
+            "https://api.piped.yt",
             "https://pipedapi.darkness.services",
             "https://pipedapi.r4fo.com",
             "https://pipedapi.hostux.net",
             "https://piped-api.lunar.icu",
             "https://pipedapi.in.projectsegfault.com",
-            "https://watchapi.whatever.social",
-            "https://api.piped.yt"
+            "https://api.piped.projectsegfault.com",
+            "https://watchapi.whatever.social"
         )
 
         // ═══ cobalt.tools API instances (open-source YouTube audio extractor) ═══
@@ -225,6 +225,11 @@ class YouTubeRepository {
     suspend fun getAudioStream(videoId: String): YouTubeSong? = withContext(Dispatchers.IO) {
         Log.d(TAG, "Resolving audio for: $videoId")
 
+        if (videoId.isBlank()) {
+            Log.w(TAG, "Empty videoId provided")
+            return@withContext null
+        }
+
         // 1. Try ALL Invidious instances
         for (i in INVIDIOUS_INSTANCES.indices) {
             try {
@@ -241,6 +246,7 @@ class YouTubeRepository {
                 if (thumbnails != null && thumbnails.length() > 0) {
                     thumbnail = thumbnails.getJSONObject(0).optString("url", "")
                 }
+                if (thumbnail.isEmpty()) thumbnail = "https://i.ytimg.com/vi/$videoId/default.jpg"
 
                 // Try adaptiveFormats (audio-only streams)
                 val adaptiveFormats = json.optJSONArray("adaptiveFormats")
@@ -248,16 +254,18 @@ class YouTubeRepository {
                     var bestAudioUrl = ""
                     var bestBitrate = 0
                     for (j in 0 until adaptiveFormats.length()) {
-                        val fmt = adaptiveFormats.getJSONObject(j)
-                        val type = fmt.optString("type", "")
-                        if (type.startsWith("audio/")) {
-                            val bitrate = fmt.optInt("bitrate", 0)
-                            val audioUrl = fmt.optString("url", "")
-                            if (audioUrl.isNotEmpty() && bitrate > bestBitrate) {
-                                bestAudioUrl = audioUrl
-                                bestBitrate = bitrate
+                        try {
+                            val fmt = adaptiveFormats.getJSONObject(j)
+                            val type = fmt.optString("type", "")
+                            if (type.startsWith("audio/")) {
+                                val bitrate = fmt.optInt("bitrate", 0)
+                                val audioUrl = fmt.optString("url", "")
+                                if (audioUrl.isNotEmpty() && audioUrl.startsWith("http") && bitrate > bestBitrate) {
+                                    bestAudioUrl = audioUrl
+                                    bestBitrate = bitrate
+                                }
                             }
-                        }
+                        } catch (e: Exception) { /* skip malformed format */ }
                     }
                     if (bestAudioUrl.isNotEmpty()) {
                         currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
@@ -274,17 +282,19 @@ class YouTubeRepository {
                 val formatStreams = json.optJSONArray("formatStreams")
                 if (formatStreams != null) {
                     for (j in 0 until formatStreams.length()) {
-                        val fmt = formatStreams.getJSONObject(j)
-                        val streamUrl = fmt.optString("url", "")
-                        if (streamUrl.isNotEmpty()) {
-                            currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
-                            Log.d(TAG, "✓ Invidious formatStream OK: $title")
-                            return@withContext YouTubeSong(
-                                id = videoId, title = title, artist = author,
-                                duration = lengthSeconds, thumbnailUrl = thumbnail,
-                                audioUrl = streamUrl
-                            )
-                        }
+                        try {
+                            val fmt = formatStreams.getJSONObject(j)
+                            val streamUrl = fmt.optString("url", "")
+                            if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
+                                currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
+                                Log.d(TAG, "✓ Invidious formatStream OK: $title")
+                                return@withContext YouTubeSong(
+                                    id = videoId, title = title, artist = author,
+                                    duration = lengthSeconds, thumbnailUrl = thumbnail,
+                                    audioUrl = streamUrl
+                                )
+                            }
+                        } catch (e: Exception) { /* skip malformed stream */ }
                     }
                 }
             } catch (e: Exception) {
@@ -303,20 +313,23 @@ class YouTubeRepository {
                 val title = json.optString("title", "Unknown")
                 val uploader = json.optString("uploader", json.optString("uploaderName", "Unknown Artist"))
                 val duration = json.optLong("duration", 0)
-                val thumbnail = json.optString("thumbnailUrl", json.optString("thumbnail", ""))
+                var thumbnail = json.optString("thumbnailUrl", json.optString("thumbnail", ""))
+                if (thumbnail.isEmpty()) thumbnail = "https://i.ytimg.com/vi/$videoId/default.jpg"
 
                 val audioStreams = json.optJSONArray("audioStreams")
                 if (audioStreams != null && audioStreams.length() > 0) {
                     var bestUrl = ""
                     var bestBitrate = 0
                     for (j in 0 until audioStreams.length()) {
-                        val stream = audioStreams.getJSONObject(j)
-                        val bitrate = stream.optInt("bitrate", 0)
-                        val streamUrl = stream.optString("url", "")
-                        if (streamUrl.isNotEmpty() && bitrate > bestBitrate) {
-                            bestUrl = streamUrl
-                            bestBitrate = bitrate
-                        }
+                        try {
+                            val stream = audioStreams.getJSONObject(j)
+                            val bitrate = stream.optInt("bitrate", 0)
+                            val streamUrl = stream.optString("url", "")
+                            if (streamUrl.isNotEmpty() && streamUrl.startsWith("http") && bitrate > bestBitrate) {
+                                bestUrl = streamUrl
+                                bestBitrate = bitrate
+                            }
+                        } catch (e: Exception) { /* skip malformed stream */ }
                     }
                     if (bestUrl.isNotEmpty()) {
                         currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
@@ -333,20 +346,22 @@ class YouTubeRepository {
                 val videoStreams = json.optJSONArray("videoStreams")
                 if (videoStreams != null && videoStreams.length() > 0) {
                     for (j in 0 until videoStreams.length()) {
-                        val stream = videoStreams.getJSONObject(j)
-                        val mimeType = stream.optString("mimeType", "")
-                        if (mimeType.contains("audio")) {
-                            val streamUrl = stream.optString("url", "")
-                            if (streamUrl.isNotEmpty()) {
-                                currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
-                                Log.d(TAG, "✓ Piped videoStream(audio) OK: $title")
-                                return@withContext YouTubeSong(
-                                    id = videoId, title = title, artist = uploader,
-                                    duration = duration, thumbnailUrl = thumbnail,
-                                    audioUrl = streamUrl
-                                )
+                        try {
+                            val stream = videoStreams.getJSONObject(j)
+                            val mimeType = stream.optString("mimeType", "")
+                            if (mimeType.contains("audio")) {
+                                val streamUrl = stream.optString("url", "")
+                                if (streamUrl.isNotEmpty() && streamUrl.startsWith("http")) {
+                                    currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
+                                    Log.d(TAG, "✓ Piped videoStream(audio) OK: $title")
+                                    return@withContext YouTubeSong(
+                                        id = videoId, title = title, artist = uploader,
+                                        duration = duration, thumbnailUrl = thumbnail,
+                                        audioUrl = streamUrl
+                                    )
+                                }
                             }
-                        }
+                        } catch (e: Exception) { /* skip malformed stream */ }
                     }
                 }
             } catch (e: Exception) {
