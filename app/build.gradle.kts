@@ -12,10 +12,25 @@ android {
         applicationId = "com.salmanlaghari.pulsemusicplayerai"
         minSdk = 24
         targetSdk = 35
-        versionCode = 10600
+        versionCode = 9
         versionName = "1.06.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val ksFile = System.getenv("KEYSTORE_FILE")
+            if (ksFile != null) {
+                val f = file(ksFile)
+                if (f.exists()) {
+                    storeFile = f
+                    storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                    keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                    keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+                }
+            }
+        }
     }
 
     buildTypes {
@@ -25,6 +40,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -36,6 +52,11 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    lint {
+        abortOnError = true
+        warningsAsErrors = false
+        disable.add("DEPRECATION")
     }
 }
 

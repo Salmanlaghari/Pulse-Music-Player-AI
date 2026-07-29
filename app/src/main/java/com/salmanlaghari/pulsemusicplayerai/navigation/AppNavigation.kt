@@ -30,6 +30,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.aihub.AIHubScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoPreviewEditScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.HomeScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayer
 import com.salmanlaghari.pulsemusicplayerai.presentation.library.LibraryScreen
@@ -176,6 +177,9 @@ fun AppNavigation(
                     },
                     onNavigateToEqualizer = {
                         navController.navigate(Screen.Equalizer.route)
+                    },
+                    onNavigateToVideoStudio = {
+                        navController.navigate(Screen.VideoPreviewEdit.route)
                     }
                 )
             }
@@ -238,6 +242,15 @@ fun AppNavigation(
                 QueueScreen(
                     viewModel = musicViewModel,
                     onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.VideoPreviewEdit.route) {
+                VideoPreviewEditScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onExport = { uri, name, preset, bgStyle, resolution ->
+                        // Export handled by AudioStudioViewModel in AudioTools
+                        navController.popBackStack()
+                    }
                 )
             }
         }

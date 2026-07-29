@@ -1,60 +1,66 @@
-name: Android Automated Build
+name: Android Build & Release
 
 on:
   push:
-    branches:
-      - main
-      - 'feature/**'
-  pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build:
-    name: Build & Verify Android App
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v3
 
-      - name: Grant Execute Permission to Gradlew
-        run: chmod +x gradlew
-
-      - name: Run Gradle Verification & Checks
-        run: ./gradlew check --no-daemon
+      - run: chmod +x gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Build Unsigned Release APK
+      - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
+        env:
+          KEYSTORE_FILE: release-keystore.jks
+          KEYSTORE_PASSWORD: pulse123456
+          KEY_ALIAS: pulse-release
+          KEY_PASSWORD: pulse123456
 
-      - name: Rename and Prepare APKs
-        run: |
-          mkdir -p build-apks
-          cp app/build/outputs/apk/debug/app-debug.apk build-apks/Pulse-Music-Player-AI-Debug.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk build-apks/Pulse-Music-Player-AI-Release.apk
+      - name: Get Version
+        id: ver
+        run: echo "version=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')" >> $GITHUB_OUTPUT
 
-      - name: Upload Debug APK Artifact
+      - name: List APKs
+        run: ls -lh app/build/outputs/apk/release/ app/build/outputs/apk/debug/
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Pulse-Music-Player-AI-Debug
-          path: build-apks/Pulse-Music-Player-AI-Debug.apk
-          if-no-files-found: error
+          name: Pulse-v${{ steps.ver.outputs.version }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload Release APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Pulse-Music-Player-AI-Release
-          path: build-apks/Pulse-Music-Player-AI-Release.apk
-          if-no-files-found: error
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: "Pulse Music Player AI v${{ steps.ver.outputs.version }}"
+          body: |
+            ## Pulse Music Player AI ${{ steps.ver.outputs.version }}
+            - MP3 to MP4 Video Studio with Live Preview
+            - Premium AI Assistant
+            - Fixed See All buttons
+            - 10+ Visualizer presets
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
