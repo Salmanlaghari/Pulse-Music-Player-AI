@@ -37,11 +37,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +58,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun YouTubeScreen(
@@ -70,16 +71,18 @@ fun YouTubeScreen(
     val isTrendingLoading by viewModel.isTrendingLoading.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
-    val playbackReady by viewModel.playbackReady.collectAsState()
+    val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
 
-    // Navigate to player ONLY when playback is actually ready
-    LaunchedEffect(playbackReady) {
-        if (playbackReady) {
-            viewModel.resetPlaybackReady()
-            onNavigateToPlayer()
+    // Helper function to play song and navigate
+    fun playAndNavigate(song: YouTubeSong, queue: List<YouTubeSong>) {
+        scope.launch {
+            val success = viewModel.playSong(song, queue)
+            if (success) {
+                onNavigateToPlayer()
+            }
         }
     }
 
@@ -267,9 +270,7 @@ fun YouTubeScreen(
                             YouTubeSongCard(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
-                                onClick = {
-                                    viewModel.playSong(song, searchResults)
-                                }
+                                onClick = { playAndNavigate(song, searchResults) }
                             )
                         }
                     }
@@ -331,9 +332,7 @@ fun YouTubeScreen(
                             TrendingCard(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
-                                onClick = {
-                                    viewModel.playSong(song, trendingSongs)
-                                }
+                                onClick = { playAndNavigate(song, trendingSongs) }
                             )
                         }
                     }
@@ -356,9 +355,7 @@ fun YouTubeScreen(
                             YouTubeSongCard(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
-                                onClick = {
-                                    viewModel.playSong(song, trendingSongs)
-                                }
+                                onClick = { playAndNavigate(song, trendingSongs) }
                             )
                         }
                     }

@@ -19,7 +19,6 @@ data class YouTubeSong(
 ) {
     /**
      * Convert to a MediaItem for ExoPlayer playback.
-     * Only call this when audioUrl is validated as non-empty and valid HTTP(S) URL.
      */
     fun toMediaItem(): MediaItem {
         val safeUrl = audioUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
@@ -40,7 +39,7 @@ data class YouTubeSong(
 
     /**
      * Convert to a local Song model for compatibility with existing UI.
-     * Returns null if audioUrl is invalid — caller must check.
+     * Returns null if audioUrl is invalid.
      */
     fun toSong(): Song? {
         if (!hasValidAudio()) return null

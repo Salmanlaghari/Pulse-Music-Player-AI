@@ -26,36 +26,26 @@ class YouTubeViewModel(
 
     companion object {
         private const val TAG = "YouTubeVM"
-        private const val MAX_FORCE_RETRIES = 5
     }
 
-    // Search state
     private val _searchResults = MutableStateFlow<List<YouTubeSong>>(emptyList())
     val searchResults: StateFlow<List<YouTubeSong>> = _searchResults.asStateFlow()
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
-    // Trending state
     private val _trendingSongs = MutableStateFlow<List<YouTubeSong>>(emptyList())
     val trendingSongs: StateFlow<List<YouTubeSong>> = _trendingSongs.asStateFlow()
 
     private val _isTrendingLoading = MutableStateFlow(false)
     val isTrendingLoading: StateFlow<Boolean> = _isTrendingLoading.asStateFlow()
 
-    // Currently playing
     private val _currentlyPlaying = MutableStateFlow<YouTubeSong?>(null)
     val currentlyPlaying: StateFlow<YouTubeSong?> = _currentlyPlaying.asStateFlow()
 
-    // Loading state for play action
     private val _isPlayLoading = MutableStateFlow(false)
     val isPlayLoading: StateFlow<Boolean> = _isPlayLoading.asStateFlow()
 
-    // Whether playback was successful (used to trigger navigation)
-    private val _playbackReady = MutableStateFlow(false)
-    val playbackReady: StateFlow<Boolean> = _playbackReady.asStateFlow()
-
-    // Debounce search
     private var searchJob: Job? = null
 
     init {
@@ -102,144 +92,85 @@ class YouTubeViewModel(
     }
 
     /**
-     * Reset playback ready state (call after navigation)
+     * Play a YouTube song. Resolves audio URL, then plays via PlaybackConnectionManager.
+     * Returns true if playback started successfully.
      */
-    fun resetPlaybackReady() {
-        _playbackReady.value = false
-    }
+    suspend fun playSong(song: YouTubeSong, queue: List<YouTubeSong>): Boolean {
+        _isPlayLoading.value = true
+        try {
+            AdManager.incrementSongChangeCount()
 
-    /**
-     * FORCE PLAY — tries to play the selected song.
-     * If audio URL resolution fails, automatically tries next songs in queue.
-     * Sets playbackReady = true ONLY when playback actually starts.
-     */
-    fun playSong(song: YouTubeSong, queue: List<YouTubeSong>) {
-        viewModelScope.launch {
-            _isPlayLoading.value = true
-            _playbackReady.value = false
-            try {
-                AdManager.incrementSongChangeCount()
+            // Try to resolve audio for selected song first
+            var resolvedSong = resolveAudio(song)
 
-                // Build a list of songs to try (selected song first, then rest of queue)
-                val songsToTry = mutableListOf(song)
-                songsToTry.addAll(queue.filter { it.id != song.id })
-
-                // Try up to MAX_FORCE_RETRIES songs
-                var resolvedSong: YouTubeSong? = null
-                var attempts = 0
-
-                for (candidate in songsToTry) {
-                    if (attempts >= MAX_FORCE_RETRIES) break
-                    attempts++
-
-                    try {
-                        val audioUrl = if (candidate.hasValidAudio()) {
-                            candidate.audioUrl
-                        } else {
-                            // Resolve audio stream from all APIs
-                            youTubeRepository.getAudioStream(candidate.id)?.audioUrl
-                        }
-
-                        if (!audioUrl.isNullOrEmpty() && audioUrl.startsWith("http")) {
-                            resolvedSong = candidate.copy(audioUrl = audioUrl.trim())
-                            break
-                        } else {
-                            Log.w(TAG, "No audio for: ${candidate.title} (${candidate.id}), trying next...")
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Stream resolve failed for ${candidate.title}: ${e.message}")
-                    }
+            // If selected song fails, try next songs in queue
+            if (resolvedSong == null) {
+                val fallbackQueue = queue.filter { it.id != song.id }.take(5)
+                for (fallback in fallbackQueue) {
+                    resolvedSong = resolveAudio(fallback)
+                    if (resolvedSong != null) break
                 }
+            }
 
-                // If still no resolved song, show error and DO NOT navigate
-                if (resolvedSong == null || !resolvedSong.hasValidAudio()) {
-                    try {
-                        Toast.makeText(
-                            getApplication(),
-                            "Could not load any audio. Check your internet and try again.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    } catch (t: Exception) { }
-                    Log.e(TAG, "All $attempts attempts failed — no playable song found")
-                    _isPlayLoading.value = false
-                    return@launch
-                }
-
-                _currentlyPlaying.value = resolvedSong
-
-                // Convert to local Song — MUST succeed
-                val songAsLocal = resolvedSong.toSong()
-                if (songAsLocal == null) {
-                    try {
-                        Toast.makeText(
-                            getApplication(),
-                            "Invalid audio source. Try another song.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } catch (t: Exception) { }
-                    Log.e(TAG, "toSong() returned null for: ${resolvedSong.title}")
-                    _isPlayLoading.value = false
-                    return@launch
-                }
-
-                // Resolve audio URLs for rest of queue (parallel first 10)
-                val resolvedQueue = mutableListOf<YouTubeSong>()
-                resolvedQueue.add(resolvedSong)
-
-                for (index in 1 until queue.size) {
-                    if (index < 10) {
-                        val queueSong = queue[index]
-                        try {
-                            val resolved = if (queueSong.hasValidAudio()) {
-                                queueSong
-                            } else {
-                                youTubeRepository.getAudioStream(queueSong.id)
-                            }
-                            if (resolved != null && resolved.hasValidAudio()) {
-                                resolvedQueue.add(resolved)
-                            }
-                        } catch (e: Exception) {
-                            // Skip failed queue items
-                        }
-                    } else {
-                        resolvedQueue.add(queue[index])
-                    }
-                }
-
-                // Convert queue — filter out invalid songs
-                val queueAsLocal = resolvedQueue.mapNotNull { it.toSong() }.toMutableList()
-                if (queueAsLocal.isEmpty()) {
-                    queueAsLocal.add(songAsLocal)
-                }
-
-                // Play!
-                try {
-                    playbackConnectionManager.playSong(songAsLocal, queueAsLocal)
-                    _playbackReady.value = true
-                    Log.d(TAG, "✓ Playing: ${resolvedSong.title} (after $attempts attempts)")
-                } catch (e: Exception) {
-                    Log.e(TAG, "PlaybackConnection.playSong failed", e)
-                    try {
-                        Toast.makeText(
-                            getApplication(),
-                            "Playback error. Please try again.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } catch (t: Exception) { }
-                }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to play song", e)
+            if (resolvedSong == null) {
                 try {
                     Toast.makeText(
                         getApplication(),
-                        "Playback error. Please try again.",
-                        Toast.LENGTH_SHORT
+                        "Could not load audio. Check your internet and try again.",
+                        Toast.LENGTH_LONG
                     ).show()
                 } catch (t: Exception) { }
-            } finally {
-                _isPlayLoading.value = false
+                Log.e(TAG, "All audio resolution attempts failed")
+                return false
             }
+
+            _currentlyPlaying.value = resolvedSong
+
+            // Convert to local Song
+            val songAsLocal = resolvedSong.toSong() ?: return false
+
+            // Resolve queue (best effort, first 5)
+            val resolvedQueue = mutableListOf(songAsLocal)
+            for (i in 1 until minOf(queue.size, 6)) {
+                try {
+                    val qSong = queue[i]
+                    val resolved = if (qSong.hasValidAudio()) qSong else resolveAudio(qSong)
+                    if (resolved != null) {
+                        resolved.toSong()?.let { resolvedQueue.add(it) }
+                    }
+                } catch (e: Exception) { /* skip */ }
+            }
+
+            // Play via connection manager
+            playbackConnectionManager.playSong(songAsLocal, resolvedQueue)
+            Log.d(TAG, "✓ Playing: ${resolvedSong.title}")
+            return true
+
+        } catch (e: Exception) {
+            Log.e(TAG, "playSong failed", e)
+            try {
+                Toast.makeText(
+                    getApplication(),
+                    "Playback error. Please try again.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (t: Exception) { }
+            return false
+        } finally {
+            _isPlayLoading.value = false
+        }
+    }
+
+    private suspend fun resolveAudio(song: YouTubeSong): YouTubeSong? {
+        // If already has valid audio URL, return as-is
+        if (song.hasValidAudio()) return song
+
+        // Try to resolve from API
+        return try {
+            youTubeRepository.getAudioStream(song.id)
+        } catch (e: Exception) {
+            Log.w(TAG, "Audio resolve failed for ${song.title}: ${e.message}")
+            null
         }
     }
 
