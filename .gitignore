@@ -1,0 +1,25 @@
+# Built artifacts
+**/build/
+build/
+app/build/
+
+# Gradle files
+.gradle/
+**/.gradle/
+
+# Android Studio / IntelliJ IDEA
+.idea/
+**/.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+.navigation/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keystore secrets
+*.keystore
+*.jks
