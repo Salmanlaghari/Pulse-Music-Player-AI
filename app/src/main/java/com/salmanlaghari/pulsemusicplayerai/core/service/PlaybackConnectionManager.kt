@@ -151,25 +151,29 @@ class PlaybackConnectionManager(private val context: Context) {
 
     // Playback control wrappers
     fun playSong(song: Song, playQueue: List<Song>) {
-        val controller = mediaController ?: return
+        try {
+            val controller = mediaController ?: return
 
-        controller.stop()
-        controller.clearMediaItems()
+            controller.stop()
+            controller.clearMediaItems()
 
-        // Set references and load items
-        _currentQueue.value = playQueue
-        val mediaItems = playQueue.map { it.toMediaItem() }
-        controller.addMediaItems(mediaItems)
+            // Set references and load items
+            _currentQueue.value = playQueue
+            val mediaItems = playQueue.map { it.toMediaItem() }
+            controller.addMediaItems(mediaItems)
 
-        val targetIndex = playQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        controller.seekTo(targetIndex, 0L)
-        controller.prepare()
-        controller.play()
+            val targetIndex = playQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+            controller.seekTo(targetIndex, 0L)
+            controller.prepare()
+            controller.play()
 
-        // Restore speed/pitch to player
-        controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(_playbackSpeed.value, _playbackPitch.value))
+            // Restore speed/pitch to player
+            controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(_playbackSpeed.value, _playbackPitch.value))
 
-        updateStateFromController()
+            updateStateFromController()
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackConn", "playSong failed", e)
+        }
     }
 
     fun play() {

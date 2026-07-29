@@ -125,7 +125,11 @@ class MusicViewModel(
 
     // 6. Playback Control Handlers
     fun playSong(song: Song, customQueue: List<Song> = _allSongs.value) {
-        playbackConnectionManager.playSong(song, customQueue)
+        try {
+            playbackConnectionManager.playSong(song, customQueue)
+        } catch (e: Exception) {
+            android.util.Log.e("MusicVM", "playSong failed", e)
+        }
     }
 
     fun togglePlayPause() {
