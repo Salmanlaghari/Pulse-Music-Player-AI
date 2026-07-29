@@ -92,7 +92,7 @@ object AdManager {
     private fun loadAppOpen(context: Context) {
         AppOpenAd.load(context, APP_OPEN_ID, AdRequest.Builder().build(),
             AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT,
-            object : AppOpenAdLoadCallback() {
+            object : AppOpenAd.AppOpenAdLoadCallback() {
                 override fun onAdLoaded(ad: AppOpenAd) {
                     appOpenAd = ad
                     Log.d(TAG, "App Open loaded")

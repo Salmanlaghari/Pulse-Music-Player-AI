@@ -61,8 +61,8 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
 
-    // AdMob
-    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    // AdMob (22.x for stable API compatibility)
+    implementation("com.google.android.gms:play-services-ads:22.6.0")
 
     // Required for Unit Tests
     testImplementation(libs.junit)
