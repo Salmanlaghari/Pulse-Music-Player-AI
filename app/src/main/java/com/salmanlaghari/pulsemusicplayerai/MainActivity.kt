@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         MusicViewModelFactory(musicRepository, playbackConnectionManager)
     }
     private val youTubeViewModel: YouTubeViewModel by viewModels {
-        YouTubeViewModelFactory(youTubeRepository, playbackConnectionManager)
+        YouTubeViewModelFactory(application, youTubeRepository, playbackConnectionManager)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

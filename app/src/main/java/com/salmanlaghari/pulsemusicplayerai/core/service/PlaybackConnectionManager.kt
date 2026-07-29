@@ -154,11 +154,23 @@ class PlaybackConnectionManager(private val context: Context) {
         try {
             val controller = mediaController ?: return
 
+            // Validate: song must have a playable URI
+            val songUri = song.uri?.toString() ?: ""
+            if (songUri.isEmpty() || songUri == "null") {
+                android.util.Log.w("PlaybackConn", "Cannot play song with empty URI: ${song.title}")
+                return
+            }
+
             controller.stop()
             controller.clearMediaItems()
 
-            // Ensure queue is not empty
-            val safeQueue = if (playQueue.isEmpty()) listOf(song) else playQueue
+            // Ensure queue is not empty and filter out songs with empty URIs
+            val safeQueue = playQueue.filter { s ->
+                val uri = s.uri?.toString() ?: ""
+                uri.isNotEmpty() && uri != "null"
+            }.let { filtered ->
+                if (filtered.isEmpty()) listOf(song) else filtered
+            }
 
             // Set references and load items
             _currentQueue.value = safeQueue
