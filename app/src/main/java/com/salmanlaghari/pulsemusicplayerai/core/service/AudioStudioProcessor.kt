@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
@@ -125,7 +126,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
         }
 
         // 2. Fetch Videos (MP4 Exporter results)
@@ -189,7 +190,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
         }
 
         list.sortByDescending { it.dateAdded }
@@ -268,7 +269,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", mimeType)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -300,7 +301,7 @@ class AudioStudioProcessor(private val context: Context) {
             outputStream.close()
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", "audio/mpeg")
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -370,7 +371,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -439,7 +440,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -517,7 +518,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -589,7 +590,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -611,7 +612,7 @@ class AudioStudioProcessor(private val context: Context) {
 
         val tempFile = File(context.cacheDir, "temp_studio_${System.currentTimeMillis()}.mp4")
         val retriever = MediaMetadataRetriever()
-        var durationUs = 15_000_000L // Default to 15 seconds if duration cannot be resolved
+        var durationUs = 15_000_000L
         try {
             retriever.setDataSource(context, sourceUri)
             val dStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
@@ -619,10 +620,14 @@ class AudioStudioProcessor(private val context: Context) {
                 durationUs = dStr.toLong() * 1000L
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Failed to get duration", e)
         } finally {
             retriever.release()
         }
+
+        // Limit video length to 10 minutes for performance
+        val maxDurationUs = 10 * 60 * 1_000_000L
+        if (durationUs > maxDurationUs) durationUs = maxDurationUs
 
         val videoFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
@@ -829,11 +834,11 @@ class AudioStudioProcessor(private val context: Context) {
             // Save to public video directory inside MediaStore
             return@withContext copyLocalFileToMediaStoreVideo(tempFile, outputName)
         } catch (e: Exception) {
-            e.printStackTrace()
-            videoEncoder?.release()
-            audioExtractor?.release()
-            muxer?.release()
-            surface?.release()
+            Log.e("AudioStudioProcessor", "Video export failed: ${e.message}", e)
+            try { videoEncoder?.release() } catch (ex: Exception) { }
+            try { audioExtractor?.release() } catch (ex: Exception) { }
+            try { muxer?.release() } catch (ex: Exception) { }
+            try { surface?.release() } catch (ex: Exception) { }
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
@@ -878,7 +883,7 @@ class AudioStudioProcessor(private val context: Context) {
         return@withContext try {
             contentResolver.update(uri, values, null, null) > 0
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             false
         }
     }
@@ -907,7 +912,7 @@ class AudioStudioProcessor(private val context: Context) {
         return@withContext try {
             contentResolver.delete(uri, null, null) > 0
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             false
         }
     }
@@ -998,7 +1003,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
             }
@@ -1086,7 +1091,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
             }

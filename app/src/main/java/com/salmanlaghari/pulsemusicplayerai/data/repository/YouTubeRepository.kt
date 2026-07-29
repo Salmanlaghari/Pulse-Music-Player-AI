@@ -10,19 +10,20 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-/**
- * Repository for fetching YouTube music via Piped API (free, no API key).
- */
 class YouTubeRepository {
 
     companion object {
         private const val TAG = "YouTubeRepo"
 
+        // Multiple Piped API instances for reliability
         private val API_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
             "https://pipedapi.adminforge.de",
             "https://api.piped.projectsegfault.com",
-            "https://pipedapi.in.projectsegfault.com"
+            "https://pipedapi.in.projectsegfault.com",
+            "https://piped-api.privacy.com.de",
+            "https://watchapi.whatever.social",
+            "https://api.piped.yt"
         )
 
         private var currentInstanceIndex = 0
@@ -35,14 +36,9 @@ class YouTubeRepository {
         }
     }
 
-    /**
-     * Search YouTube for music/videos.
-     * Uses "videos" filter which is widely supported across all Piped instances.
-     */
     suspend fun search(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
 
-        // Try "videos" filter first (most reliable), then fallback to no filter
         val filters = listOf("videos", "music_songs", "")
         var lastError: Exception? = null
 
@@ -64,12 +60,12 @@ class YouTubeRepository {
                     if (items != null && items.length() > 0) {
                         val results = parseSearchResults(items)
                         if (results.isNotEmpty()) {
-                            Log.d(TAG, "Found ${results.size} results with filter='$filter'")
+                            Log.d(TAG, "Found ${results.size} results")
                             return@withContext results
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Search failed with filter='$filter': ${e.message}")
+                    Log.w(TAG, "Search failed: ${e.message}")
                     lastError = e
                 }
             }
@@ -80,40 +76,65 @@ class YouTubeRepository {
         emptyList()
     }
 
-    /**
-     * Get trending videos from YouTube.
-     */
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
-        for (attempt in 0 until API_INSTANCES.size) {
-            try {
-                val url = "${getBaseUrl()}/trending?region=US"
-                Log.d(TAG, "Fetching trending: $url")
-                val response = httpGet(url)
-                val json = JSONArray(response)
+        // Try multiple endpoints and regions
+        val endpoints = listOf(
+            "/trending?region=US",
+            "/trending?region=GB",
+            "/trending",
+            "/trending?region=IN"
+        )
 
-                val songs = mutableListOf<YouTubeSong>()
-                for (i in 0 until json.length()) {
+        for (attempt in 0 until API_INSTANCES.size) {
+            for (endpoint in endpoints) {
+                try {
+                    val url = "${getBaseUrl()}$endpoint"
+                    Log.d(TAG, "Fetching trending: $url")
+                    val response = httpGet(url)
+
+                    // Handle both JSONArray and JSONObject responses
+                    val songs = mutableListOf<YouTubeSong>()
                     try {
-                        val item = json.getJSONObject(i)
-                        val song = parseTrendingItem(item)
-                        if (song != null) songs.add(song)
-                    } catch (e: Exception) { }
+                        val json = JSONArray(response)
+                        for (i in 0 until json.length()) {
+                            try {
+                                val item = json.getJSONObject(i)
+                                val song = parseTrendingItem(item)
+                                if (song != null) songs.add(song)
+                            } catch (e: Exception) { }
+                        }
+                    } catch (e: Exception) {
+                        // Maybe it's a JSONObject with items
+                        try {
+                            val json = JSONObject(response)
+                            val items = json.optJSONArray("items")
+                            if (items != null) {
+                                for (i in 0 until items.length()) {
+                                    try {
+                                        val item = items.getJSONObject(i)
+                                        val song = parseTrendingItem(item)
+                                        if (song != null) songs.add(song)
+                                    } catch (e2: Exception) { }
+                                }
+                            }
+                        } catch (e2: Exception) { }
+                    }
+
+                    if (songs.isNotEmpty()) {
+                        Log.d(TAG, "Found ${songs.size} trending songs")
+                        return@withContext songs.take(50)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Trending failed: ${e.message}")
                 }
-                if (songs.isNotEmpty()) {
-                    Log.d(TAG, "Found ${songs.size} trending songs")
-                    return@withContext songs.take(50)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Trending failed: ${e.message}")
-                switchInstance()
             }
+            switchInstance()
         }
+
+        Log.e(TAG, "All trending attempts failed")
         emptyList()
     }
 
-    /**
-     * Get audio stream URL for a YouTube video.
-     */
     suspend fun getAudioStream(videoId: String): YouTubeSong? = withContext(Dispatchers.IO) {
         for (attempt in 0 until API_INSTANCES.size) {
             try {
@@ -148,8 +169,6 @@ class YouTubeRepository {
         null
     }
 
-    // --- Private Helpers ---
-
     private fun parseSearchResults(items: JSONArray): List<YouTubeSong> {
         val songs = mutableListOf<YouTubeSong>()
         for (i in 0 until items.length()) {
@@ -157,16 +176,10 @@ class YouTubeRepository {
                 val item = items.getJSONObject(i)
                 val type = item.optString("type", "")
 
-                // Accept stream, video, or any item with a url
                 if (type == "stream" || type == "video" || item.has("url")) {
                     var videoId = item.optString("url", "")
-                    // Clean up video ID
-                    if (videoId.startsWith("/watch?v=")) {
-                        videoId = videoId.removePrefix("/watch?v=")
-                    }
-                    if (videoId.startsWith("/")) {
-                        videoId = videoId.removePrefix("/")
-                    }
+                    if (videoId.startsWith("/watch?v=")) videoId = videoId.removePrefix("/watch?v=")
+                    if (videoId.startsWith("/")) videoId = videoId.removePrefix("/")
                     if (videoId.isEmpty()) continue
 
                     val title = item.optString("title", "").ifEmpty { item.optString("name", "Unknown") }
@@ -176,29 +189,17 @@ class YouTubeRepository {
                     val isLive = item.optBoolean("isLive", false)
 
                     if (!isLive && title.isNotEmpty()) {
-                        songs.add(
-                            YouTubeSong(
-                                id = videoId,
-                                title = title,
-                                artist = uploader,
-                                duration = duration,
-                                thumbnailUrl = thumbnail,
-                                audioUrl = ""
-                            )
-                        )
+                        songs.add(YouTubeSong(id = videoId, title = title, artist = uploader, duration = duration, thumbnailUrl = thumbnail, audioUrl = ""))
                     }
                 }
-            } catch (e: Exception) {
-                // Skip malformed items
-            }
+            } catch (e: Exception) { }
         }
         return songs
     }
 
     private fun parseTrendingItem(item: JSONObject): YouTubeSong? {
         return try {
-            var url = item.optString("url", "")
-            var videoId = url.removePrefix("/watch?v=").removePrefix("/")
+            var videoId = item.optString("url", "").removePrefix("/watch?v=").removePrefix("/")
             if (videoId.isEmpty()) return null
 
             val title = item.optString("title", "").ifEmpty { item.optString("name", "Unknown") }
@@ -209,14 +210,7 @@ class YouTubeRepository {
 
             if (isLive || title.isEmpty()) return null
 
-            YouTubeSong(
-                id = videoId,
-                title = title,
-                artist = uploader,
-                duration = duration,
-                thumbnailUrl = thumbnail,
-                audioUrl = ""
-            )
+            YouTubeSong(id = videoId, title = title, artist = uploader, duration = duration, thumbnailUrl = thumbnail, audioUrl = "")
         } catch (e: Exception) {
             null
         }
