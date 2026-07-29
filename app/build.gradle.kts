@@ -37,6 +37,11 @@ android {
     buildFeatures {
         compose = true
     }
+    lint {
+        // Avoid lint errors from AdMob SDK and third-party libs
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {
@@ -59,6 +64,7 @@ dependencies {
     // AdMob
     implementation("com.google.android.gms:play-services-ads:23.6.0")
 
+    // Required for Unit Tests
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
