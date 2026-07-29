@@ -21,6 +21,9 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModelFactory
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModelFactory
+import com.salmanlaghari.pulsemusicplayerai.presentation.youtube.YouTubeViewModel
+import com.salmanlaghari.pulsemusicplayerai.presentation.youtube.YouTubeViewModelFactory
+import com.salmanlaghari.pulsemusicplayerai.data.repository.YouTubeRepository
 import coil.Coil
 import coil.ImageLoader
 import com.salmanlaghari.pulsemusicplayerai.theme.PulseMusicPlayerAITheme
@@ -37,9 +40,13 @@ class MainActivity : ComponentActivity() {
 
     private val audioScanner by lazy { AudioScanner(applicationContext) }
     private val musicRepository by lazy { MusicRepository(applicationContext, audioScanner) }
+    private val youTubeRepository by lazy { YouTubeRepository() }
     private val playbackConnectionManager by lazy { PlaybackConnectionManager(applicationContext) }
     private val musicViewModel: MusicViewModel by viewModels {
         MusicViewModelFactory(musicRepository, playbackConnectionManager)
+    }
+    private val youTubeViewModel: YouTubeViewModel by viewModels {
+        YouTubeViewModelFactory(youTubeRepository, playbackConnectionManager)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +85,7 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(
                         mainViewModel = mainViewModel,
                         musicViewModel = musicViewModel,
+                        youTubeViewModel = youTubeViewModel,
                         isDarkTheme = isDarkTheme
                     )
                 }

@@ -4,6 +4,7 @@ sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object Home : Screen("home")
     object Library : Screen("library")
+    object YouTube : Screen("youtube")
     object AudioTools : Screen("audio_tools")
     object AIHub : Screen("ai_hub")
     object Settings : Screen("settings")

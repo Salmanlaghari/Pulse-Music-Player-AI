@@ -85,7 +85,7 @@ fun HomeScreen(
     viewModel: MusicViewModel,
     onNavigateToSearch: () -> Unit,
     onNavigateToPlayer: () -> Unit,
-    onNavigateToAIHub: () -> Unit,
+    onNavigateToYouTube: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToEqualizer: () -> Unit
@@ -101,7 +101,7 @@ fun HomeScreen(
             viewModel = viewModel,
             onNavigateToSearch = onNavigateToSearch,
             onNavigateToPlayer = onNavigateToPlayer,
-            onNavigateToAIHub = onNavigateToAIHub,
+            onNavigateToYouTube = onNavigateToYouTube,
             onNavigateToFavorites = onNavigateToFavorites,
             onNavigateToLibrary = onNavigateToLibrary,
             onNavigateToEqualizer = onNavigateToEqualizer
@@ -114,7 +114,7 @@ fun HomeScreenContent(
     viewModel: MusicViewModel,
     onNavigateToSearch: () -> Unit,
     onNavigateToPlayer: () -> Unit,
-    onNavigateToAIHub: () -> Unit,
+    onNavigateToYouTube: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToEqualizer: () -> Unit
@@ -271,7 +271,7 @@ fun HomeScreenContent(
             SectionHeader(title = "Quick Access", showSeeAll = false) {}
             Spacer(modifier = Modifier.height(12.dp))
             QuickAccessRow(
-                onNavigateToAIHub = onNavigateToAIHub,
+                onNavigateToYouTube = onNavigateToYouTube,
                 onNavigateToFavorites = onNavigateToFavorites,
                 onNavigateToLibrary = onNavigateToLibrary,
                 onNavigateToEqualizer = onNavigateToEqualizer
@@ -477,13 +477,13 @@ data class QuickAccessItem(
 
 @Composable
 fun QuickAccessRow(
-    onNavigateToAIHub: () -> Unit,
+    onNavigateToYouTube: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToEqualizer: () -> Unit
 ) {
     val items = listOf(
-        QuickAccessItem("AI Assistant", "✨", onNavigateToAIHub),
+        QuickAccessItem("YouTube Music", "▶️", onNavigateToYouTube),
         QuickAccessItem("My Favorites", "🩵", onNavigateToFavorites),
         QuickAccessItem("Library", "🎧", onNavigateToLibrary),
         QuickAccessItem("Equalizer", "📊", onNavigateToEqualizer)

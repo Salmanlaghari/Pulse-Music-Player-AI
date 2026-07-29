@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -28,11 +28,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
-import com.salmanlaghari.pulsemusicplayerai.presentation.aihub.AIHubScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.HomeScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayer
 import com.salmanlaghari.pulsemusicplayerai.presentation.library.LibraryScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.youtube.YouTubeScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.youtube.YouTubeViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsAboutScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsFeedbackScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivacyScreen
@@ -47,8 +48,8 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.ui.SearchScreen
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem(Screen.Home.route, "Home", Icons.Default.Home)
     object Library : BottomNavItem(Screen.Library.route, "Library", Icons.Default.LibraryMusic)
+    object YouTube : BottomNavItem(Screen.YouTube.route, "YouTube", Icons.Default.OndemandVideo)
     object AudioTools : BottomNavItem(Screen.AudioTools.route, "Audio Tools", Icons.Default.Tune)
-    object AIHub : BottomNavItem(Screen.AIHub.route, "AI Hub", Icons.Default.AutoAwesome)
     object Settings : BottomNavItem(Screen.Settings.route, "Settings", Icons.Default.Settings)
 }
 
@@ -56,6 +57,7 @@ sealed class BottomNavItem(val route: String, val title: String, val icon: Image
 fun AppNavigation(
     mainViewModel: MainViewModel,
     musicViewModel: MusicViewModel,
+    youTubeViewModel: YouTubeViewModel,
     isDarkTheme: Boolean
 ) {
     val navController = rememberNavController()
@@ -66,8 +68,8 @@ fun AppNavigation(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Library,
+        BottomNavItem.YouTube,
         BottomNavItem.AudioTools,
-        BottomNavItem.AIHub,
         BottomNavItem.Settings
     )
 
@@ -75,8 +77,8 @@ fun AppNavigation(
     val showNavigationAndPlayer = currentRoute in listOf(
         Screen.Home.route,
         Screen.Library.route,
+        Screen.YouTube.route,
         Screen.AudioTools.route,
-        Screen.AIHub.route,
         Screen.Settings.route
     )
 
@@ -153,8 +155,8 @@ fun AppNavigation(
                     viewModel = musicViewModel,
                     onNavigateToSearch = { navController.navigate(Screen.Search.route) },
                     onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
-                    onNavigateToAIHub = {
-                        navController.navigate(Screen.AIHub.route) {
+                    onNavigateToYouTube = {
+                        navController.navigate(Screen.YouTube.route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
@@ -182,11 +184,14 @@ fun AppNavigation(
             composable(Screen.Library.route) {
                 LibraryScreen(viewModel = musicViewModel)
             }
+            composable(Screen.YouTube.route) {
+                YouTubeScreen(
+                    viewModel = youTubeViewModel,
+                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }
+                )
+            }
             composable(Screen.AudioTools.route) {
                 AudioToolsScreen()
-            }
-            composable(Screen.AIHub.route) {
-                AIHubScreen()
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
