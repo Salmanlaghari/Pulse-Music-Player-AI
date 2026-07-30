@@ -126,6 +126,9 @@ class YouTubeViewModel(
 
             _currentlyPlaying.value = resolvedSong
 
+            // Store YouTube songs reference for playback state tracking
+            playbackConnectionManager.setYouTubeSongsReference(queue)
+
             // Convert to local Song
             val songAsLocal = resolvedSong.toSong() ?: return false
 
