@@ -14,7 +14,7 @@ data class YouTubeSong(
     val artist: String,
     val duration: Long, // in seconds
     val thumbnailUrl: String,
-    val audioUrl: String, // direct audio stream URL
+    val audioUrl: String, // direct audio stream URL OR YouTube video URL
     val isLive: Boolean = false
 ) {
     /**
@@ -23,16 +23,31 @@ data class YouTubeSong(
     val sourceType: String
         get() = when {
             id.startsWith("dz_") -> "Deezer"
-            id.startsWith("ia_") -> "Internet Archive"
-            id.startsWith("jm_") -> "Jamendo"
-            else -> "YouTube"
+            id.startsWith("yt_") -> "YouTube"
+            id.startsWith("ia_") -> "Archive"
+            else -> "Music"
         }
 
     /**
+     * Check if this is a YouTube video (not extracted audio).
+     */
+    val isYouTubeVideo: Boolean
+        get() = !id.startsWith("dz_") && !id.startsWith("ia_") && !id.startsWith("jm_") && !audioUrl.startsWith("http")
+
+    /**
      * Convert to a MediaItem for ExoPlayer playback.
+     * For YouTube videos, use the video URL. For others, use audioUrl.
      */
     fun toMediaItem(): MediaItem {
-        val safeUrl = audioUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
+        val mediaUri = when {
+            // YouTube video - use the video URL directly
+            isYouTubeVideo -> "https://www.youtube.com/watch?v=$id"
+            // Has direct audio URL
+            audioUrl.isNotBlank() && audioUrl.startsWith("http") -> audioUrl
+            // Fallback
+            else -> ""
+        }
+        
         val safeThumb = thumbnailUrl.takeIf { it.isNotBlank() } ?: getDefaultThumbnail()
 
         val metadata = MediaMetadata.Builder()
@@ -43,45 +58,52 @@ data class YouTubeSong(
 
         return MediaItem.Builder()
             .setMediaId("yt_$id")
-            .setUri(safeUrl)
+            .setUri(mediaUri)
             .setMediaMetadata(metadata)
             .build()
     }
 
     /**
      * Convert to a local Song model for compatibility with existing UI.
-     * Returns null if audioUrl is invalid.
+     * Returns null if no valid URI available.
      */
     fun toSong(): Song? {
-        if (!hasValidAudio()) return null
-        val safeAudioUrl = audioUrl.trim()
+        val uri = when {
+            isYouTubeVideo -> Uri.parse("https://www.youtube.com/watch?v=$id")
+            audioUrl.isNotBlank() && audioUrl.startsWith("http") -> Uri.parse(audioUrl.trim())
+            else -> return null
+        }
+        
         val safeThumbnail = thumbnailUrl.takeIf { it.isNotBlank() } ?: getDefaultThumbnail()
+        
         return Song(
             id = id.hashCode().toLong(),
             title = title,
             artist = artist,
             album = "$sourceType Music",
-            duration = duration * 1000, // convert to ms
-            path = safeAudioUrl,
-            uri = Uri.parse(safeAudioUrl),
+            duration = duration * 1000,
+            path = uri.toString(),
+            uri = uri,
             dateAdded = System.currentTimeMillis(),
             artUri = Uri.parse(safeThumbnail)
         )
     }
 
     /**
-     * Check if this song has a valid playable audio URL.
+     * Check if this song has a valid playable URL.
      */
     fun hasValidAudio(): Boolean {
-        return audioUrl.isNotBlank() &&
-                audioUrl.trim().length > 10 &&
-                (audioUrl.startsWith("http://") || audioUrl.startsWith("https://"))
+        return when {
+            isYouTubeVideo -> true // YouTube videos can be played directly
+            audioUrl.isNotBlank() && audioUrl.trim().length > 10 && audioUrl.startsWith("http") -> true
+            else -> false
+        }
     }
 
     private fun getDefaultThumbnail(): String {
         return when {
             id.startsWith("dz_") -> "https://e-cdns-images.dzcdn.net/images/cover/000000000/56x56.jpg"
-            else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_")}/default.jpg"
+            else -> "https://i.ytimg.com/vi/$id/default.jpg"
         }
     }
 }

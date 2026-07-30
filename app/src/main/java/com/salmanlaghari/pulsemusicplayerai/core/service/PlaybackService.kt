@@ -3,10 +3,15 @@ package com.salmanlaghari.pulsemusicplayerai.core.service
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.youtube.YouTubeMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
+@UnstableApi
 class PlaybackService : MediaSessionService() {
 
     companion object {
@@ -16,19 +21,26 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var exoPlayer: ExoPlayer? = null
 
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
 
-        // 1. Initialize ExoPlayer with standard Audio Focus attributes
+        // 1. Initialize ExoPlayer with YouTube support
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        // Create renderers factory with YouTube extension support
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+
+        // Create media source factory that supports YouTube
+        val mediaSourceFactory = DefaultMediaSourceFactory(renderersFactory)
+
         exoPlayer = ExoPlayer.Builder(this)
-            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
-            .setHandleAudioBecomingNoisy(true) // Automatically pause playback on headphones unplug (Become-Noisy)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
             .build()
 
         // 2. Initialize Audio effects
@@ -51,7 +63,6 @@ class PlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
         if (player != null && !player.playWhenReady) {
-            // Stop service if player is paused or stopped
             stopSelf()
         }
     }
@@ -67,6 +78,5 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    // Custom Callback to intercept queue actions, media item setups etc. if necessary
     private inner class CustomSessionCallback : MediaSession.Callback
 }
