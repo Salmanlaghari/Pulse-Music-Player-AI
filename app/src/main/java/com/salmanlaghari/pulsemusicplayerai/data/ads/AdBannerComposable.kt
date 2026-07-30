@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.data.ads
 
 import android.util.Log
+import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,11 +29,6 @@ fun AdMobBanner(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val errorHandler = remember { 
-        { error: LoadAdError ->
-            Log.w("AdMobBanner", "Ad failed to load: ${error.message}")
-        }
-    }
 
     Box(
         modifier = modifier
@@ -62,12 +58,12 @@ fun AdMobBanner(
                     }
                 } catch (e: Exception) {
                     Log.e("AdMobBanner", "Failed to create AdView: ${e.message}")
-                    null
+                    FrameLayout(ctx)
                 }
             },
-            update = { adView ->
+            update = { adView: AdView ->
                 try {
-                    adView?.loadAd(AdRequest.Builder().build())
+                    adView.loadAd(AdRequest.Builder().build())
                 } catch (e: Exception) {
                     Log.e("AdMobBanner", "Failed to update AdView: ${e.message}")
                 }
