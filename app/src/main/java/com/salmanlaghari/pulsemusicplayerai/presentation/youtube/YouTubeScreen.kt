@@ -1,5 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.youtube
 
+import java.util.Locale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -130,18 +131,44 @@ fun YouTubeScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
+            // Header with Region Indicator
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "YouTube Music",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White
-                )
+                Column {
+                    Text(
+                        text = "YouTube Music",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    // Region indicator
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎵 Music Only",
+                            fontSize = 12.sp,
+                            color = CyanGlow
+                        )
+                        Text(
+                            text = " • ",
+                            fontSize = 12.sp,
+                            color = TextDim
+                        )
+                        Text(
+                            text = getRegionFlag(Locale.getDefault().country),
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = " ${getRegionName(Locale.getDefault().country)}",
+                            fontSize = 12.sp,
+                            color = TextDim
+                        )
+                    }
+                }
                 if (currentlyPlaying != null) {
                     Card(
                         onClick = onNavigateToPlayer,
@@ -554,4 +581,82 @@ private fun formatDuration(seconds: Long): String {
     val mins = seconds / 60
     val secs = seconds % 60
     return String.format("%d:%02d", mins, secs)
+}
+
+// Helper function to get region flag emoji
+private fun getRegionFlag(countryCode: String): String {
+    return when (countryCode) {
+        "IN" -> "🇮🇳"  // India
+        "US" -> "🇺🇸"  // USA
+        "GB" -> "🇬🇧"  // UK
+        "PK" -> "🇵🇰"  // Pakistan
+        "BD" -> "🇧🇩"  // Bangladesh
+        "AE" -> "🇦🇪"  // UAE
+        "SA" -> "🇸🇦"  // Saudi Arabia
+        "DE" -> "🇩🇪"  // Germany
+        "FR" -> "🇫🇷"  // France
+        "ES" -> "🇪🇸"  // Spain
+        "IT" -> "🇮🇹"  // Italy
+        "BR" -> "🇧🇷"  // Brazil
+        "MX" -> "🇲🇽"  // Mexico
+        "JP" -> "🇯🇵"  // Japan
+        "KR" -> "🇰🇷"  // Korea
+        "CN" -> "🇨🇳"  // China
+        "ID" -> "🇮🇩"  // Indonesia
+        "TH" -> "🇹🇭"  // Thailand
+        "VN" -> "🇻🇳"  // Vietnam
+        "PH" -> "🇵🇭"  // Philippines
+        "MY" -> "🇲🇾"  // Malaysia
+        "TR" -> "🇹🇷"  // Turkey
+        "EG" -> "🇪🇬"  // Egypt
+        "NG" -> "🇳🇬"  // Nigeria
+        "ZA" -> "🇿🇦"  // South Africa
+        "AR" -> "🇦🇷"  // Argentina
+        "CO" -> "🇨🇴"  // Colombia
+        "CL" -> "🇨🇱"  // Chile
+        "CA" -> "🇨🇦"  // Canada
+        "AU" -> "🇦🇺"  // Australia
+        "NZ" -> "🇳🇿"  // New Zealand
+        "RU" -> "🇷🇺"  // Russia
+        else -> "🌍"
+    }
+}
+
+// Helper function to get region name
+private fun getRegionName(countryCode: String): String {
+    return when (countryCode) {
+        "IN" -> "India"
+        "US" -> "USA"
+        "GB" -> "UK"
+        "PK" -> "Pakistan"
+        "BD" -> "Bangladesh"
+        "AE" -> "UAE"
+        "SA" -> "Saudi"
+        "DE" -> "Germany"
+        "FR" -> "France"
+        "ES" -> "Spain"
+        "IT" -> "Italy"
+        "BR" -> "Brazil"
+        "MX" -> "Mexico"
+        "JP" -> "Japan"
+        "KR" -> "Korea"
+        "CN" -> "China"
+        "ID" -> "Indonesia"
+        "TH" -> "Thailand"
+        "VN" -> "Vietnam"
+        "PH" -> "Philippines"
+        "MY" -> "Malaysia"
+        "TR" -> "Turkey"
+        "EG" -> "Egypt"
+        "NG" -> "Nigeria"
+        "ZA" -> "South Africa"
+        "AR" -> "Argentina"
+        "CO" -> "Colombia"
+        "CL" -> "Chile"
+        "CA" -> "Canada"
+        "AU" -> "Australia"
+        "NZ" -> "New Zealand"
+        "RU" -> "Russia"
+        else -> "World"
+    }
 }

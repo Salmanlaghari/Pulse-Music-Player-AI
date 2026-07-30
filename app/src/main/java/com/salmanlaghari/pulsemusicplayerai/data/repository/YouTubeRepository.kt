@@ -9,22 +9,97 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 
 class YouTubeRepository {
 
     companion object {
         private const val TAG = "YouTubeRepo"
 
-        // ═══ Invidious instances ═══
+        // ═══ FAST TIMEOUTS (reduced for faster loading) ═══
+        private const val FAST_TIMEOUT = 5000 // 5 seconds
+        private const val NORMAL_TIMEOUT = 8000 // 8 seconds
+
+        // ═══ REGION MAPPING — maps locale to YouTube region codes ═══
+        private val REGION_MAP = mapOf(
+            "IN" to "IN",  // India
+            "US" to "US",  // USA
+            "GB" to "GB",  // UK
+            "PK" to "PK",  // Pakistan
+            "BD" to "BD",  // Bangladesh
+            "AE" to "AE",  // UAE
+            "SA" to "SA",  // Saudi Arabia
+            "DE" to "DE",  // Germany
+            "FR" to "FR",  // France
+            "ES" to "ES",  // Spain
+            "IT" to "IT",  // Italy
+            "BR" to "BR",  // Brazil
+            "MX" to "MX",  // Mexico
+            "JP" to "JP",  // Japan
+            "KR" to "KR",  // Korea
+            "CN" to "CN",  // China
+            "RU" to "RU",  // Russia
+            "ID" to "ID",  // Indonesia
+            "TH" to "TH",  // Thailand
+            "VN" to "VN",  // Vietnam
+            "PH" to "PH",  // Philippines
+            "MY" to "MY",  // Malaysia
+            "TR" to "TR",  // Turkey
+            "EG" to "EG",  // Egypt
+            "NG" to "NG",  // Nigeria
+            "ZA" to "ZA",  // South Africa
+            "AR" to "AR",  // Argentina
+            "CO" to "CO",  // Colombia
+            "CL" to "CL",  // Chile
+            "PE" to "PE",  // Peru
+            "CA" to "CA",  // Canada
+            "AU" to "AU",  // Australia
+            "NZ" to "NZ"   // New Zealand
+        )
+
+        // ═══ COUNTRY-SPECIFIC SEARCH KEYWORDS ═══
+        private val REGIONAL_MUSIC_KEYWORDS = mapOf(
+            "IN" to listOf("bollywood songs", "hindi songs", "punjabi songs", "indian music"),
+            "US" to listOf("top hits", "pop music", "hip hop", "american music"),
+            "GB" to listOf("uk hits", "british music", "uk charts"),
+            "PK" to listOf("pakistani songs", "urdu songs", "pakistani music"),
+            "BD" to listOf("bangla songs", "bangladeshi music"),
+            "AE" to listOf("arabic music", "gulf music", "emirati songs"),
+            "SA" to listOf("arabic songs", "saudi music"),
+            "DE" to listOf("german music", "deutsch music"),
+            "FR" to listOf("french music", "chanson francaise"),
+            "ES" to listOf("spanish music", "latin music", "reggaeton"),
+            "IT" to listOf("italian music", "italo disco"),
+            "BR" to listOf("brazilian music", "samba", "bossa nova"),
+            "MX" to listOf("reggaeton", "latin pop", "musica mexicana"),
+            "JP" to listOf("jpop", "japanese music", "anime songs"),
+            "KR" to listOf("kpop", "korean music", "kdrama ost"),
+            "CN" to listOf("cpop", "chinese music"),
+            "ID" to listOf("indonesian music", "dangdut"),
+            "TH" to listOf("thai music", "luk thung"),
+            "VN" to listOf("vietnamese music", "vpop"),
+            "PH" to listOf("opm", "filipino music"),
+            "MY" to listOf("malay music", "malaysian songs"),
+            "TR" to listOf("turkish music", "arabesque"),
+            "EG" to listOf("arabic music", "egyptian songs"),
+            "NG" to listOf("afrobeats", "nigerian music"),
+            "ZA" to listOf("amapiano", "south african music"),
+            "AR" to listOf("reggaeton", "latin music"),
+            "CO" to listOf("salsa", "colombian music"),
+            "CA" to listOf("canadian music", "canadian hits"),
+            "AU" to listOf("australian music", "auspop")
+        )
+
+        // ═══ Invidious instances (ordered by reliability) ═══
         private val INVIDIOUS_INSTANCES = listOf(
             "https://yewtu.be",
+            "https://vid.puffyan.us",
             "https://inv.tux.pizza",
-            "https://invidious.fdn.fr",
             "https://iv.ggtyler.dev",
-            "https://invidious.protokolla.fi",
+            "https://invidious.fdn.fr",
             "https://invidious.futo.org",
             "https://invidious.perennialte.ch",
-            "https://vid.puffyan.us",
+            "https://invidious.protokolla.fi",
             "https://invidious.privacyredirect.com",
             "https://invidious.nerdvpn.de",
             "https://inv.nadeko.net",
@@ -34,14 +109,14 @@ class YouTubeRepository {
             "https://invidious.drgns.space"
         )
 
-        // ═══ Piped instances ═══
+        // ═══ Piped instances (ordered by reliability) ═══
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
-            "https://pipedapi.adminforge.de",
             "https://api.piped.yt",
+            "https://pipedapi.adminforge.de",
+            "https://pipedapi.hostux.net",
             "https://pipedapi.darkness.services",
             "https://pipedapi.r4fo.com",
-            "https://pipedapi.hostux.net",
             "https://piped-api.lunar.icu",
             "https://pipedapi.in.projectsegfault.com",
             "https://api.piped.projectsegfault.com",
@@ -59,6 +134,35 @@ class YouTubeRepository {
         private var currentInvidiousIndex = 0
         private var currentPipedIndex = 0
         private var currentCobaltIndex = 0
+
+        // ═══ CACHE for faster subsequent loads ═══
+        private var cachedTrendingSongs: List<YouTubeSong>? = null
+        private var cachedTrendingRegion: String? = null
+        private var cachedTrendingTime: Long = 0
+        private const val CACHE_VALIDITY_MS = 5 * 60 * 1000 // 5 minutes
+
+        // ═══ FAST MUSIC FILTER KEYWORDS ═══
+        private val MUSIC_KEYWORDS = listOf(
+            "music", "song", "official video", "official audio", "official music",
+            "lyric video", "lyrics", "ft.", "feat.", "remix", "live",
+            "vevo", "topic", "recordings", "musica", "musique", "musik"
+        )
+
+        private val MUSIC_CHANNEL_IDS = listOf(
+            "UC", // YouTube Music
+            "Vevo",
+            "Spinnin'",
+            "Trap Nation",
+            "CloudKid",
+            "MrSuicideSheep",
+            "ChilledCow",
+            "Radio Swiss",
+            "Ultra Music",
+            "SonyMusicIndia",
+            "T-Series",
+            "Gaana",
+            "Hungama"
+        )
 
         // ═══ FREE LEGAL MUSIC — Internet Archive Direct Links ═══
         // These are public domain / Creative Commons music files
@@ -189,41 +293,50 @@ class YouTubeRepository {
     suspend fun search(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
 
-        // 1. Try Invidious search
-        for (i in INVIDIOUS_INSTANCES.indices) {
+        // Get user's region for localized results
+        val region = getUserRegion()
+
+        // 1. Try Piped search (faster, music filter) - try only 3 instances for speed
+        for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
+            try {
+                val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
+                val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+                val url = "$instance/search?q=$encodedQuery&filter=music_songs"
+                val response = httpGet(url, timeout = FAST_TIMEOUT)
+                if (response.isNotBlank()) {
+                    val json = JSONObject(response)
+                    val items = json.optJSONArray("items")
+                    if (items != null && items.length() > 0) {
+                        val songs = parsePipedItems(items).filter { 
+                            isLikelyMusic(it.title, it.artist) 
+                        }
+                        if (songs.isNotEmpty()) {
+                            currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
+                            Log.d(TAG, "Piped search: ${songs.size} results")
+                            return@withContext songs
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "Piped search fail: ${e.message}") }
+        }
+
+        // 2. Try Invidious search (with fast timeout)
+        for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-                val url = "$instance/api/v1/search?q=$encodedQuery&type=music"
-                val response = httpGet(url)
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=music&region=$region"
+                val response = httpGet(url, timeout = FAST_TIMEOUT)
                 val json = JSONArray(response)
-                val songs = parseInvidiousItems(json)
+                val songs = parseInvidiousItems(json).filter { 
+                    isLikelyMusic(it.title, it.artist) 
+                }
                 if (songs.isNotEmpty()) {
                     currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
                     Log.d(TAG, "Invidious search: ${songs.size} results")
                     return@withContext songs
                 }
             } catch (e: Exception) { Log.w(TAG, "Invidious search fail: ${e.message}") }
-        }
-
-        // 2. Try Piped search
-        for (i in PIPED_INSTANCES.indices) {
-            try {
-                val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
-                val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-                val url = "$instance/search?q=$encodedQuery&filter=music_songs"
-                val response = httpGet(url)
-                val json = JSONObject(response)
-                val items = json.optJSONArray("items")
-                if (items != null && items.length() > 0) {
-                    val songs = parsePipedItems(items)
-                    if (songs.isNotEmpty()) {
-                        currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
-                        Log.d(TAG, "Piped search: ${songs.size} results")
-                        return@withContext songs
-                    }
-                }
-            } catch (e: Exception) { Log.w(TAG, "Piped search fail: ${e.message}") }
         }
 
         // 3. Try Internet Archive search (FREE, no API key!)
@@ -250,51 +363,71 @@ class YouTubeRepository {
     // TRENDING — free music from local database + APIs
     // ═══════════════════════════════════════════════
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        // Get user's region based on locale
+        val region = getUserRegion()
+        val currentTime = System.currentTimeMillis()
+
+        // Check cache first - return cached songs if valid
+        if (cachedTrendingSongs != null && 
+            cachedTrendingRegion == region && 
+            currentTime - cachedTrendingTime < CACHE_VALIDITY_MS) {
+            Log.d(TAG, "Returning cached trending songs for region: $region")
+            return@withContext cachedTrendingSongs!!
+        }
+
         val allSongs = mutableListOf<YouTubeSong>()
+        Log.d(TAG, "Loading trending songs for region: $region")
 
         try {
-            // 1. Try Invidious popular
-            for (i in INVIDIOUS_INSTANCES.indices) {
+            // 1. Try Piped music trending with user's region (FAST - 5 second timeout)
+            for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
                 try {
-                    val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
-                    val url = "$instance/api/v1/popular"
-                    val response = httpGet(url, timeout = 8000)
+                    val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
+                    // Use music category + user's region
+                    val url = "$instance/trending?region=$region&category=music"
+                    val response = httpGet(url, timeout = FAST_TIMEOUT)
                     if (response.isNotBlank()) {
                         val json = JSONArray(response)
-                        val songs = parseInvidiousItems(json)
-                        if (songs.isNotEmpty()) {
-                            currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
-                            allSongs.addAll(songs)
-                            Log.d(TAG, "Invidious returned ${songs.size} songs")
+                        for (j in 0 until minOf(json.length(), 30)) {
+                            try {
+                                val item = json.getJSONObject(j)
+                                val song = parsePipedTrendingItem(item)
+                                // Filter to only music content
+                                if (song != null && isLikelyMusic(song.title, song.artist)) {
+                                    allSongs.add(song)
+                                }
+                            } catch (e: Exception) { }
+                        }
+                        if (allSongs.isNotEmpty()) {
+                            currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
+                            Log.d(TAG, "Piped music trending returned ${allSongs.size} songs for $region")
                             break
                         }
                     }
-                } catch (e: Exception) { Log.w(TAG, "Invidious popular fail: ${e.message}") }
+                } catch (e: Exception) { Log.w(TAG, "Piped trending fail: ${e.message}") }
             }
 
-            // 2. Try Piped trending (only if no songs from Invidious)
-            if (allSongs.isEmpty()) {
-                for (i in PIPED_INSTANCES.indices) {
+            // 2. If not enough regional songs, try Invidious music search
+            if (allSongs.size < 10) {
+                val keywords = REGIONAL_MUSIC_KEYWORDS[region] ?: REGIONAL_MUSIC_KEYWORDS["US"]!!
+                for (keyword in keywords.take(2)) {
                     try {
-                        val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
-                        val url = "$instance/trending?region=US"
-                        val response = httpGet(url, timeout = 8000)
+                        val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex) % INVIDIOUS_INSTANCES.size]
+                        val encodedQuery = URLEncoder.encode(keyword, "UTF-8")
+                        val url = "$instance/api/v1/search?q=$encodedQuery&type=music&region=$region"
+                        val response = httpGet(url, timeout = FAST_TIMEOUT)
                         if (response.isNotBlank()) {
                             val json = JSONArray(response)
-                            for (j in 0 until json.length()) {
-                                try {
-                                    val item = json.getJSONObject(j)
-                                    val song = parsePipedTrendingItem(item)
-                                    if (song != null) allSongs.add(song)
-                                } catch (e: Exception) { }
+                            val songs = parseInvidiousItems(json).filter { 
+                                isLikelyMusic(it.title, it.artist) 
                             }
-                            if (allSongs.isNotEmpty()) {
-                                currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
-                                Log.d(TAG, "Piped returned ${allSongs.size} songs")
+                            if (songs.isNotEmpty()) {
+                                allSongs.addAll(songs)
+                                Log.d(TAG, "Invidious music search returned ${songs.size} songs")
                                 break
                             }
                         }
-                    } catch (e: Exception) { Log.w(TAG, "Piped trending fail: ${e.message}") }
+                    } catch (e: Exception) { Log.w(TAG, "Invidious music search fail: ${e.message}") }
                 }
             }
         } catch (e: Exception) {
@@ -312,12 +445,15 @@ class YouTubeRepository {
                 audioUrl = free.audioUrl
             )
         }
-        allSongs.addAll(freeSongs)
+        // Prioritize free songs from user's region if available
+        val regionalFreeSongs = freeSongs.take(15)
+        allSongs.addAll(regionalFreeSongs)
 
-        // 4. Try Internet Archive for more variety (only if no songs from APIs)
-        if (allSongs.size <= freeSongs.size) {
+        // 4. Try Internet Archive for more variety (only if not enough songs)
+        if (allSongs.size < 20) {
             try {
-                val iaResults = searchInternetArchive("popular music 2025")
+                val keywords = REGIONAL_MUSIC_KEYWORDS[region] ?: listOf("popular music")
+                val iaResults = searchInternetArchive(keywords.first())
                 allSongs.addAll(iaResults.take(10))
             } catch (e: Exception) { Log.w(TAG, "IA trending fail: ${e.message}") }
         }
@@ -329,8 +465,49 @@ class YouTubeRepository {
         }
 
         val unique = allSongs.distinctBy { it.id }
-        Log.d(TAG, "Trending total: ${unique.size} songs (${unique.size - freeSongs.size} from APIs, ${freeSongs.size} local)")
+        
+        // Update cache
+        cachedTrendingSongs = unique.take(80)
+        cachedTrendingRegion = region
+        cachedTrendingTime = currentTime
+        
+        Log.d(TAG, "Trending total: ${unique.size} songs for region $region")
         return@withContext unique.take(80)
+    }
+
+    // Helper function to detect if content is likely music
+    private fun isLikelyMusic(title: String, artist: String): Boolean {
+        val combined = "$title $artist".lowercase()
+        // Check for music-related keywords
+        return MUSIC_KEYWORDS.any { combined.contains(it.lowercase()) } ||
+               // Or from known music channels (checked elsewhere in parsing)
+               title.isNotBlank() && artist.isNotBlank() &&
+               // Exclude videos that are clearly not music
+               !combined.contains("minecraft") &&
+               !combined.contains("gaming") &&
+               !combined.contains("tutorial") &&
+               !combined.contains("react") &&
+               !combined.contains("compilation") ||
+               combined.contains("song") ||
+               combined.contains("music")
+    }
+
+    // Get user's region from device locale
+    private fun getUserRegion(): String {
+        return try {
+            val locale = Locale.getDefault()
+            val country = locale.country
+            
+            // Map to supported regions
+            REGION_MAP[country] ?: 
+            // Try to extract country from locale (e.g., "en_IN" -> "IN")
+            if (country.length == 2) country else 
+            // Default to US if unknown
+            "US"
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not detect region, defaulting to US")
+            "US"
+        }
     }
 
     // ═══════════════════════════════════════════════
