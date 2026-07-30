@@ -294,7 +294,7 @@ fun YouTubeScreen(
                         selected = selectedSource == MusicSource.ARCHIVE,
                         onClick = { 
                             selectedSource = MusicSource.ARCHIVE
-                            if (searchQuery.length >= 3) viewModel.search(query)
+                            if (searchQuery.length >= 3) viewModel.search(searchQuery)
                         }
                     )
                     SourceChip(
