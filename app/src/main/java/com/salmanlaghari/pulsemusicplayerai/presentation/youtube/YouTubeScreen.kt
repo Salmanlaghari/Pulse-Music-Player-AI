@@ -68,7 +68,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.launch
 
-enum class MusicSource { ALL, JIOSAAVN, DEEZER, ARCHIVE }
+enum class MusicSource { ALL, ARCHIVE, DEEZER }
 enum class ViewMode { LIST, GRID }
 
 @Composable
@@ -101,10 +101,7 @@ fun YouTubeScreen(
 
     // Search with selected source
     fun searchWithSource(query: String) {
-        when (selectedSource) {
-            MusicSource.JIOSAAVN -> viewModel.searchJioSaavn(query)
-            else -> viewModel.search(query)
-        }
+        viewModel.search(query)
     }
 
     Box(
@@ -166,7 +163,7 @@ fun YouTubeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🎵 Music Search",
+                            text = "🎵 Deezer + Archive",
                             fontSize = 12.sp,
                             color = CyanGlow
                         )
@@ -293,11 +290,11 @@ fun YouTubeScreen(
                         }
                     )
                     SourceChip(
-                        text = "🎧 JioSaavn",
-                        selected = selectedSource == MusicSource.JIOSAAVN,
+                        text = "🌐 Archive",
+                        selected = selectedSource == MusicSource.ARCHIVE,
                         onClick = { 
-                            selectedSource = MusicSource.JIOSAAVN
-                            if (searchQuery.length >= 3) viewModel.searchJioSaavn(searchQuery)
+                            selectedSource = MusicSource.ARCHIVE
+                            if (searchQuery.length >= 3) viewModel.search(query)
                         }
                     )
                     SourceChip(
