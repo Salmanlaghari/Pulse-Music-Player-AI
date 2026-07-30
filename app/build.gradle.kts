@@ -60,7 +60,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
-    implementation("androidx.media3:media3-exoplayer-youtube:1.2.0")  // YouTube full playback!
+    implementation("androidx.media3:media3-exoplayer-youtube:1.3.1")  // YouTube full playback!
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
