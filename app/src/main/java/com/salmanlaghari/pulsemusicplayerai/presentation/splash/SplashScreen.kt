@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -75,13 +74,13 @@ fun SplashScreen(onNavigateToHome: () -> Unit) {
         label = "pulse"
     )
 
-    // 4. Equalizer bars (5 bars, animated heights)
+    // 4. Equalizer bars (5 bars, animated heights) - staggered via different durations
     val eqBars = listOf(
-        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(700, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq1", initialStartOffset = StartOffset(0)),
-        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(650, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq2", initialStartOffset = StartOffset(120)),
-        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(800, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq3", initialStartOffset = StartOffset(240)),
-        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(720, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq4", initialStartOffset = StartOffset(80)),
-        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(680, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq5", initialStartOffset = StartOffset(200))
+        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(700, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq1"),
+        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(650, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq2"),
+        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(800, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq3"),
+        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(720, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq4"),
+        infiniteTransition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(680, easing = EaseOutCubic), RepeatMode.Reverse), label = "eq5")
     )
 
     // 5. Loading progress bar fill

@@ -35,7 +35,6 @@ class PlaybackService : MediaSessionService() {
                 /* playbackBufferMs  = */ 1_500,  // start playback once 1.5s buffered
                 /* rebufferBufferMs  = */ 3_000   // resume once 3s buffered after stall
             )
-            .setTargetPlaybackBytes(5_000_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
