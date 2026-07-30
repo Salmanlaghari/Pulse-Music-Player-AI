@@ -1,5 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.youtube
 
+import java.util.Locale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -158,11 +159,11 @@ fun YouTubeScreen(
                             color = TextDim
                         )
                         Text(
-                            text = getRegionFlag(android.os.Locale.getDefault().country),
+                            text = getRegionFlag(Locale.getDefault().country),
                             fontSize = 12.sp
                         )
                         Text(
-                            text = " ${getRegionName(android.os.Locale.getDefault().country)}",
+                            text = " ${getRegionName(Locale.getDefault().country)}",
                             fontSize = 12.sp,
                             color = TextDim
                         )
