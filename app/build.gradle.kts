@@ -12,8 +12,8 @@ android {
         applicationId = "com.salmanlaghari.pulsemusicplayerai"
         minSdk = 24
         targetSdk = 35
-        versionCode = 10700
-        versionName = "1.07.0"
+        versionCode = 10800
+        versionName = "1.08.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

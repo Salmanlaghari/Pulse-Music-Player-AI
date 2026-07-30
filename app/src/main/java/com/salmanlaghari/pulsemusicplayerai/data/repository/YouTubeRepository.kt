@@ -987,6 +987,144 @@ class YouTubeRepository {
         null
     }
 
+    /**
+     * Resolve a FULL (non-preview) audio stream for a song that only has a 30-second
+     * preview URL (Apple Music, Spotify, Deezer). Searches JioSaavn and YouTube Music
+     * for a matching track by title + artist and returns the full stream URL.
+     *
+     * @param title  The song title
+     * @param artist The song artist
+     * @param originalThumbnail The original thumbnail (kept if no better one found)
+     * @return A YouTubeSong with a full audio stream URL, or null if not found
+     */
+    suspend fun resolveFullSong(
+        title: String,
+        artist: String,
+        originalThumbnail: String
+    ): YouTubeSong? = withContext(Dispatchers.IO) {
+        if (title.isBlank()) return@withContext null
+
+        // Build a clean search query: "title artist"
+        val cleanTitle = title.trim().replace(Regex("\\(.*?\\)"), "").trim() // remove (feat. ...) etc.
+        val cleanArtist = artist.trim().replace(Regex("\\s+feat\\..*"), "").trim()
+        val searchQuery = if (cleanArtist.isNotBlank() && cleanArtist != "Unknown Artist") {
+            "$cleanTitle $cleanArtist"
+        } else {
+            cleanTitle
+        }
+
+        Log.d(TAG, "resolveFullSong: searching '$searchQuery' for full stream")
+
+        // 1. Try JioSaavn first (full songs, 320kbps)
+        try {
+            val jioResults = searchJioSaavn(searchQuery)
+            if (jioResults.isNotEmpty()) {
+                // Find best match by title similarity
+                val match = findBestMatch(jioResults, cleanTitle, cleanArtist)
+                if (match != null && match.hasValidAudio()) {
+                    Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}'")
+                    return@withContext match
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveFullSong: JioSaavn fail: ${e.message}")
+        }
+
+        // 2. Try YouTube Music (Piped/Invidious - full streams)
+        try {
+            val ytmResults = searchYouTubeMusic(searchQuery)
+            if (ytmResults.isNotEmpty()) {
+                val match = findBestMatch(ytmResults, cleanTitle, cleanArtist)
+                if (match != null) {
+                    // YouTube Music results may need stream resolution
+                    if (match.hasValidAudio()) {
+                        Log.d(TAG, "✓ resolveFullSong: YouTube Music match '${match.title}'")
+                        return@withContext match
+                    }
+                    // Try to resolve the stream
+                    val resolved = getAudioStream(match.id.removePrefix("yt_"))
+                    if (resolved != null && resolved.hasValidAudio()) {
+                        Log.d(TAG, "✓ resolveFullSong: YouTube Music resolved '${match.title}'")
+                        return@withContext resolved
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveFullSong: YouTube Music fail: ${e.message}")
+        }
+
+        // 3. Try Internet Archive as last resort
+        try {
+            val iaResults = searchInternetArchive(searchQuery)
+            if (iaResults.isNotEmpty()) {
+                val match = findBestMatch(iaResults, cleanTitle, cleanArtist)
+                if (match != null && match.hasValidAudio()) {
+                    Log.d(TAG, "✓ resolveFullSong: Internet Archive match '${match.title}'")
+                    return@withContext match
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveFullSong: Internet Archive fail: ${e.message}")
+        }
+
+        Log.w(TAG, "✗ resolveFullSong: no full stream found for '$title' by '$artist'")
+        null
+    }
+
+    /**
+     * Find the best matching song from a list by comparing title similarity.
+     * Uses simple string containment + Levenshtein-like heuristic.
+     */
+    private fun findBestMatch(
+        songs: List<YouTubeSong>,
+        expectedTitle: String,
+        expectedArtist: String
+    ): YouTubeSong? {
+        val targetTitle = expectedTitle.lowercase().trim()
+        val targetArtist = expectedArtist.lowercase().trim()
+
+        var bestSong: YouTubeSong? = null
+        var bestScore = -1
+
+        for (song in songs) {
+            val songTitle = song.title.lowercase().trim()
+            val songArtist = song.artist.lowercase().trim()
+
+            var score = 0
+
+            // Title matching
+            if (songTitle == targetTitle) {
+                score += 100
+            } else if (songTitle.contains(targetTitle) || targetTitle.contains(songTitle)) {
+                score += 60
+            } else {
+                // Check word overlap
+                val targetWords = targetTitle.split(" ").filter { it.length > 2 }
+                val songWords = songTitle.split(" ").filter { it.length > 2 }
+                val commonWords = targetWords.intersect(songWords.toSet())
+                score += commonWords.size * 10
+            }
+
+            // Artist matching (bonus, not required)
+            if (targetArtist.isNotBlank() && songArtist.isNotBlank()) {
+                if (songArtist.contains(targetArtist) || targetArtist.contains(songArtist)) {
+                    score += 30
+                }
+            }
+
+            // Prefer songs with valid audio
+            if (song.hasValidAudio()) score += 5
+
+            if (score > bestScore) {
+                bestScore = score
+                bestSong = song
+            }
+        }
+
+        // Only return if we have a reasonable match (score >= 20)
+        return if (bestScore >= 20) bestSong else null
+    }
+
     // ═══════════════════════════════════════════════
     // INTERNET ARCHIVE SEARCH (FREE, No API Key!)
     // ═══════════════════════════════════════════════

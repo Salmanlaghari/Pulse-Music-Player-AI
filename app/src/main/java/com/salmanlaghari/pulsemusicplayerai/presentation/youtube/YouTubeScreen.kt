@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -141,7 +140,7 @@ fun YouTubeScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Trying multiple sources",
+                        text = "Finding full song from all sources",
                         color = TextDim,
                         fontSize = 12.sp
                     )
@@ -424,9 +423,9 @@ fun YouTubeScreen(
                     }
                 }
             } else {
-                // Trending Section
+                // Library-style list (no Top Picks cards — just a clean song list)
                 Text(
-                    text = "TRENDING NOW 🔥",
+                    text = "TRENDING NOW",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = PurplePrimary,
@@ -479,42 +478,11 @@ fun YouTubeScreen(
                         }
                     }
                 } else {
-                    // Top 5 Horizontal Cards
-                    Text(
-                        text = "Top Picks",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 12.dp)
-                    ) {
-                        items(trendingSongs.take(5)) { song ->
-                            TrendingCard(
-                                song = song,
-                                isCurrentlyPlaying = currentlyPlaying?.id == song.id,
-                                onClick = { playAndNavigate(song, trendingSongs) }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // All Trending List
-                    Text(
-                        text = "All Trending",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                    // Clean library-style list — all songs in a single list
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        itemsIndexed(trendingSongs.drop(5)) { index, song ->
+                        itemsIndexed(trendingSongs) { index, song ->
                             YouTubeSongCard(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
@@ -532,84 +500,6 @@ fun YouTubeScreen(
             )
 
             Spacer(modifier = Modifier.height(80.dp))
-        }
-    }
-}
-
-@Composable
-fun TrendingCard(
-    song: YouTubeSong,
-    isCurrentlyPlaying: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .width(160.dp)
-            .height(200.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrentlyPlaying)
-                PurplePrimary.copy(alpha = 0.3f)
-            else GlassBg
-        )
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Thumbnail
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(CardNavy)
-            ) {
-                AsyncImage(
-                    model = song.thumbnailUrl,
-                    contentDescription = song.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Play overlay
-                if (isCurrentlyPlaying) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = CyanGlow,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier.padding(10.dp)
-            ) {
-                Text(
-                    text = song.title,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = song.artist,
-                    fontSize = 10.sp,
-                    color = TextDim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }
@@ -691,6 +581,20 @@ fun YouTubeSongCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
+            // Source badge — shows which platform this song is from
+            Text(
+                text = song.sourceType,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextDim,
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(CardNavy)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
         }
     }
 }

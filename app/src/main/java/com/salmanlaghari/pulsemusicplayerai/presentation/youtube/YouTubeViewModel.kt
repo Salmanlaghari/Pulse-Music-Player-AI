@@ -196,11 +196,11 @@ class YouTubeViewModel(
                 val ytmDeferred = async { runCatching { youTubeRepository.searchYouTubeMusic(query) }.getOrDefault(emptyList()) }
                 val generalDeferred = async { runCatching { youTubeRepository.search(query) }.getOrDefault(emptyList()) }
 
-                val apple = appleDeferred.await()
-                val saavn = saavnDeferred.await()
-                val spotify = spotifyDeferred.await()
-                val ytm = ytmDeferred.await()
-                val general = generalDeferred.await()
+                val apple = appleDeferred.await().take(10)
+                val saavn = saavnDeferred.await().take(10)
+                val spotify = spotifyDeferred.await().take(10)
+                val ytm = ytmDeferred.await().take(10)
+                val general = generalDeferred.await().take(10)
 
                 for (list in listOf(apple, saavn, spotify, ytm, general)) {
                     for (s in list) {
@@ -317,16 +317,64 @@ class YouTubeViewModel(
     }
 
     private suspend fun resolveAudio(song: YouTubeSong): YouTubeSong? {
-        // If already has valid audio URL, return as-is
-        if (song.hasValidAudio()) return song
+        // If the song is from a preview-only source (Apple Music, Spotify, Deezer),
+        // it only has a 30-second preview URL. Resolve the FULL song from JioSaavn /
+        // YouTube Music by matching title + artist.
+        if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
+            return song
+        }
 
-        // Try to resolve from API
+        // For preview-only sources (or empty audio), try to find the full song
+        if (isPreviewOnlySource(song.id) || !song.hasValidAudio()) {
+            Log.d(TAG, "resolveAudio: resolving full song for '${song.title}' (source: ${song.sourceType})")
+            val fullSong = try {
+                youTubeRepository.resolveFullSong(
+                    title = song.title,
+                    artist = song.artist,
+                    originalThumbnail = song.thumbnailUrl
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "resolveFullSong failed for ${song.title}: ${e.message}")
+                null
+            }
+
+            if (fullSong != null && fullSong.hasValidAudio()) {
+                // Keep the original song's display info but use the full stream URL
+                return YouTubeSong(
+                    id = song.id, // keep original ID for UI tracking
+                    title = song.title,
+                    artist = song.artist,
+                    duration = if (fullSong.duration > 0) fullSong.duration else song.duration,
+                    thumbnailUrl = song.thumbnailUrl.ifBlank { fullSong.thumbnailUrl },
+                    audioUrl = fullSong.audioUrl,
+                    isLive = false
+                )
+            }
+
+            // If full song resolution failed, fall back to preview if available
+            if (song.hasValidAudio()) {
+                Log.w(TAG, "resolveAudio: falling back to 30s preview for '${song.title}'")
+                return song
+            }
+        }
+
+        // Try to resolve from API (for YouTube/Internet Archive IDs)
         return try {
             youTubeRepository.getAudioStream(song.id)
         } catch (e: Exception) {
             Log.w(TAG, "Audio resolve failed for ${song.title}: ${e.message}")
             null
         }
+    }
+
+    /**
+     * Check if a song ID is from a source that only provides 30-second previews.
+     * These sources need full-song resolution from JioSaavn/YouTube Music.
+     */
+    private fun isPreviewOnlySource(id: String): Boolean {
+        return id.startsWith("am_") ||  // Apple Music (iTunes preview)
+               id.startsWith("sp_") ||  // Spotify (30s preview)
+               id.startsWith("dz_")     // Deezer (30s preview)
     }
 
     fun refresh() {
