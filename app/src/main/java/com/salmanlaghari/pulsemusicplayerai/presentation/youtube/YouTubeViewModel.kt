@@ -102,6 +102,24 @@ class YouTubeViewModel(
         }
     }
 
+    fun searchJioSaavn(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchJioSaavn(query)
+                _searchResults.value = results
+                Log.d(TAG, "JioSaavn found ${results.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "JioSaavn search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     fun clearSearch() {
         searchJob?.cancel()
         _searchResults.value = emptyList()

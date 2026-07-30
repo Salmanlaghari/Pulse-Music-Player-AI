@@ -297,7 +297,7 @@ class YouTubeRepository {
     )
 
     // ═══════════════════════════════════════════════
-    // SEARCH — Deezer + Internet Archive for free full songs
+    // SEARCH — Deezer + Internet Archive + YouTube
     // ═══════════════════════════════════════════════
     suspend fun search(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
@@ -305,20 +305,7 @@ class YouTubeRepository {
         val searchQuery = query.trim()
         Log.d(TAG, "Searching for: $searchQuery")
 
-        // 1. JIOSAAVN FIRST - Full songs! (best for Indian music)
-        val region = getUserRegion()
-        if (region == "IN" || query.lowercase().contains("hindi") || 
-            query.lowercase().contains("bollywood") || query.lowercase().contains("punjabi")) {
-            try {
-                val jioResults = searchJioSaavn(searchQuery)
-                if (jioResults.isNotEmpty()) {
-                    Log.d(TAG, "JioSaavn search: ${jioResults.size} results (FULL SONGS!)")
-                    return@withContext jioResults
-                }
-            } catch (e: Exception) { Log.w(TAG, "JioSaavn search fail: ${e.message}") }
-        }
-
-        // 2. DEEZER SECOND - Most reliable for music search (30-second previews)
+        // 1. DEEZER FIRST - Most reliable for music search
         try {
             val deezerResults = searchDeezer(searchQuery)
             if (deezerResults.isNotEmpty()) {
@@ -327,14 +314,14 @@ class YouTubeRepository {
             }
         } catch (e: Exception) { Log.w(TAG, "Deezer search fail: ${e.message}") }
 
-        // 3. Try local database first
+        // 2. Try local database
         val localResults = searchLocalDatabase(query)
         if (localResults.isNotEmpty()) {
             Log.d(TAG, "Local DB search: ${localResults.size} results")
             return@withContext localResults
         }
 
-        // 4. INTERNET ARCHIVE - Free full songs (no preview limit!)
+        // 3. INTERNET ARCHIVE - Free full songs
         try {
             val iaResults = searchInternetArchive(searchQuery)
             if (iaResults.isNotEmpty()) {
@@ -343,7 +330,7 @@ class YouTubeRepository {
             }
         } catch (e: Exception) { Log.w(TAG, "Internet Archive search fail: ${e.message}") }
 
-        // 5. Try YouTube/Piped as fallback
+        // 4. Try YouTube/Piped as fallback
         for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
@@ -365,11 +352,12 @@ class YouTubeRepository {
             } catch (e: Exception) { Log.w(TAG, "Piped search fail: ${e.message}") }
         }
 
-        // 6. Try Invidious as fallback
+        // 5. Try Invidious as fallback
         for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+                val region = getUserRegion()
                 val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
@@ -391,33 +379,54 @@ class YouTubeRepository {
     // ═══════════════════════════════════════════════
     // JIOSAAVN SEARCH - FULL SONGS! Bollywood, Hindi, Punjabi
     // ═══════════════════════════════════════════════
-    private suspend fun searchJioSaavn(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+    suspend fun searchJioSaavn(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<YouTubeSong>()
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val url = "$JIOSAAVN_API/search/songs?query=$encodedQuery"
-            val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+            val searchUrl = "$JIOSAAVN_API/search/songs?query=$encodedQuery"
+            val searchResponse = httpGet(searchUrl, timeout = NORMAL_TIMEOUT)
             
-            if (response.isNotBlank()) {
-                val json = JSONObject(response)
-                val results = json.optJSONArray("results") ?: return@withContext emptyList()
+            if (searchResponse.isNotBlank()) {
+                val searchJson = JSONObject(searchResponse)
+                val results = searchJson.optJSONArray("results") ?: return@withContext emptyList()
                 
-                for (i in 0 until minOf(results.length(), 30)) {
+                // Batch fetch song details for faster loading
+                val songIds = mutableListOf<String>()
+                for (i in 0 until minOf(results.length(), 15)) {
+                    try {
+                        val result = results.getJSONObject(i)
+                        val id = result.optString("id", "")
+                        if (id.isNotBlank()) songIds.add(id)
+                    } catch (e: Exception) { }
+                }
+                
+                // Batch fetch all songs at once
+                val songDetailsMap = mutableMapOf<String, JSONObject?>()
+                songIds.forEach { id ->
+                    songDetailsMap[id] = getJioSaavnSongDetails(id)
+                }
+                
+                // Now build songs list
+                for (i in 0 until results.length()) {
                     try {
                         val result = results.getJSONObject(i)
                         val id = result.optString("id", "")
                         val title = result.optString("title", "Unknown")
                         val image = result.optString("image", "")
-                        val album = result.optString("album", "")
                         val moreInfo = result.optJSONObject("more_info")
                         val singers = moreInfo?.optString("singers", "") ?: ""
                         
-                        // Get full song URL
-                        val songDetails = getJioSaavnSongDetails(id)
-                        val mediaUrl = songDetails?.optString("media_url", "") ?: ""
+                        // Get full song URL from cached details
+                        val songDetails = songDetailsMap[id]
+                        val mediaUrls = songDetails?.optJSONObject("media_urls")
+                        
+                        // Prefer 320kbps, fallback to 160kbps or media_url
+                        val mediaUrl = mediaUrls?.optString("320_KBPS") 
+                            ?: mediaUrls?.optString("160_KBPS")
+                            ?: songDetails?.optString("media_url", "")
+                            ?: ""
                         
                         if (id.isNotBlank() && mediaUrl.isNotBlank()) {
-                            // Parse duration from song details
                             val durationStr = songDetails?.optString("duration", "0:00") ?: "0:00"
                             val durationParts = durationStr.split(":")
                             val durationSec = if (durationParts.size == 2) {
@@ -442,7 +451,7 @@ class YouTubeRepository {
         songs
     }
     
-    // Get full song URL from JioSaavn
+    // Get full song URL from JioSaavn (320kbps)
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
         try {
             val url = "$JIOSAAVN_API/song?id=$songId"
@@ -453,7 +462,7 @@ class YouTubeRepository {
                     return@withContext json
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { Log.w(TAG, "JioSaavn song details error: ${e.message}") }
         null
     }
 

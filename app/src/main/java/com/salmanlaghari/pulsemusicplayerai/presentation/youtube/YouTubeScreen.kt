@@ -4,6 +4,7 @@ import java.util.Locale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,10 +26,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +68,9 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.launch
 
+enum class MusicSource { ALL, JIOSAAVN, DEEZER, ARCHIVE }
+enum class ViewMode { LIST, GRID }
+
 @Composable
 fun YouTubeScreen(
     viewModel: YouTubeViewModel,
@@ -79,6 +86,8 @@ fun YouTubeScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf(MusicSource.ALL) }
+    var viewMode by remember { mutableStateOf(ViewMode.LIST) }
 
     // Helper function to play song and navigate
     fun playAndNavigate(song: YouTubeSong, queue: List<YouTubeSong>) {
@@ -87,6 +96,14 @@ fun YouTubeScreen(
             if (success) {
                 onNavigateToPlayer()
             }
+        }
+    }
+
+    // Search with selected source
+    fun searchWithSource(query: String) {
+        when (selectedSource) {
+            MusicSource.JIOSAAVN -> viewModel.searchJioSaavn(query)
+            else -> viewModel.search(query)
         }
     }
 
@@ -149,7 +166,7 @@ fun YouTubeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🎵 JioSaavn + Deezer",
+                            text = "🎵 Music Search",
                             fontSize = 12.sp,
                             color = CyanGlow
                         )
@@ -207,7 +224,7 @@ fun YouTubeScreen(
                 onValueChange = {
                     searchQuery = it
                     if (it.length >= 3) {
-                        viewModel.search(it)
+                        searchWithSource(it)
                         isSearchActive = true
                     } else if (it.isEmpty()) {
                         viewModel.clearSearch()
@@ -257,7 +274,57 @@ fun YouTubeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Source Selection Tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Source Tabs
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SourceChip(
+                        text = "🎵 All",
+                        selected = selectedSource == MusicSource.ALL,
+                        onClick = { 
+                            selectedSource = MusicSource.ALL
+                            if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                        }
+                    )
+                    SourceChip(
+                        text = "🎧 JioSaavn",
+                        selected = selectedSource == MusicSource.JIOSAAVN,
+                        onClick = { 
+                            selectedSource = MusicSource.JIOSAAVN
+                            if (searchQuery.length >= 3) viewModel.searchJioSaavn(searchQuery)
+                        }
+                    )
+                    SourceChip(
+                        text = "🎵 Deezer",
+                        selected = selectedSource == MusicSource.DEEZER,
+                        onClick = { 
+                            selectedSource = MusicSource.DEEZER
+                            if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                        }
+                    )
+                }
+                
+                // View Mode Toggle
+                IconButton(
+                    onClick = { 
+                        viewMode = if (viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST 
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (viewMode == ViewMode.LIST) Icons.Default.GridView else Icons.Default.ViewList,
+                        contentDescription = "Toggle View",
+                        tint = CyanGlow
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (isSearchActive) {
                 // Search Results
@@ -581,6 +648,34 @@ private fun formatDuration(seconds: Long): String {
     val mins = seconds / 60
     val secs = seconds % 60
     return String.format("%d:%02d", mins, secs)
+}
+
+// Source Chip Component
+@Composable
+fun SourceChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) PurplePrimary.copy(alpha = 0.3f) else GlassBg)
+            .border(
+                width = 1.dp,
+                color = if (selected) PurplePrimary else GlassBorder,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) CyanGlow else TextDim
+        )
+    }
 }
 
 // Helper function to get region flag emoji
