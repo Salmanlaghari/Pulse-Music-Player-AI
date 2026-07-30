@@ -116,16 +116,24 @@ class YouTubeViewModel(
         _isPlayLoading.value = true
         try {
             AdManager.incrementSongChangeCount()
+            
+            Log.d(TAG, "Attempting to play: ${song.title}")
 
             // Try to resolve audio for selected song first
             var resolvedSong = resolveAudio(song)
+            Log.d(TAG, "resolveAudio result: ${if (resolvedSong != null) "success" else "failed"}")
 
             // If selected song fails, try next songs in queue
             if (resolvedSong == null) {
-                val fallbackQueue = queue.filter { it.id != song.id }.take(5)
-                for (fallback in fallbackQueue) {
+                val fallbackQueue = queue.filter { it.id != song.id }.take(10)
+                Log.d(TAG, "Trying fallback queue: ${fallbackQueue.size} songs")
+                for ((index, fallback) in fallbackQueue.withIndex()) {
+                    Log.d(TAG, "Trying fallback $index: ${fallback.title}")
                     resolvedSong = resolveAudio(fallback)
-                    if (resolvedSong != null) break
+                    if (resolvedSong != null) {
+                        Log.d(TAG, "Fallback $index worked!")
+                        break
+                    }
                 }
             }
 
@@ -133,7 +141,7 @@ class YouTubeViewModel(
                 try {
                     Toast.makeText(
                         getApplication(),
-                        "Could not load audio. Check your internet and try again.",
+                        "This video may be unavailable. Try another song.",
                         Toast.LENGTH_LONG
                     ).show()
                 } catch (t: Exception) { }
@@ -147,7 +155,17 @@ class YouTubeViewModel(
             playbackConnectionManager.setYouTubeSongsReference(queue)
 
             // Convert to local Song
-            val songAsLocal = resolvedSong.toSong() ?: return false
+            val songAsLocal = resolvedSong.toSong() ?: run {
+                Log.e(TAG, "toSong() returned null for ${resolvedSong.title}")
+                try {
+                    Toast.makeText(
+                        getApplication(),
+                        "Error playing this track. Try another.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (t: Exception) { }
+                return false
+            }
 
             // Resolve queue (best effort, first 5)
             val resolvedQueue = mutableListOf(songAsLocal)

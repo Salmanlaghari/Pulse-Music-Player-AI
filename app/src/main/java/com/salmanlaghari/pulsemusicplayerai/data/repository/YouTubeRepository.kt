@@ -298,32 +298,17 @@ class YouTubeRepository {
         
         Log.d(TAG, "Searching for: $searchQuery in region: $region")
 
-        // 1. Try Invidious YouTube Music search FIRST (most reliable for music)
-        for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
-            try {
-                val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
-                // Use type=videos with music-related search terms for better results
-                val encodedQuery = URLEncoder.encode("$searchQuery music official", "UTF-8")
-                val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
-                val response = httpGet(url, timeout = NORMAL_TIMEOUT)
-                if (response.isNotBlank()) {
-                    val json = JSONArray(response)
-                    val songs = parseInvidiousItems(json)
-                    Log.d(TAG, "Invidious returned ${songs.size} results")
-                    if (songs.isNotEmpty()) {
-                        currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
-                        return@withContext songs
-                    }
-                }
-            } catch (e: Exception) { Log.w(TAG, "Invidious search fail: ${e.message}") }
-        }
+        // Check if this is a genre/artist query and add relevant terms
+        val musicTerms = listOf("music", "song", "official", "audio")
+        val isGenreSearch = searchQuery.lowercase() in listOf("bollywood", "pop", "rock", "jazz", "hip hop", "classical", "kpop", "indie", "electronic", "country")
+        val enhancedQuery = if (isGenreSearch) "$searchQuery music songs" else searchQuery
 
-        // 2. Try Piped YouTube Music search (specific music filter)
+        // 1. Try Piped YouTube Music search FIRST (best for music)
         for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
-                val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
-                // Use YouTube Music specific endpoint
+                val encodedQuery = URLEncoder.encode(enhancedQuery, "UTF-8")
+                // Use YouTube Music specific search - /ytsearch gives music results
                 val url = "$instance/ytsearch?q=$encodedQuery"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
@@ -334,52 +319,80 @@ class YouTubeRepository {
                         Log.d(TAG, "Piped YT search returned ${songs.size} results")
                         if (songs.isNotEmpty()) {
                             currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
-                            return@withContext songs
+                            return@withContext songs.take(30)
                         }
                     }
                 }
             } catch (e: Exception) { Log.w(TAG, "Piped YT search fail: ${e.message}") }
         }
 
-        // 3. Try Piped with music_songs filter as fallback
+        // 2. Try Invidious search with specific music query and playlist_spanner for music
+        for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
+            try {
+                val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
+                // Use type=music for better music results
+                val encodedQuery = URLEncoder.encode(enhancedQuery, "UTF-8")
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=music&region=$region"
+                val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+                if (response.isNotBlank()) {
+                    val jsonArray = JSONArray(response)
+                    val songs = parseInvidiousItems(jsonArray)
+                    Log.d(TAG, "Invidious music search returned ${songs.size} results")
+                    if (songs.isNotEmpty()) {
+                        currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
+                        return@withContext songs.take(30)
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "Invidious search fail: ${e.message}") }
+        }
+
+        // 3. Try Piped with music_songs filter (more targeted)
         for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
-                val encodedQuery = URLEncoder.encode("$searchQuery official video", "UTF-8")
-                val url = "$instance/search?q=$encodedQuery&filter=videos"
+                val encodedQuery = URLEncoder.encode(enhancedQuery, "UTF-8")
+                val url = "$instance/search?q=$encodedQuery&filter=music_songs"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
                     val json = JSONObject(response)
                     val items = json.optJSONArray("items")
                     if (items != null && items.length() > 0) {
                         val songs = parsePipedItems(items)
-                        Log.d(TAG, "Piped video search returned ${songs.size} results")
+                        Log.d(TAG, "Piped music_songs search returned ${songs.size} results")
                         if (songs.isNotEmpty()) {
-                            return@withContext songs
+                            return@withContext songs.take(30)
                         }
                     }
                 }
-            } catch (e: Exception) { Log.w(TAG, "Piped video search fail: ${e.message}") }
+            } catch (e: Exception) { Log.w(TAG, "Piped music_songs search fail: ${e.message}") }
         }
 
-        // 4. Try Invidious with videos type (no music filter)
+        // 4. Try Invidious with playlists type (music playlists often have good results)
         for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
-                val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
-                val url = "$instance/api/v1/search?q=$encodedQuery&type=videos"
+                val encodedQuery = URLEncoder.encode("$enhancedQuery official video", "UTF-8")
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
                     val json = JSONArray(response)
                     val songs = parseInvidiousItems(json)
+                    Log.d(TAG, "Invidious video search returned ${songs.size} results")
                     if (songs.isNotEmpty()) {
-                        return@withContext songs
+                        // Filter out shorts and live streams
+                        val filtered = songs.filter { 
+                            it.duration > 60 && !it.isLive && 
+                            isLikelyMusic(it.title, it.artist) 
+                        }
+                        if (filtered.isNotEmpty()) {
+                            return@withContext filtered.take(30)
+                        }
                     }
                 }
             } catch (e: Exception) { Log.w(TAG, "Invidious videos search fail: ${e.message}") }
         }
 
-        // 5. Try Internet Archive search (FREE, no API key!)
+        // 5. Try Internet Archive search (FREE music)
         try {
             val iaResults = searchInternetArchive("$searchQuery music")
             if (iaResults.isNotEmpty()) {
