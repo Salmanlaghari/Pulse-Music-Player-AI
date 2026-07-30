@@ -12,6 +12,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.repository.YouTubeRepository
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +114,104 @@ class YouTubeViewModel(
                 Log.d(TAG, "JioSaavn found ${results.size} results for '$query'")
             } catch (e: Exception) {
                 Log.e(TAG, "JioSaavn search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    fun searchAppleMusic(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchAppleMusic(query)
+                _searchResults.value = results
+                Log.d(TAG, "Apple Music found ${results.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "Apple Music search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    fun searchSpotify(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchSpotify(query)
+                _searchResults.value = results
+                Log.d(TAG, "Spotify found ${results.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "Spotify search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    fun searchYouTubeMusic(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchYouTubeMusic(query)
+                _searchResults.value = results
+                Log.d(TAG, "YouTube Music found ${results.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "YouTube Music search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    /**
+     * Unified synced search — aggregates results from ALL platforms (JioSaavn,
+     * Apple Music, Spotify, YouTube Music, Deezer, Internet Archive) so the
+     * player shows a single synced catalog across every source.
+     */
+    fun searchAllSources(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(300)
+            _isSearching.value = true
+            try {
+                val combined = mutableListOf<YouTubeSong>()
+                val seen = mutableSetOf<String>()
+
+                // Run all source searches concurrently for speed and sync them together
+                val appleDeferred = async { runCatching { youTubeRepository.searchAppleMusic(query) }.getOrDefault(emptyList()) }
+                val saavnDeferred = async { runCatching { youTubeRepository.searchJioSaavn(query) }.getOrDefault(emptyList()) }
+                val spotifyDeferred = async { runCatching { youTubeRepository.searchSpotify(query) }.getOrDefault(emptyList()) }
+                val ytmDeferred = async { runCatching { youTubeRepository.searchYouTubeMusic(query) }.getOrDefault(emptyList()) }
+                val generalDeferred = async { runCatching { youTubeRepository.search(query) }.getOrDefault(emptyList()) }
+
+                val apple = appleDeferred.await()
+                val saavn = saavnDeferred.await()
+                val spotify = spotifyDeferred.await()
+                val ytm = ytmDeferred.await()
+                val general = generalDeferred.await()
+
+                for (list in listOf(apple, saavn, spotify, ytm, general)) {
+                    for (s in list) {
+                        if (seen.add(s.id)) combined.add(s)
+                    }
+                }
+
+                _searchResults.value = combined
+                Log.d(TAG, "Synced search aggregated ${combined.size} unique results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "Synced search failed", e)
                 _searchResults.value = emptyList()
             } finally {
                 _isSearching.value = false

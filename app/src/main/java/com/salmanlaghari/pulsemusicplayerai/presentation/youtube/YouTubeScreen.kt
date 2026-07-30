@@ -68,7 +68,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.launch
 
-enum class MusicSource { ALL, ARCHIVE, DEEZER }
+enum class MusicSource { ALL, JIOSAAVN, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, ARCHIVE, DEEZER }
 enum class ViewMode { LIST, GRID }
 
 @Composable
@@ -99,9 +99,17 @@ fun YouTubeScreen(
         }
     }
 
-    // Search with selected source
+    // Search with selected source — routes to the correct platform or aggregated sync
     fun searchWithSource(query: String) {
-        viewModel.search(query)
+        when (selectedSource) {
+            MusicSource.ALL -> viewModel.searchAllSources(query)
+            MusicSource.JIOSAAVN -> viewModel.searchJioSaavn(query)
+            MusicSource.APPLE_MUSIC -> viewModel.searchAppleMusic(query)
+            MusicSource.SPOTIFY -> viewModel.searchSpotify(query)
+            MusicSource.YOUTUBE_MUSIC -> viewModel.searchYouTubeMusic(query)
+            MusicSource.ARCHIVE -> viewModel.search(query)
+            MusicSource.DEEZER -> viewModel.search(query)
+        }
     }
 
     Box(
@@ -273,38 +281,84 @@ fun YouTubeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Source Selection Tabs
+            // Source Selection Tabs — scrollable to fit all synced platforms
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Source Tabs
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SourceChip(
-                        text = "🎵 All",
-                        selected = selectedSource == MusicSource.ALL,
-                        onClick = { 
-                            selectedSource = MusicSource.ALL
-                            if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                        }
-                    )
-                    SourceChip(
-                        text = "🌐 Archive",
-                        selected = selectedSource == MusicSource.ARCHIVE,
-                        onClick = { 
-                            selectedSource = MusicSource.ARCHIVE
-                            if (searchQuery.length >= 3) viewModel.search(searchQuery)
-                        }
-                    )
-                    SourceChip(
-                        text = "🎵 Deezer",
-                        selected = selectedSource == MusicSource.DEEZER,
-                        onClick = { 
-                            selectedSource = MusicSource.DEEZER
-                            if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                        }
-                    )
+                // Source Tabs (scrollable)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        SourceChip(
+                            text = "🌐 All",
+                            selected = selectedSource == MusicSource.ALL,
+                            onClick = {
+                                selectedSource = MusicSource.ALL
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🎶 JioSaavn",
+                            selected = selectedSource == MusicSource.JIOSAAVN,
+                            onClick = {
+                                selectedSource = MusicSource.JIOSAAVN
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🍎 Apple Music",
+                            selected = selectedSource == MusicSource.APPLE_MUSIC,
+                            onClick = {
+                                selectedSource = MusicSource.APPLE_MUSIC
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🟢 Spotify",
+                            selected = selectedSource == MusicSource.SPOTIFY,
+                            onClick = {
+                                selectedSource = MusicSource.SPOTIFY
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "▶ YouTube Music",
+                            selected = selectedSource == MusicSource.YOUTUBE_MUSIC,
+                            onClick = {
+                                selectedSource = MusicSource.YOUTUBE_MUSIC
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🌐 Archive",
+                            selected = selectedSource == MusicSource.ARCHIVE,
+                            onClick = {
+                                selectedSource = MusicSource.ARCHIVE
+                                if (searchQuery.length >= 3) viewModel.search(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🎵 Deezer",
+                            selected = selectedSource == MusicSource.DEEZER,
+                            onClick = {
+                                selectedSource = MusicSource.DEEZER
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
                 }
                 
                 // View Mode Toggle

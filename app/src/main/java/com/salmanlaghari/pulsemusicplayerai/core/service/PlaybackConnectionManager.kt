@@ -74,6 +74,10 @@ class PlaybackConnectionManager(private val context: Context) {
     private var positionUpdateJob: Job? = null
     private var sleepTimerJob: Job? = null
 
+    // Track last persisted position to avoid hammering DataStore every tick (fixes UI jank / hang)
+    private var lastSavedPositionMs: Long = -1L
+    private var lastSavedSongId: Long = -1L
+
     init {
         initializeController()
     }
@@ -147,9 +151,20 @@ class PlaybackConnectionManager(private val context: Context) {
                     val pos = controller.currentPosition.coerceAtLeast(0L)
                     _currentPosition.value = pos
                     _duration.value = controller.duration.coerceAtLeast(0L)
-                    _currentSong.value?.let { saveLastPlayedState(it.id, pos) }
+                    // Throttle persistence: only save when position moved by >= 5s or song changed.
+                    // This avoids the constant DataStore writes that caused the app to feel "hung".
+                    val cur = _currentSong.value
+                    if (cur != null) {
+                        val movedEnough = (pos - lastSavedPositionMs).let { it >= 5000 || it <= -5000 }
+                        if (cur.id != lastSavedSongId || movedEnough) {
+                            lastSavedSongId = cur.id
+                            lastSavedPositionMs = pos
+                            saveLastPlayedState(cur.id, pos)
+                        }
+                    }
                 }
-                delay(1000)
+                // 500ms tick gives a smoother progress bar without flooding the UI thread
+                delay(500)
             }
         }
     }
@@ -171,7 +186,6 @@ class PlaybackConnectionManager(private val context: Context) {
                 return
             }
 
-            controller.stop()
             controller.clearMediaItems()
 
             // Ensure queue is not empty and filter out songs with empty/invalid URIs
@@ -190,7 +204,7 @@ class PlaybackConnectionManager(private val context: Context) {
             // Set references and load items
             _currentQueue.value = safeQueue
             val mediaItems = safeQueue.map { it.toMediaItem() }
-            controller.addMediaItems(mediaItems)
+            controller.setMediaItems(mediaItems, true)
 
             val targetIndex = safeQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
             controller.seekTo(targetIndex, 0L)
@@ -310,8 +324,10 @@ class PlaybackConnectionManager(private val context: Context) {
                     _currentSong.value = lastSong
                     _currentPosition.value = lastPosition
                     _duration.value = lastSong.duration
+                    lastSavedSongId = lastSong.id
+                    lastSavedPositionMs = lastPosition
 
-                    // Pre-load the song silently into queue
+                    // Pre-load the song silently into queue (do not auto-play on restore)
                     controller.setMediaItem(lastSong.toMediaItem())
                     controller.seekTo(lastPosition)
                     controller.prepare()
@@ -366,6 +382,24 @@ class PlaybackConnectionManager(private val context: Context) {
 
         override fun onRepeatModeChanged(repeatMode: Int) {
             _repeatMode.value = repeatMode
+        }
+
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            android.util.Log.w("PlaybackConn", "Player error: ${error.errorCodeName} — auto-skipping")
+            // Auto-skip to next track so a bad/expired URL never leaves the app "hung"
+            try {
+                val controller = mediaController
+                if (controller != null && controller.mediaItemCount > 1) {
+                    controller.seekToNext()
+                    controller.prepare()
+                    controller.play()
+                } else {
+                    controller?.stop()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PlaybackConn", "Auto-skip failed", e)
+            }
+            updateStateFromController()
         }
     }
 }
