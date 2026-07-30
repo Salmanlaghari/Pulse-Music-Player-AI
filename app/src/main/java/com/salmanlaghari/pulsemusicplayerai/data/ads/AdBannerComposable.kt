@@ -1,7 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.data.ads
 
 import android.util.Log
-import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,33 +34,31 @@ fun AdMobBanner(
         AndroidView(
             modifier = Modifier.fillMaxWidth(),
             factory = { ctx ->
-                try {
-                    AdView(ctx).apply {
-                        this.adUnitId = adUnitId
-                        setAdSize(AdSize.BANNER)
-                        adListener = object : AdListener() {
-                            override fun onAdFailedToLoad(error: LoadAdError) {
-                                Log.w("AdMobBanner", "Ad load failed: ${error.message}")
-                            }
-                            override fun onAdOpened() {
-                                Log.d("AdMobBanner", "Ad opened")
-                            }
-                            override fun onAdClosed() {
-                                Log.d("AdMobBanner", "Ad closed")
-                            }
+                AdView(ctx).apply {
+                    this.adUnitId = adUnitId
+                    setAdSize(AdSize.BANNER)
+                    adListener = object : AdListener() {
+                        override fun onAdFailedToLoad(error: LoadAdError) {
+                            Log.w("AdMobBanner", "Ad load failed: ${error.message}")
                         }
-                        loadAd(AdRequest.Builder().build())
+                        override fun onAdOpened() {
+                            Log.d("AdMobBanner", "Ad opened")
+                        }
+                        override fun onAdClosed() {
+                            Log.d("AdMobBanner", "Ad closed")
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.e("AdMobBanner", "Failed to create AdView: ${e.message}")
-                    FrameLayout(ctx)
+                    loadAd(AdRequest.Builder().build())
                 }
             },
-            update = { adView: AdView ->
-                try {
-                    adView.loadAd(AdRequest.Builder().build())
-                } catch (e: Exception) {
-                    Log.e("AdMobBanner", "Failed to update AdView: ${e.message}")
+            update = { adView ->
+                // Refresh ad on recomposition if needed
+                if (adView.parent != null) {
+                    try {
+                        adView.loadAd(AdRequest.Builder().build())
+                    } catch (e: Exception) {
+                        Log.e("AdMobBanner", "Failed to update AdView: ${e.message}")
+                    }
                 }
             }
         )
