@@ -25,6 +25,10 @@ data class YouTubeSong(
             id.startsWith("dz_") -> "Deezer"
             id.startsWith("ia_") -> "Internet Archive"
             id.startsWith("jm_") -> "Jamendo"
+            id.startsWith("js_") -> "JioSaavn"
+            id.startsWith("am_") -> "Apple Music"
+            id.startsWith("sp_") -> "Spotify"
+            id.startsWith("yt_") -> "YouTube Music"
             else -> "YouTube"
         }
 
@@ -81,7 +85,9 @@ data class YouTubeSong(
     private fun getDefaultThumbnail(): String {
         return when {
             id.startsWith("dz_") -> "https://e-cdns-images.dzcdn.net/images/cover/000000000/56x56.jpg"
-            else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_")}/default.jpg"
+            id.startsWith("am_") -> "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/00/00/00/0000000000/56x56bb.jpg"
+            id.startsWith("sp_") -> "https://i.scdn.co/image/ab67616d0000b273000000000000000000000000"
+            else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_").removePrefix("js_").removePrefix("am_").removePrefix("sp_")}/default.jpg"
         }
     }
 }

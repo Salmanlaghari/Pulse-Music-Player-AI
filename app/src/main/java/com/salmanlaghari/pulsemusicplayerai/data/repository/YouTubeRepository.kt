@@ -517,6 +517,181 @@ class YouTubeRepository {
     }
 
     // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // APPLE MUSIC SEARCH — iTunes Search API (FREE, no auth, 30s preview m4a)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    suspend fun searchAppleMusic(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            // iTunes Search API — returns tracks with 30-second previewUrl (m4a, playable in ExoPlayer)
+            val url = "https://itunes.apple.com/search?term=$encodedQuery&media=music&entity=song&limit=30"
+            val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+
+            if (response.isNotBlank()) {
+                val json = JSONObject(response)
+                val results = json.optJSONArray("results") ?: return@withContext emptyList()
+
+                for (i in 0 until results.length()) {
+                    try {
+                        val track = results.getJSONObject(i)
+                        val trackName = track.optString("trackName", "Unknown")
+                        val artistName = track.optString("artistName", "Unknown Artist")
+                        val trackId = track.optString("trackId", "")
+                        val previewUrl = track.optString("previewUrl", "")
+                        val artworkUrl = track.optString("artworkUrl100", "")
+                            .replace("100x100", "300x300")
+                        val durationMs = track.optLong("trackTimeMillis", 0)
+                        val durationSec = if (durationMs > 0) durationMs / 1000 else 0
+
+                        // Only add tracks that have a playable preview URL
+                        if (previewUrl.isNotBlank() && previewUrl.startsWith("http")) {
+                            songs.add(
+                                YouTubeSong(
+                                    id = "am_$trackId",
+                                    title = trackName,
+                                    artist = artistName,
+                                    duration = durationSec,
+                                    thumbnailUrl = artworkUrl.ifBlank { "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/00/00/00/0000000000/300x300.jpg" },
+                                    audioUrl = previewUrl
+                                )
+                            )
+                        }
+                    } catch (e: Exception) { /* skip invalid track */ }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Apple Music search error: ${e.message}")
+        }
+        songs
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // SPOTIFY SEARCH — via Spotify public access token (metadata + 30s preview)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    suspend fun searchSpotify(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+
+            // 1. Obtain a public access token (Spotify Web Player anonymous token endpoint)
+            val tokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player"
+            val tokenResponse = httpGet(tokenUrl, timeout = FAST_TIMEOUT)
+            var accessToken: String? = null
+            if (tokenResponse.isNotBlank()) {
+                try {
+                    val tokenJson = JSONObject(tokenResponse)
+                    accessToken = tokenJson.optString("accessToken", "")
+                } catch (e: Exception) { /* fall through */ }
+            }
+
+            if (accessToken.isNullOrBlank()) {
+                Log.w(TAG, "Spotify token fetch failed; skipping Spotify search")
+                return@withContext emptyList()
+            }
+
+            // 2. Search tracks using the public access token
+            val searchUrl = "https://api.spotify.com/v1/search?q=$encodedQuery&type=track&limit=30"
+            val searchResponse = httpGetWithAuth(searchUrl, "Bearer $accessToken", timeout = NORMAL_TIMEOUT)
+
+            if (searchResponse.isNotBlank()) {
+                val json = JSONObject(searchResponse)
+                val tracks = json.optJSONObject("tracks")?.optJSONArray("items")
+                    ?: return@withContext emptyList()
+
+                for (i in 0 until tracks.length()) {
+                    try {
+                        val track = tracks.getJSONObject(i)
+                        val trackName = track.optString("name", "Unknown")
+                        val trackId = track.optString("id", "")
+                        val artists = track.optJSONArray("artists")
+                        val artistName = if (artists != null && artists.length() > 0) {
+                            artists.getJSONObject(0).optString("name", "Unknown Artist")
+                        } else "Unknown Artist"
+                        val durationMs = track.optLong("duration_ms", 0)
+                        val durationSec = if (durationMs > 0) durationMs / 1000 else 0
+                        val previewUrl = track.optString("preview_url", "")
+                        val albumObj = track.optJSONObject("album")
+                        val images = albumObj?.optJSONArray("images")
+                        val thumbnail = if (images != null && images.length() > 0) {
+                            images.getJSONObject(0).optString("url", "")
+                        } else ""
+
+                        // Spotify preview_url can be null for some tracks; still include metadata-only
+                        // entries so they appear in sync results, but mark audio as empty so fallback resolves them.
+                        val audio = previewUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
+                        songs.add(
+                            YouTubeSong(
+                                id = "sp_$trackId",
+                                title = trackName,
+                                artist = artistName,
+                                duration = durationSec,
+                                thumbnailUrl = thumbnail.ifBlank { "https://i.scdn.co/image/ab67616d0000b273000000000000000000000000" },
+                                audioUrl = audio
+                            )
+                        )
+                    } catch (e: Exception) { /* skip invalid track */ }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Spotify search error: ${e.message}")
+        }
+        songs
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // YOUTUBE MUSIC SEARCH — dedicated Piped/Invidious video search (full streams)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    suspend fun searchYouTubeMusic(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val searchQuery = query.trim()
+        val songs = mutableListOf<YouTubeSong>()
+
+        // 1. Piped instances first (returns direct audio streams)
+        for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
+            try {
+                val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
+                val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+                val url = "$instance/ytsearch?q=$encodedQuery"
+                val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+                if (response.isNotBlank()) {
+                    val json = JSONObject(response)
+                    val items = json.optJSONArray("items")
+                    if (items != null && items.length() > 0) {
+                        val parsed = parsePipedItems(items)
+                        if (parsed.isNotEmpty()) {
+                            currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
+                            songs.addAll(parsed)
+                            return@withContext songs.take(30)
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "Piped YTM search fail: ${e.message}") }
+        }
+
+        // 2. Invidious fallback
+        for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
+            try {
+                val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
+                val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+                val region = getUserRegion()
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
+                val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+                if (response.isNotBlank()) {
+                    val jsonArray = JSONArray(response)
+                    val parsed = parseInvidiousItems(jsonArray)
+                    if (parsed.isNotEmpty()) {
+                        currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
+                        songs.addAll(parsed)
+                        return@withContext songs.take(30)
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "Invidious YTM search fail: ${e.message}") }
+        }
+
+        songs
+    }
+
     // TRENDING — Deezer + Internet Archive + local
     // ═══════════════════════════════════════════════
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
@@ -1014,6 +1189,32 @@ class YouTubeRepository {
             }
         } catch (e: Exception) {
             Log.w(TAG, "HTTP GET failed for $urlString: ${e.message}")
+            throw e
+        }
+    }
+
+    // HTTP GET with Authorization header (used for Spotify public token API)
+    private fun httpGetWithAuth(urlString: String, authHeader: String, timeout: Int = 10000): String {
+        return try {
+            val url = URL(urlString)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            conn.setRequestProperty("Authorization", authHeader)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.connectTimeout = timeout
+            conn.readTimeout = timeout
+            conn.instanceFollowRedirects = true
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                Log.w(TAG, "HTTP(auth) error: $responseCode for URL: $urlString")
+                throw Exception("HTTP $responseCode")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "HTTP GET(auth) failed for $urlString: ${e.message}")
             throw e
         }
     }
