@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
+import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import com.salmanlaghari.pulsemusicplayerai.utils.dataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +70,7 @@ class PlaybackConnectionManager(private val context: Context) {
 
     // Full song list references to resolve Song entities
     private var allSongsReference: List<Song> = emptyList()
+    private var youTubeSongsReference: List<YouTubeSong> = emptyList()
     private var positionUpdateJob: Job? = null
     private var sleepTimerJob: Job? = null
 
@@ -93,6 +95,10 @@ class PlaybackConnectionManager(private val context: Context) {
         restoreLastPlayedState()
     }
 
+    fun setYouTubeSongsReference(songs: List<YouTubeSong>) {
+        youTubeSongsReference = songs
+    }
+
     private fun updateStateFromController() {
         val controller = mediaController ?: return
         _isPlaying.value = controller.isPlaying
@@ -105,7 +111,9 @@ class PlaybackConnectionManager(private val context: Context) {
 
         val activeMediaId = controller.currentMediaItem?.mediaId
         if (activeMediaId != null) {
+            // Try to find song in local songs first, then YouTube songs
             val foundSong = allSongsReference.find { it.id.toString() == activeMediaId }
+                ?: youTubeSongsReference.find { "yt_$it" == activeMediaId }?.toSong()
             _currentSong.value = foundSong
             if (foundSong != null) {
                 saveLastPlayedState(foundSong.id, controller.currentPosition.coerceAtLeast(0L))
@@ -118,7 +126,9 @@ class PlaybackConnectionManager(private val context: Context) {
         val queueItems = mutableListOf<Song>()
         for (i in 0 until controller.mediaItemCount) {
             val mId = controller.getMediaItemAt(i).mediaId
-            allSongsReference.find { it.id.toString() == mId }?.let { queueItems.add(it) }
+            val foundSong = allSongsReference.find { it.id.toString() == mId }
+                ?: youTubeSongsReference.find { "yt_$it" == mId }?.toSong()
+            foundSong?.let { queueItems.add(it) }
         }
         _currentQueue.value = queueItems
 
