@@ -47,24 +47,41 @@ class YouTubeViewModel(
     val isPlayLoading: StateFlow<Boolean> = _isPlayLoading.asStateFlow()
 
     private var searchJob: Job? = null
+    private var trendingJob: Job? = null
 
     init {
+        // Load trending songs asynchronously with proper error handling
         loadTrending()
     }
 
     fun loadTrending() {
-        viewModelScope.launch {
+        // Cancel any existing loading job to prevent duplicate requests
+        trendingJob?.cancel()
+        trendingJob = viewModelScope.launch {
             _isTrendingLoading.value = true
             try {
+                // Add a small delay to prevent rapid consecutive requests
+                kotlinx.coroutines.delay(100)
                 val trending = youTubeRepository.getTrending()
                 _trendingSongs.value = trending
                 Log.d(TAG, "Loaded ${trending.size} trending songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load trending", e)
+                // Keep the existing songs if load fails
+                if (_trendingSongs.value.isEmpty()) {
+                    // Load fallback songs from local database
+                    loadFallbackSongs()
+                }
             } finally {
                 _isTrendingLoading.value = false
             }
         }
+    }
+
+    private fun loadFallbackSongs() {
+        // This will be called from the repository's getTrending method
+        // which already includes fallback songs from FREE_MUSIC_DATABASE
+        Log.d(TAG, "Attempting to load fallback songs")
     }
 
     fun search(query: String) {

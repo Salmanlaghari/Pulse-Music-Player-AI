@@ -252,41 +252,53 @@ class YouTubeRepository {
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val allSongs = mutableListOf<YouTubeSong>()
 
-        // 1. Try Invidious popular
-        for (i in INVIDIOUS_INSTANCES.indices) {
-            try {
-                val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
-                val url = "$instance/api/v1/popular"
-                val response = httpGet(url)
-                val json = JSONArray(response)
-                val songs = parseInvidiousItems(json)
-                if (songs.isNotEmpty()) {
-                    currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
-                    allSongs.addAll(songs)
-                    break
-                }
-            } catch (e: Exception) { Log.w(TAG, "Invidious popular fail: ${e.message}") }
-        }
+        try {
+            // 1. Try Invidious popular
+            for (i in INVIDIOUS_INSTANCES.indices) {
+                try {
+                    val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
+                    val url = "$instance/api/v1/popular"
+                    val response = httpGet(url, timeout = 8000)
+                    if (response.isNotBlank()) {
+                        val json = JSONArray(response)
+                        val songs = parseInvidiousItems(json)
+                        if (songs.isNotEmpty()) {
+                            currentInvidiousIndex = (currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size
+                            allSongs.addAll(songs)
+                            Log.d(TAG, "Invidious returned ${songs.size} songs")
+                            break
+                        }
+                    }
+                } catch (e: Exception) { Log.w(TAG, "Invidious popular fail: ${e.message}") }
+            }
 
-        // 2. Try Piped trending
-        for (i in PIPED_INSTANCES.indices) {
-            try {
-                val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
-                val url = "$instance/trending?region=US"
-                val response = httpGet(url)
-                val json = JSONArray(response)
-                for (j in 0 until json.length()) {
+            // 2. Try Piped trending (only if no songs from Invidious)
+            if (allSongs.isEmpty()) {
+                for (i in PIPED_INSTANCES.indices) {
                     try {
-                        val item = json.getJSONObject(j)
-                        val song = parsePipedTrendingItem(item)
-                        if (song != null) allSongs.add(song)
-                    } catch (e: Exception) { }
+                        val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
+                        val url = "$instance/trending?region=US"
+                        val response = httpGet(url, timeout = 8000)
+                        if (response.isNotBlank()) {
+                            val json = JSONArray(response)
+                            for (j in 0 until json.length()) {
+                                try {
+                                    val item = json.getJSONObject(j)
+                                    val song = parsePipedTrendingItem(item)
+                                    if (song != null) allSongs.add(song)
+                                } catch (e: Exception) { }
+                            }
+                            if (allSongs.isNotEmpty()) {
+                                currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
+                                Log.d(TAG, "Piped returned ${allSongs.size} songs")
+                                break
+                            }
+                        }
+                    } catch (e: Exception) { Log.w(TAG, "Piped trending fail: ${e.message}") }
                 }
-                if (allSongs.isNotEmpty()) {
-                    currentPipedIndex = (currentPipedIndex + i) % PIPED_INSTANCES.size
-                    break
-                }
-            } catch (e: Exception) { Log.w(TAG, "Piped trending fail: ${e.message}") }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in trending API calls: ${e.message}")
         }
 
         // 3. ALWAYS add free music from local database (guaranteed to work!)
@@ -302,20 +314,23 @@ class YouTubeRepository {
         }
         allSongs.addAll(freeSongs)
 
-        // 4. Try Internet Archive for more variety
-        try {
-            val iaResults = searchInternetArchive("popular music 2025")
-            allSongs.addAll(iaResults.take(10))
-        } catch (e: Exception) { Log.w(TAG, "IA trending fail: ${e.message}") }
-
-        if (allSongs.isNotEmpty()) {
-            val unique = allSongs.distinctBy { it.id }
-            Log.d(TAG, "Trending total: ${unique.size} songs")
-            return@withContext unique.take(80)
+        // 4. Try Internet Archive for more variety (only if no songs from APIs)
+        if (allSongs.size <= freeSongs.size) {
+            try {
+                val iaResults = searchInternetArchive("popular music 2025")
+                allSongs.addAll(iaResults.take(10))
+            } catch (e: Exception) { Log.w(TAG, "IA trending fail: ${e.message}") }
         }
 
-        // 5. Last resort: just return free music
-        freeSongs
+        // Always return at least the free songs
+        if (allSongs.isEmpty()) {
+            Log.w(TAG, "No trending songs available, returning free music only")
+            return@withContext freeSongs
+        }
+
+        val unique = allSongs.distinctBy { it.id }
+        Log.d(TAG, "Trending total: ${unique.size} songs (${unique.size - freeSongs.size} from APIs, ${freeSongs.size} local)")
+        return@withContext unique.take(80)
     }
 
     // ═══════════════════════════════════════════════
@@ -659,25 +674,28 @@ class YouTubeRepository {
     }
 
     // ═══════════════════════════════════════════════
-    // HTTP helper
+    // HTTP helper with robust error handling
     // ═══════════════════════════════════════════════
     private fun httpGet(urlString: String, timeout: Int = 10000): String {
-        val url = URL(urlString)
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
-        conn.connectTimeout = timeout
-        conn.readTimeout = timeout
-        conn.instanceFollowRedirects = true
-
         return try {
-            if (conn.responseCode == 200) {
+            val url = URL(urlString)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            conn.connectTimeout = timeout
+            conn.readTimeout = timeout
+            conn.instanceFollowRedirects = true
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
                 conn.inputStream.bufferedReader().use { it.readText() }
             } else {
-                throw Exception("HTTP ${conn.responseCode}")
+                Log.w(TAG, "HTTP error: $responseCode for URL: $urlString")
+                throw Exception("HTTP $responseCode")
             }
-        } finally {
-            conn.disconnect()
+        } catch (e: Exception) {
+            Log.w(TAG, "HTTP GET failed for $urlString: ${e.message}")
+            throw e
         }
     }
 }
