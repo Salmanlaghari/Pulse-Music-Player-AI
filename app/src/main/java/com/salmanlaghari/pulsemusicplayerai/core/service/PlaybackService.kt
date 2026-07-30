@@ -3,14 +3,10 @@ package com.salmanlaghari.pulsemusicplayerai.core.service
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
-@UnstableApi
 class PlaybackService : MediaSessionService() {
 
     companion object {
@@ -23,19 +19,12 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize ExoPlayer with YouTube extension support
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
-        val renderersFactory = DefaultRenderersFactory(this)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(renderersFactory)
-
         exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .build()
