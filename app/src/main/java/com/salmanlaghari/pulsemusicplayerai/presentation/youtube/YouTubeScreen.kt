@@ -149,7 +149,7 @@ fun YouTubeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🎵 Deezer + Free Music",
+                            text = "🎵 Deezer + Archive.org",
                             fontSize = 12.sp,
                             color = CyanGlow
                         )

@@ -294,17 +294,15 @@ class YouTubeRepository {
     )
 
     // ═══════════════════════════════════════════════
-    // SEARCH — Deezer FIRST (reliable), then YouTube fallback
+    // SEARCH — Deezer + Internet Archive for free full songs
     // ═══════════════════════════════════════════════
     suspend fun search(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
 
-        val region = getUserRegion()
         val searchQuery = query.trim()
-        
         Log.d(TAG, "Searching for: $searchQuery")
 
-        // 1. DEEZER FIRST - Most reliable for music search with working previews
+        // 1. DEEZER FIRST - Most reliable for music search (30-second previews)
         try {
             val deezerResults = searchDeezer(searchQuery)
             if (deezerResults.isNotEmpty()) {
@@ -320,7 +318,16 @@ class YouTubeRepository {
             return@withContext localResults
         }
 
-        // 3. Try YouTube/Piped as fallback (might be blocked in some regions)
+        // 3. INTERNET ARCHIVE - Free full songs (no preview limit!)
+        try {
+            val iaResults = searchInternetArchive(searchQuery)
+            if (iaResults.isNotEmpty()) {
+                Log.d(TAG, "Internet Archive search: ${iaResults.size} results")
+                return@withContext iaResults.take(30)
+            }
+        } catch (e: Exception) { Log.w(TAG, "Internet Archive search fail: ${e.message}") }
+
+        // 4. Try YouTube/Piped as fallback
         for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
@@ -342,11 +349,12 @@ class YouTubeRepository {
             } catch (e: Exception) { Log.w(TAG, "Piped search fail: ${e.message}") }
         }
 
-        // 4. Try Invidious as fallback
+        // 5. Try Invidious as fallback
         for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+                val region = getUserRegion()
                 val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
@@ -416,7 +424,72 @@ class YouTubeRepository {
     }
 
     // ═══════════════════════════════════════════════
-    // TRENDING — Deezer first, then local + YouTube fallback
+    // INTERNET ARCHIVE SEARCH - Free full songs!
+    // ═══════════════════════════════════════════════
+    private suspend fun searchInternetArchive(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode("$query music", "UTF-8")
+            val url = "https://archive.org/advancedsearch.php?q=$encodedQuery+AND+mediatype%3Aaudio&fl[]=identifier,title,creator&rows=20&output=json&sort[]=downloads+desc"
+            val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+            
+            if (response.isNotBlank()) {
+                val json = JSONObject(response)
+                val docs = json.optJSONObject("response")?.optJSONArray("docs") ?: return@withContext emptyList()
+                
+                for (i in 0 until docs.length()) {
+                    try {
+                        val doc = docs.getJSONObject(i)
+                        val identifier = doc.optString("identifier", "")
+                        val title = doc.optString("title", "Unknown")
+                        val creator = doc.optString("creator", "Unknown Artist")
+                        
+                        if (identifier.isBlank()) continue
+                        
+                        // Get the first MP3 file from this item
+                        val audioUrl = getFirstMp3FromArchive(identifier)
+                        if (audioUrl.isNotBlank()) {
+                            songs.add(YouTubeSong(
+                                id = "ia_$identifier",
+                                title = title.take(100),
+                                artist = creator.take(50),
+                                duration = 0, // Duration unknown until we fetch metadata
+                                thumbnailUrl = "https://archive.org/img/book-audio.png",
+                                audioUrl = audioUrl
+                            ))
+                        }
+                    } catch (e: Exception) { /* skip invalid */ }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Internet Archive search error: ${e.message}")
+        }
+        songs
+    }
+    
+    // Get first MP3 file URL from an archive.org item
+    private suspend fun getFirstMp3FromArchive(identifier: String): String = withContext(Dispatchers.IO) {
+        try {
+            val url = "https://archive.org/metadata/$identifier"
+            val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+            if (response.isNotBlank()) {
+                val json = JSONObject(response)
+                val files = json.optJSONArray("files") ?: return@withContext ""
+                for (i in 0 until files.length()) {
+                    val file = files.getJSONObject(i)
+                    val format = file.optString("format", "")
+                    val name = file.optString("name", "")
+                    if ((format == "MP3" || format == "VBR MP3" || name.endsWith(".mp3")) && !name.contains("剁.mp3")) {
+                        return@withContext "https://archive.org/download/$identifier/$name"
+                    }
+                }
+            }
+        } catch (e: Exception) { }
+        ""
+    }
+
+    // ═══════════════════════════════════════════════
+    // TRENDING — Deezer + Internet Archive + local
     // ═══════════════════════════════════════════════
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val region = getUserRegion()
@@ -433,9 +506,8 @@ class YouTubeRepository {
         val allSongs = mutableListOf<YouTubeSong>()
         Log.d(TAG, "Loading trending for region: $region")
 
-        // 1. DEEZER FIRST - Best for trending music
+        // 1. DEEZER FIRST - Best for trending music (30-second previews)
         try {
-            // Use regional search for trending
             val regionQuery = when(region) {
                 "IN" -> "indian songs"
                 "US" -> "top hits"
@@ -450,7 +522,18 @@ class YouTubeRepository {
             }
         } catch (e: Exception) { Log.w(TAG, "Deezer trending fail: ${e.message}") }
 
-        // 2. Try YouTube/Piped trending as fallback
+        // 2. INTERNET ARCHIVE - Free full songs (no preview limit!)
+        if (allSongs.size < 20) {
+            try {
+                val iaResults = searchInternetArchive("popular")
+                if (iaResults.isNotEmpty()) {
+                    allSongs.addAll(iaResults.take(20))
+                    Log.d(TAG, "Internet Archive trending: ${iaResults.size} songs")
+                }
+            } catch (e: Exception) { Log.w(TAG, "Internet Archive trending fail: ${e.message}") }
+        }
+
+        // 3. Try YouTube/Piped trending as fallback
         if (allSongs.size < 20) {
             try {
                 for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
@@ -477,7 +560,7 @@ class YouTubeRepository {
             } catch (e: Exception) { Log.e(TAG, "Trending error: ${e.message}") }
         }
 
-        // 3. Add local free music
+        // 4. Add local free music
         val freeSongs = FREE_MUSIC_DATABASE.map { free ->
             YouTubeSong(
                 id = free.id,
