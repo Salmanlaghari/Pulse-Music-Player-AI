@@ -137,7 +137,7 @@ class MusicViewModel(
                     _allSongs.value = updatedSongs
                     playbackConnectionManager.setAllSongsReference(updatedSongs)
                     _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
-                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(song.id.toString()) }
+                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
                 } catch (fe: Exception) {
                     android.util.Log.w("MusicVM", "Initial favorites apply failed: " + fe.message)
                 }
@@ -162,7 +162,7 @@ class MusicViewModel(
                         _allSongs.value = updatedSongs
                         playbackConnectionManager.setAllSongsReference(updatedSongs)
                         _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
-                        _favoriteSongs.value = updatedSongs.filter { favIds.contains(song.id.toString()) }
+                        _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("MusicVM", "Favorites collector ended: " + e.message)
