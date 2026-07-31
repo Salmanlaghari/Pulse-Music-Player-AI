@@ -11,6 +11,7 @@ import com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackConnectionManag
 import com.salmanlaghari.pulsemusicplayerai.data.repository.YouTubeRepository
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -56,6 +57,11 @@ class YouTubeViewModel(
 
     private val _isPlayLoading = MutableStateFlow(false)
     val isPlayLoading: StateFlow<Boolean> = _isPlayLoading.asStateFlow()
+
+    // Descriptive loading message so the UI can show a calm, accurate state
+    // instead of always saying "Finding full song from all sources".
+    private val _playLoadingMessage = MutableStateFlow("Loading...")
+    val playLoadingMessage: StateFlow<String> = _playLoadingMessage.asStateFlow()
 
     private var searchJob: Job? = null
     private var trendingJob: Job? = null
@@ -269,16 +275,48 @@ class YouTubeViewModel(
         _isPlayLoading.value = true
         try {
             AdManager.incrementSongChangeCount()
-            
+
             Log.d(TAG, "Attempting to play: ${song.title}")
 
-            // Try to resolve audio for selected song first
+            // FAST PATH: if the selected song already has a valid, playable audio URL
+            // (i.e. it is NOT a preview-only source like Apple Music / Spotify / Deezer),
+            // start playback immediately and resolve the queue in the background.
+            // This makes valid songs feel instant instead of "stuck finding source".
+            if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
+                _playLoadingMessage.value = "Loading..."
+                Log.d(TAG, "Fast path: song has valid audio, playing immediately")
+                _currentlyPlaying.value = song
+                playbackConnectionManager.setYouTubeSongsReference(queue)
+                val songAsLocal = song.toSong() ?: run {
+                    Log.e(TAG, "toSong() returned null for ${song.title}")
+                    try {
+                        Toast.makeText(
+                            getApplication(),
+                            "Error playing this track. Try another.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } catch (t: Exception) { }
+                    return false
+                }
+                // Start with just the selected song so playback begins instantly;
+                // resolve the rest of the queue in the background for smooth skipping.
+                val initialQueue = mutableListOf(songAsLocal)
+                playbackConnectionManager.playSong(songAsLocal, initialQueue)
+                Log.d(TAG, "✓ Playing (fast path): ${song.title}")
+                // Background queue resolution (best effort, non-blocking)
+                resolveQueueInBackground(song, queue, songAsLocal)
+                return true
+            }
+
+            // SLOW PATH: preview-only source or no valid audio -> resolve full song
+            _playLoadingMessage.value = "Finding full song..."
+            Log.d(TAG, "Slow path: resolving full song for '${song.title}' (source: ${song.sourceType})")
             var resolvedSong = resolveAudio(song)
             Log.d(TAG, "resolveAudio result: ${if (resolvedSong != null) "success" else "failed"}")
 
-            // If selected song fails, try next songs in queue
+            // If selected song fails, try next songs in queue (limited to 3 to avoid long hangs)
             if (resolvedSong == null) {
-                val fallbackQueue = queue.filter { it.id != song.id }.take(10)
+                val fallbackQueue = queue.filter { it.id != song.id }.take(3)
                 Log.d(TAG, "Trying fallback queue: ${fallbackQueue.size} songs")
                 for ((index, fallback) in fallbackQueue.withIndex()) {
                     Log.d(TAG, "Trying fallback $index: ${fallback.title}")
@@ -303,11 +341,8 @@ class YouTubeViewModel(
             }
 
             _currentlyPlaying.value = resolvedSong
-
-            // Store YouTube songs reference for playback state tracking
             playbackConnectionManager.setYouTubeSongsReference(queue)
 
-            // Convert to local Song
             val songAsLocal = resolvedSong.toSong() ?: run {
                 Log.e(TAG, "toSong() returned null for ${resolvedSong.title}")
                 try {
@@ -320,21 +355,12 @@ class YouTubeViewModel(
                 return false
             }
 
-            // Resolve queue (best effort, first 5)
-            val resolvedQueue = mutableListOf(songAsLocal)
-            for (i in 1 until minOf(queue.size, 6)) {
-                try {
-                    val qSong = queue[i]
-                    val resolved = if (qSong.hasValidAudio()) qSong else resolveAudio(qSong)
-                    if (resolved != null) {
-                        resolved.toSong()?.let { resolvedQueue.add(it) }
-                    }
-                } catch (e: Exception) { /* skip */ }
-            }
-
-            // Play via connection manager
-            playbackConnectionManager.playSong(songAsLocal, resolvedQueue)
-            Log.d(TAG, "✓ Playing: ${resolvedSong.title}")
+            // Play immediately with just the resolved song; build the queue in the background
+            val initialQueue = mutableListOf(songAsLocal)
+            playbackConnectionManager.playSong(songAsLocal, initialQueue)
+            Log.d(TAG, "✓ Playing (slow path): ${resolvedSong.title}")
+            // Background queue resolution
+            resolveQueueInBackground(resolvedSong, queue, songAsLocal)
             return true
 
         } catch (e: Exception) {
@@ -349,6 +375,45 @@ class YouTubeViewModel(
             return false
         } finally {
             _isPlayLoading.value = false
+        }
+    }
+
+    /**
+     * Resolve the rest of the playback queue in the background so that skipping
+     * to the next song is smooth. This runs after playback has already started,
+     * so it never blocks the user from hearing the selected song.
+     */
+    private fun resolveQueueInBackground(
+        selectedSong: YouTubeSong,
+        queue: List<YouTubeSong>,
+        alreadyResolved: com.salmanlaghari.pulsemusicplayerai.domain.model.Song
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolvedQueue = mutableListOf(alreadyResolved)
+                for (i in queue.indices) {
+                    val qSong = queue[i]
+                    if (qSong.id == selectedSong.id) continue
+                    if (resolvedQueue.size >= 6) break
+                    try {
+                        val resolved = if (qSong.hasValidAudio() && !isPreviewOnlySource(qSong.id)) {
+                            qSong
+                        } else {
+                            resolveAudio(qSong)
+                        }
+                        if (resolved != null) {
+                            resolved.toSong()?.let { resolvedQueue.add(it) }
+                        }
+                    } catch (e: Exception) { /* skip */ }
+                }
+                // Update the playback queue if we resolved more songs
+                if (resolvedQueue.size > 1) {
+                    playbackConnectionManager.playSong(alreadyResolved, resolvedQueue)
+                    Log.d(TAG, "Background queue resolved: ${resolvedQueue.size} songs")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Background queue resolution failed: ${e.message}")
+            }
         }
     }
 
