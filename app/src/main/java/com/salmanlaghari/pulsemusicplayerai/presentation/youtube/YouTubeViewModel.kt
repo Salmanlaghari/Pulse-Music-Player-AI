@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class YouTubeViewModel(
     private val application: Application,
@@ -273,18 +274,23 @@ class YouTubeViewModel(
                 val combined = mutableListOf<YouTubeSong>()
                 val seen = mutableSetOf<String>()
 
-                // Run all source searches concurrently for speed and sync them together
-                val appleDeferred = async { runCatching { youTubeRepository.searchAppleMusic(query) }.getOrDefault(emptyList()) }
-                val saavnDeferred = async { runCatching { youTubeRepository.searchJioSaavn(query) }.getOrDefault(emptyList()) }
-                val spotifyDeferred = async { runCatching { youTubeRepository.searchSpotify(query) }.getOrDefault(emptyList()) }
-                val ytmDeferred = async { runCatching { youTubeRepository.searchYouTubeMusic(query) }.getOrDefault(emptyList()) }
-                val generalDeferred = async { runCatching { youTubeRepository.search(query) }.getOrDefault(emptyList()) }
+                // Run all source searches concurrently for speed and sync them together.
+                // Each source is bounded by an 8s timeout so a single dead/slow source
+                // (e.g. Spotify 403, slow Piped/Invidious instances) never blocks the
+                // whole aggregated search and makes the app appear hung.
+                val appleDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchAppleMusic(query) } }.getOrDefault(emptyList()) }
+                val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(emptyList()) }
+                val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(emptyList()) }
+                val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(emptyList()) }
+                val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(emptyList()) }
 
                 val apple = appleDeferred.await().take(10)
                 val saavn = saavnDeferred.await().take(10)
                 val spotify = spotifyDeferred.await().take(10)
                 val ytm = ytmDeferred.await().take(10)
                 val general = generalDeferred.await().take(10)
+
+                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} spotify=${spotify.size} ytm=${ytm.size} general=${general.size}")
 
                 for (list in listOf(apple, saavn, spotify, ytm, general)) {
                     for (s in list) {

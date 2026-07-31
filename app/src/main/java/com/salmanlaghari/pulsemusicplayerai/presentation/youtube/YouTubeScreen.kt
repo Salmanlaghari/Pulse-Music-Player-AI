@@ -64,7 +64,10 @@ import coil.compose.AsyncImage
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.common.PulseBranding
+import com.salmanlaghari.pulsemusicplayerai.common.premiumPressScale
 import com.salmanlaghari.pulsemusicplayerai.theme.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import kotlinx.coroutines.launch
 
 enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, ARCHIVE, DEEZER }
@@ -692,6 +695,9 @@ fun YouTubeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Pulse branding footer
+            PulseBranding(modifier = Modifier.fillMaxWidth())
+
             Spacer(modifier = Modifier.height(80.dp))
         }
     }
@@ -805,8 +811,10 @@ fun SourceChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
+            .premiumPressScale(interactionSource)
             .clip(RoundedCornerShape(20.dp))
             .background(if (selected) PurplePrimary.copy(alpha = 0.3f) else GlassBg)
             .border(
@@ -814,7 +822,7 @@ fun SourceChip(
                 color = if (selected) PurplePrimary else GlassBorder,
                 shape = RoundedCornerShape(20.dp)
             )
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Text(
