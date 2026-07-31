@@ -115,9 +115,12 @@ class PlaybackConnectionManager(private val context: Context) {
 
         val activeMediaId = controller.currentMediaItem?.mediaId
         if (activeMediaId != null) {
-            // Try to find song in local songs first, then YouTube songs
+            // Try to find song in local songs first, then YouTube songs.
+            // YouTube songs converted via toSong() have Song.id = id.hashCode().toLong(),
+            // so their mediaId is hashCode.toString(). Match by that, or by "yt_$id" prefix.
             val foundSong = allSongsReference.find { it.id.toString() == activeMediaId }
-                ?: youTubeSongsReference.find { "yt_$it" == activeMediaId }?.toSong()
+                ?: youTubeSongsReference.find { "yt_${it.id}" == activeMediaId }?.toSong()
+                ?: youTubeSongsReference.find { it.id.hashCode().toLong().toString() == activeMediaId }?.toSong()
             _currentSong.value = foundSong
             if (foundSong != null) {
                 saveLastPlayedState(foundSong.id, controller.currentPosition.coerceAtLeast(0L))
@@ -131,7 +134,8 @@ class PlaybackConnectionManager(private val context: Context) {
         for (i in 0 until controller.mediaItemCount) {
             val mId = controller.getMediaItemAt(i).mediaId
             val foundSong = allSongsReference.find { it.id.toString() == mId }
-                ?: youTubeSongsReference.find { "yt_$it" == mId }?.toSong()
+                ?: youTubeSongsReference.find { "yt_${it.id}" == mId }?.toSong()
+                ?: youTubeSongsReference.find { it.id.hashCode().toLong().toString() == mId }?.toSong()
             foundSong?.let { queueItems.add(it) }
         }
         _currentQueue.value = queueItems
@@ -179,19 +183,23 @@ class PlaybackConnectionManager(private val context: Context) {
         try {
             val controller = mediaController ?: return
 
-            // Validate: song must have a playable URI
+            // Validate: song must have a playable URI.
+            // Both http(s):// (streaming) and content:// (local/device music) URIs are valid.
+            // ExoPlayer handles both via its default data source factories.
             val songUri = song.uri?.toString() ?: ""
-            if (songUri.isEmpty() || songUri == "null" || !songUri.startsWith("http")) {
+            if (songUri.isEmpty() || songUri == "null") {
                 android.util.Log.w("PlaybackConn", "Cannot play song with invalid URI: ${song.title} uri=$songUri")
                 return
             }
 
             controller.clearMediaItems()
 
-            // Ensure queue is not empty and filter out songs with empty/invalid URIs
+            // Ensure queue is not empty and filter out songs with empty/invalid URIs.
+            // Allow both http(s):// (streaming) and content:// (local/device) URIs.
             val safeQueue = playQueue.filter { s ->
                 val uri = s.uri?.toString() ?: ""
-                uri.isNotEmpty() && uri != "null" && uri.startsWith("http")
+                uri.isNotEmpty() && uri != "null" &&
+                (uri.startsWith("http") || uri.startsWith("content"))
             }.let { filtered ->
                 if (filtered.isEmpty()) listOf(song) else filtered
             }

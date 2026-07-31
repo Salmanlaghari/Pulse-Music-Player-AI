@@ -91,43 +91,49 @@ class YouTubeRepository {
             "AU" to listOf("australian music", "auspop")
         )
 
-        // ═══ Invidious instances (ordered by reliability) ═══
+        // ═══ Invidious instances (ordered by reliability - verified working 2025) ═══
         private val INVIDIOUS_INSTANCES = listOf(
-            "https://inv.zoomerville.com",
+            "https://invidious.f5.si",
+            "https://inv.nadeko.net",
+            "https://invidious.nerdvpn.de",
+            "https://invidious.tiekoetter.com",
+            "https://yt.chocolatemoo53.com",
             "https://yewtu.be",
-            "https://inv.tux.pizza",
             "https://iv.ggtyler.dev",
             "https://invidious.fdn.fr",
             "https://invidious.futo.org",
             "https://invidious.perennialte.ch",
             "https://invidious.protokolla.fi",
             "https://invidious.privacyredirect.com",
-            "https://invidious.nerdvpn.de",
-            "https://inv.nadeko.net",
             "https://invidious.lunar.icu",
             "https://yt.artemislena.eu",
             "https://invidious.drgns.space"
         )
 
-        // ═══ Piped instances (ordered by reliability) ═══
+        // ═══ Piped instances (ordered by reliability - verified from official docs 2025) ═══
         private val PIPED_INSTANCES = listOf(
-            "https://api.piped.private.coffee",
             "https://pipedapi.kavin.rocks",
             "https://pipedapi.adminforge.de",
-            "https://pipedapi.hostux.net",
+            "https://pipedapi.leptons.xyz",
+            "https://pipedapi.nosebs.ru",
+            "https://api.piped.yt",
+            "https://pipedapi.drgns.space",
+            "https://pipedapi.owo.si",
+            "https://pipedapi.ducks.party",
+            "https://api.piped.private.coffee",
             "https://pipedapi.darkness.services",
-            "https://pipedapi.r4fo.com",
-            "https://piped-api.lunar.icu",
-            "https://pipedapi.in.projectsegfault.com",
-            "https://api.piped.projectsegfault.com",
-            "https://watchapi.whatever.social"
+            "https://pipedapi.orangenet.cc",
+            "https://piped-api.codespace.cz",
+            "https://pipedapi.reallyaweso.me",
+            "https://pipedapi.hostux.net",
+            "https://pipedapi.r4fo.com"
         )
 
         // ═══ cobalt.tools instances ═══
         private val COBALT_INSTANCES = listOf(
-            "https://cobalt-api.hyper.lol",
-            "https://co.eepy.today",
             "https://cobalt.canine.tools",
+            "https://co.eepy.today",
+            "https://cobalt-api.hyper.lol",
             "https://cobalt.api.timelessnesses.me"
         )
 
@@ -542,9 +548,10 @@ class YouTubeRepository {
                     try {
                         val track = tracks.getJSONObject(i)
                         val title = track.optString("title_short", track.optString("title", "Unknown"))
-                        val artist = track.optString("artist_name", track.optString("artist", "")?.let { 
-                            val a = JSONObject(it); a.optString("name", "Unknown Artist") 
-                        } ?: "Unknown Artist")
+                        val artist = try {
+                            val artistObj = track.optJSONObject("artist")
+                            artistObj?.optString("name", "Unknown Artist") ?: "Unknown Artist"
+                        } catch (e: Exception) { "Unknown Artist" }
                         val duration = track.optLong("duration", 0)
                         val deezerId = track.optString("id", "")
                         val previewUrl = track.optString("preview", "")
@@ -1079,12 +1086,12 @@ class YouTubeRepository {
             )
         }
 
-        // 2. Try ALL Invidious instances
-        for (i in INVIDIOUS_INSTANCES.indices) {
+        // 2. Try Invidious instances (first 5 most reliable for fast playback)
+        for (i in 0 until minOf(5, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val url = "$instance/api/v1/videos/$videoId"
-                val response = httpGet(url, timeout = 15000)
+                val response = httpGet(url, timeout = 8000)
                 val json = JSONObject(response)
 
                 val title = json.optString("title", "Unknown")
@@ -1151,12 +1158,12 @@ class YouTubeRepository {
             }
         }
 
-        // 3. Try ALL Piped instances
-        for (i in PIPED_INSTANCES.indices) {
+        // 3. Try Piped instances (first 5 most reliable for fast playback)
+        for (i in 0 until minOf(5, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
                 val url = "$instance/streams/$videoId"
-                val response = httpGet(url, timeout = 15000)
+                val response = httpGet(url, timeout = 8000)
                 val json = JSONObject(response)
 
                 val title = json.optString("title", "Unknown")

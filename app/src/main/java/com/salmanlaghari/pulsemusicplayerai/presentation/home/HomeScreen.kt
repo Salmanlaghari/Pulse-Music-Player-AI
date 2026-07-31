@@ -459,7 +459,7 @@ fun SectionHeader(
         )
         if (showSeeAll) {
             Text(
-                text = "Scan Music",
+                text = "See All",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = CyanGlow,
