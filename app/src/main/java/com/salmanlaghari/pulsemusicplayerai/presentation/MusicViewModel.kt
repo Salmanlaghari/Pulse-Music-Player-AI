@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -101,6 +102,12 @@ class MusicViewModel(
         _isPermissionGranted.value = granted
         if (granted) {
             loadMusicData()
+        } else {
+            // Permission NOT granted — don't load music, and immediately clear
+            // the loading overlay so the user can see the app and grant permission.
+            // Without this, the overlay would stay stuck forever (loadMusicData
+            // is never called, so _isLoading would never become false).
+            _isLoading.value = false
         }
     }
 
@@ -118,19 +125,59 @@ class MusicViewModel(
                 _folders.value = musicRepository.getFolders()
                 _recentlyAdded.value = musicRepository.getRecentlyAdded()
 
-                // Listen to dynamic favorites updates
-                musicRepository.favoriteIdsFlow.collect { favIds ->
+                // Apply favorites ONCE synchronously (use .first() — NOT .collect{}).
+                // IMPORTANT: favoriteIdsFlow is an infinite cold Flow from DataStore.
+                // Calling .collect{} here would suspend forever and the finally block
+                // would never run, leaving the loading overlay stuck on screen.
+                try {
+                    val favIds = musicRepository.favoriteIdsFlow.first()
                     val updatedSongs = songsList.map { song ->
                         song.copy(isFavorite = favIds.contains(song.id.toString()))
                     }
                     _allSongs.value = updatedSongs
                     playbackConnectionManager.setAllSongsReference(updatedSongs)
                     _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
-                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
+                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(song.id.toString()) }
+                } catch (fe: Exception) {
+                    android.util.Log.w("MusicVM", "Initial favorites apply failed: " + fe.message)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("MusicVM", "loadMusicData failed", e)
             } finally {
+                // CRITICAL: this MUST run. Set loading false BEFORE launching the
+                // infinite favorites collector below, otherwise the overlay never hides.
+                _isLoading.value = false
+            }
+
+            // Listen to dynamic favorites updates in a SEPARATE background coroutine.
+            // This runs forever (as intended) but does NOT block the loading state.
+            launch {
+                try {
+                    musicRepository.favoriteIdsFlow.collect { favIds ->
+                        val currentSongs = _allSongs.value
+                        if (currentSongs.isEmpty()) return@collect
+                        val updatedSongs = currentSongs.map { song ->
+                            song.copy(isFavorite = favIds.contains(song.id.toString()))
+                        }
+                        _allSongs.value = updatedSongs
+                        playbackConnectionManager.setAllSongsReference(updatedSongs)
+                        _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
+                        _favoriteSongs.value = updatedSongs.filter { favIds.contains(song.id.toString()) }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MusicVM", "Favorites collector ended: " + e.message)
+                }
+            }
+        }
+
+        // SAFETY TIMEOUT: If data loading somehow hangs (e.g. MediaStore very slow
+        // on a device with thousands of files, or a repository deadlock), force
+        // the loading overlay off after 20 seconds so the user can always access
+        // the app. This is a last-resort guard against a permanently stuck screen.
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(20_000)
+            if (_isLoading.value) {
+                android.util.Log.w("MusicVM", "Loading safety timeout — forcing isLoading=false after 20s")
                 _isLoading.value = false
             }
         }
