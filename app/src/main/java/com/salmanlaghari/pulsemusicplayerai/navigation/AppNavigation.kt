@@ -26,8 +26,6 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -151,9 +149,9 @@ fun AppNavigation(
             modifier = Modifier.padding(innerPadding),
             // Premium page transition: smooth slide + fade
             enterTransition = {
-                slideInHorizontally(
-                    animationSpec = tween(400),
-                    initialOffsetWidth = { fullWidth -> fullWidth / 4 }
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(400)
                 ) + fadeIn(animationSpec = tween(400))
             },
             exitTransition = {
@@ -163,9 +161,9 @@ fun AppNavigation(
                 fadeIn(animationSpec = tween(350))
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    animationSpec = tween(350),
-                    targetOffsetWidth = { fullWidth -> fullWidth / 4 }
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(350)
                 ) + fadeOut(animationSpec = tween(350))
             }
         ) {
