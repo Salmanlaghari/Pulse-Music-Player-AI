@@ -79,6 +79,8 @@ fun YouTubeScreen(
     val trendingSongs by viewModel.trendingSongs.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val isTrendingLoading by viewModel.isTrendingLoading.collectAsState()
+    val youTubeTrending by viewModel.youTubeTrending.collectAsState()
+    val isYouTubeTrendingLoading by viewModel.isYouTubeTrendingLoading.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
     val scope = rememberCoroutineScope()
@@ -87,6 +89,13 @@ fun YouTubeScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var selectedSource by remember { mutableStateOf(MusicSource.ALL) }
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+
+    // Auto-load YouTube trending when YouTube Music tab is selected (no search needed)
+    androidx.compose.runtime.LaunchedEffect(selectedSource) {
+        if (selectedSource == MusicSource.YOUTUBE_MUSIC) {
+            viewModel.loadYouTubeTrending()
+        }
+    }
 
     // Helper function to play song and navigate
     fun playAndNavigate(song: YouTubeSong, queue: List<YouTubeSong>) {
@@ -418,6 +427,77 @@ fun YouTubeScreen(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = { playAndNavigate(song, searchResults) }
+                            )
+                        }
+                    }
+                }
+            } else if (selectedSource == MusicSource.YOUTUBE_MUSIC && searchQuery.isBlank()) {
+                // YouTube Music tab - show trending songs without requiring search
+                Text(
+                    text = "YOUTUBE MUSIC - TRENDING NOW",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PurplePrimary,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isYouTubeTrendingLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = CyanGlow)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Loading trending songs...",
+                                color = TextDim,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                } else if (youTubeTrending.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "No trending songs available",
+                                color = TextDim,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            androidx.compose.material3.TextButton(
+                                onClick = { viewModel.loadYouTubeTrending() }
+                            ) {
+                                Text(
+                                    text = "Retry",
+                                    color = CyanGlow,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(youTubeTrending) { index, song ->
+                            YouTubeSongCard(
+                                song = song,
+                                isCurrentlyPlaying = currentlyPlaying?.id == song.id,
+                                onClick = { playAndNavigate(song, youTubeTrending) }
                             )
                         }
                     }

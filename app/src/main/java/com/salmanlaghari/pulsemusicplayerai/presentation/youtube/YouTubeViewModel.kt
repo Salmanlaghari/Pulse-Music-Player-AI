@@ -41,6 +41,16 @@ class YouTubeViewModel(
     private val _isTrendingLoading = MutableStateFlow(false)
     val isTrendingLoading: StateFlow<Boolean> = _isTrendingLoading.asStateFlow()
 
+    // YouTube Music trending songs - auto-populated without search
+    private val _youTubeTrending = MutableStateFlow<List<YouTubeSong>>(emptyList())
+    val youTubeTrending: StateFlow<List<YouTubeSong>> = _youTubeTrending.asStateFlow()
+
+    private val _isYouTubeTrendingLoading = MutableStateFlow(false)
+    val isYouTubeTrendingLoading: StateFlow<Boolean> = _isYouTubeTrendingLoading.asStateFlow()
+
+    private var youTubeTrendingJob: Job? = null
+    private var youTubeTrendingLoaded = false
+
     private val _currentlyPlaying = MutableStateFlow<YouTubeSong?>(null)
     val currentlyPlaying: StateFlow<YouTubeSong?> = _currentlyPlaying.asStateFlow()
 
@@ -83,6 +93,32 @@ class YouTubeViewModel(
         // This will be called from the repository's getTrending method
         // which already includes fallback songs from FREE_MUSIC_DATABASE
         Log.d(TAG, "Attempting to load fallback songs")
+    }
+
+    /**
+     * Load YouTube Music trending songs - auto-populated without search.
+     * Called when the YouTube Music tab is opened.
+     */
+    fun loadYouTubeTrending() {
+        if (youTubeTrendingLoaded && _youTubeTrending.value.isNotEmpty()) {
+            Log.d(TAG, "YouTube trending already loaded, skipping")
+            return
+        }
+        youTubeTrendingJob?.cancel()
+        youTubeTrendingJob = viewModelScope.launch {
+            _isYouTubeTrendingLoading.value = true
+            try {
+                kotlinx.coroutines.delay(100)
+                val trending = youTubeRepository.getYouTubeTrending()
+                _youTubeTrending.value = trending
+                youTubeTrendingLoaded = true
+                Log.d(TAG, "Loaded ${trending.size} YouTube trending songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load YouTube trending", e)
+            } finally {
+                _isYouTubeTrendingLoading.value = false
+            }
+        }
     }
 
     fun search(query: String) {
