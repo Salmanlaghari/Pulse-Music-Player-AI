@@ -278,11 +278,11 @@ class YouTubeViewModel(
                 // Each source is bounded by an 8s timeout so a single dead/slow source
                 // (e.g. Spotify 403, slow Piped/Invidious instances) never blocks the
                 // whole aggregated search and makes the app appear hung.
-                val appleDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchAppleMusic(query) } }.getOrDefault(emptyList()) }
-                val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(emptyList()) }
-                val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(emptyList()) }
-                val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(emptyList()) }
-                val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(emptyList()) }
+                val appleDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchAppleMusic(query) } }.getOrDefault(null) ?: emptyList() }
+                val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(null) ?: emptyList() }
+                val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(null) ?: emptyList() }
+                val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(null) ?: emptyList() }
+                val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(null) ?: emptyList() }
 
                 val apple = appleDeferred.await().take(10)
                 val saavn = saavnDeferred.await().take(10)

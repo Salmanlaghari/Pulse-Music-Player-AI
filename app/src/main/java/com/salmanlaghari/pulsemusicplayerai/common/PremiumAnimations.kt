@@ -132,17 +132,17 @@ fun PulseBranding(modifier: Modifier = Modifier) {
         modifier = modifier
             .padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
         Row(
             verticalAlignment = Alignment.CenterHorizontally,
             horizontalArrangement = Arrangement.Center
         ) {
-            BrandBar(scaleY = bar1)
+            BrandBar(scaleFraction = bar1)
             Spacer(modifier = Modifier.width(3.dp))
-            BrandBar(scaleY = bar2)
+            BrandBar(scaleFraction = bar2)
             Spacer(modifier = Modifier.width(3.dp))
-            BrandBar(scaleY = bar3)
+            BrandBar(scaleFraction = bar3)
             Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = "Pulse",
@@ -164,13 +164,13 @@ fun PulseBranding(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BrandBar(scaleY: Float) {
+private fun BrandBar(scaleFraction: Float) {
     Box(
         modifier = Modifier
             .size(width = 4.dp, height = 18.dp)
             .graphicsLayer {
-                scaleX = scaleY
-                scaleY = scaleY
+                scaleX = scaleFraction
+                scaleY = scaleFraction
             }
             .clip(RoundedCornerShape(2.dp))
             .background(
