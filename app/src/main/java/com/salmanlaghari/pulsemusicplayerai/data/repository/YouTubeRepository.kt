@@ -530,6 +530,97 @@ class YouTubeRepository {
         null
     }
 
+    // ════════════════════════════════════════════════════════════════════════════
+    // SOUTH ASIAN CATALOG — 500-1000 Bollywood/Pakistani/South Asian/Northern songs
+    // Uses JioSaavn (the only confirmed working full-song source) with curated
+    // search queries. Each query returns up to 40 results → 25+ queries × 40 = 1000+.
+    // Results are deduplicated by JioSaavn song ID.
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Curated search queries for South Asian music covering Bollywood, Pakistani,
+     * South Indian, Punjabi, and Northern Indian regions. Each query targets a
+     * specific artist, genre, or popular theme to ensure variety.
+     */
+    private val SOUTH_ASIAN_QUERIES = listOf(
+        // ── Bollywood A-list singers ──
+        "Arijit Singh", "Shreya Ghoshal", "Sonu Nigam", "Atif Aslam",
+        "Pritam", "A R Rahman", "Vishal Shekhar", "Neha Kakkar",
+        "Jubin Nautiyal", "Armaan Malik", "Darshan Raval", "Payal Dev",
+        // ── Bollywood hits by era/theme ──
+        "Bollywood hits 2024", "Bollywood romantic songs", "Bollywood party songs",
+        "Bollywood sad songs", "Bollywood 90s hits", "Bollywood 2000s hits",
+        "Hindi film songs", "Hindi love songs", "Hindi dance hits",
+        // ── Pakistani artists & Coke Studio ──
+        "Coke Studio Pakistan", "Rahat Fateh Ali Khan", "Nusrat Fateh Ali Khan",
+        "Ali Zafar", "Atif Aslam Pakistan", "Shafqat Amanat Ali",
+        "Meesha Shafi", "Abida Parveen", "Sajjad Ali", "Junoon band",
+        // ── Punjabi / Bhangra ──
+        "Punjabi songs 2024", "Diljit Dosanjh", "Guru Randhawa",
+        "B Praak", "Sidhu Moose Wala", "Ammy Virk", "Punjabi wedding songs",
+        // ── South Indian (Tamil/Telugu/Kannada/Malayalam) ──
+        "Tamil hits 2024", "Telugu hit songs", "Anirudh Ravichander",
+        "Sid Sriram", "Ilaiyaraaja", "Devi Sri Prasad", "Kannada hits",
+        "Malayalam film songs", "South Indian melody",
+        // ── Northern Indian / Sufi / Ghazal ──
+        "Sufi songs", "Ghazal Jagjit Singh", "Mirza Ghalib ghazals",
+        "Bollywood Sufi", "Qawwali", "Hindustani classical",
+        // ── Popular Bollywood composers ──
+        "Shankar Ehsaan Loy", "Himesh Reshammiya", "Sachin Jigar",
+        "Tanishk Bagchi", "Tony Kakkar", "Mithoon composer",
+        // ── Regional / Folk ──
+        "Rajasthani folk songs", "Bhojpuri hits", "Haryanvi songs",
+        "Bengali Rabindra Sangeet", "Gujarati garba songs",
+        // ── New releases & trending ──
+        "New Hindi songs 2024", "Top Hindi songs", "Trending Bollywood",
+        "Hindi remix songs", "Bollywood lofi"
+    )
+
+    /**
+     * Load a large catalog of South Asian songs (500-1000) by running curated
+     * JioSaavn searches. Songs are deduplicated by JioSaavn ID.
+     *
+     * @param onProgress Optional callback receiving (loadedCount, totalQueries)
+     *                   so the UI can show a progress indicator.
+     * @return Deduplicated list of YouTubeSong with full 320kbps audio URLs.
+     */
+    suspend fun loadSouthAsianCatalog(
+        onProgress: ((Int, Int) -> Unit)? = null
+    ): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val allSongs = mutableMapOf<String, YouTubeSong>() // key = JioSaavn ID for dedup
+        val totalQueries = SOUTH_ASIAN_QUERIES.size
+        var completed = 0
+
+        Log.d(TAG, "Loading South Asian catalog: $totalQueries queries")
+
+        for (query in SOUTH_ASIAN_QUERIES) {
+            try {
+                val results = searchJioSaavn(query)
+                for (song in results) {
+                    // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
+                    val rawId = song.id.removePrefix("js_")
+                    if (rawId.isNotBlank() && !allSongs.containsKey(rawId) && song.hasValidAudio()) {
+                        allSongs[rawId] = song
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Catalog query '$query' failed: ${e.message}")
+            }
+
+            completed++
+            onProgress?.invoke(completed, totalQueries)
+
+            // Early exit if we already have 1000+ songs
+            if (allSongs.size >= 1000) {
+                Log.d(TAG, "Catalog reached 1000+ songs, stopping early")
+                break
+            }
+        }
+
+        Log.d(TAG, "South Asian catalog loaded: ${allSongs.size} unique songs")
+        allSongs.values.toList()
+    }
+
     // ═══════════════════════════════════════════════
     // DEEZER SEARCH - Free API with working previews
     // ═══════════════════════════════════════════════
@@ -1086,8 +1177,41 @@ class YouTubeRepository {
             )
         }
 
-        // 2. Try Invidious instances (first 5 most reliable for fast playback)
-        for (i in 0 until minOf(5, INVIDIOUS_INSTANCES.size)) {
+        // 2. JIO SAAVN FAST PATH — try JioSaavn FIRST for YouTube video IDs.
+        // JioSaavn is the ONLY confirmed working full-song source (320kbps MP4,
+        // HTTP 206 range support). Invidious/Piped/Cobalt video stream endpoints
+        // are currently all returning 403/401/empty, so trying them first just
+        // wastes 20-30 seconds before reaching the JioSaavn fallback.
+        // We fetch the YouTube video title via oembed, clean it, and search JioSaavn.
+        if (!videoId.startsWith("js_") && !videoId.startsWith("ia_") &&
+            !videoId.startsWith("dz_") && !videoId.startsWith("am_") &&
+            !videoId.startsWith("sp_") && !videoId.startsWith("jm_")) {
+            try {
+                val meta = getYouTubeVideoMeta(videoId)
+                if (meta != null) {
+                    val (title, channel) = meta
+                    val cleanTitle = cleanYouTubeTitle(title)
+                    Log.d(TAG, "JioSaavn fast path: searching '$cleanTitle' (from YT: '$title')")
+                    val resolved = resolveFullSong(cleanTitle, channel, "")
+                    if (resolved != null && resolved.hasValidAudio()) {
+                        Log.d(TAG, "✓ JioSaavn fast path OK: $title -> ${resolved.title}")
+                        return@withContext YouTubeSong(
+                            id = videoId,
+                            title = title,
+                            artist = channel,
+                            duration = resolved.duration,
+                            thumbnailUrl = resolved.thumbnailUrl.ifBlank { "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" },
+                            audioUrl = resolved.audioUrl
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "JioSaavn fast path fail: ${e.message}")
+            }
+        }
+
+        // 3. Try Invidious instances (first 3 most reliable — reduced from 5 for speed)
+        for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val url = "$instance/api/v1/videos/$videoId"
@@ -1158,8 +1282,8 @@ class YouTubeRepository {
             }
         }
 
-        // 3. Try Piped instances (first 5 most reliable for fast playback)
-        for (i in 0 until minOf(5, PIPED_INSTANCES.size)) {
+        // 4. Try Piped instances (first 3 — reduced for speed)
+        for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
                 val url = "$instance/streams/$videoId"
@@ -1217,31 +1341,8 @@ class YouTubeRepository {
             }
         }
 
-        // 5. JioSaavn fallback: use YouTube video metadata to find the same song on JioSaavn
-        try {
-            val meta = getYouTubeVideoMeta(videoId)
-            if (meta != null) {
-                val (title, channel) = meta
-                val cleanTitle = cleanYouTubeTitle(title)
-                Log.d(TAG, "JioSaavn fallback: searching '$cleanTitle' (from YT: '$title')")
-                val resolved = resolveFullSong(cleanTitle, channel, "")
-                if (resolved != null && resolved.hasValidAudio()) {
-                    // Keep the original YouTube title/channel but use the resolved audio URL
-                    Log.d(TAG, "✓ JioSaavn fallback OK: $title -> ${resolved.title}")
-                    return@withContext YouTubeSong(
-                        id = videoId,
-                        title = title, // keep YouTube title
-                        artist = channel, // keep YouTube channel
-                        duration = resolved.duration,
-                        thumbnailUrl = resolved.thumbnailUrl.ifBlank { "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" },
-                        audioUrl = resolved.audioUrl
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "JioSaavn fallback fail: ${e.message}")
-        }
-
+        // 5. JioSaavn fallback already attempted in step 2 (fast path).
+        // If we reach here, all sources failed.
         Log.e(TAG, "✗ ALL APIs failed for: $videoId")
         null
     }
@@ -1517,23 +1618,37 @@ class YouTubeRepository {
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("Accept", "application/json")
-            conn.setRequestProperty("User-Agent", "PulseMusicPlayer/1.0")
-            conn.connectTimeout = 15000
-            conn.readTimeout = 15000
+            // Browser-like User-Agent to bypass instance restrictions
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+            conn.connectTimeout = 12000
+            conn.readTimeout = 12000
             conn.doOutput = true
 
+            // New Cobalt API format (v10+): uses downloadMode, audioFormat, audioBitrate
+            // Old format (isAudioOnly, aFormat) is deprecated and returns 400/405
             val body = JSONObject().apply {
                 put("url", "https://www.youtube.com/watch?v=$videoId")
-                put("isAudioOnly", true)
-                put("aFormat", "mp3")
+                put("downloadMode", "audio")
+                put("audioFormat", "mp3")
+                put("audioBitrate", "128")
+                // Some instances accept these for better compatibility
+                put("filenameStyle", "basic")
+                put("disableMetadata", false)
             }.toString()
 
             conn.outputStream.bufferedWriter().use { it.write(body) }
 
-            if (conn.responseCode == 200) {
+            val responseCode = conn.responseCode
+            if (responseCode == 200 || responseCode == 201) {
                 val response = conn.inputStream.bufferedReader().use { it.readText() }
+                if (response.isBlank()) {
+                    Log.w(TAG, "cobalt: empty response from $instance")
+                    conn.disconnect()
+                    return null
+                }
                 val json = JSONObject(response)
                 val status = json.optString("status", "")
+                // Cobalt returns the stream URL in "url" field
                 val audioUrl = json.optString("url", json.optString("audio", ""))
 
                 if ((status == "stream" || status == "tunnel" || status == "redirect" || audioUrl.isNotEmpty()) && audioUrl.isNotEmpty()) {
@@ -1546,6 +1661,8 @@ class YouTubeRepository {
                         audioUrl = audioUrl
                     )
                 }
+            } else {
+                Log.w(TAG, "cobalt HTTP $responseCode from $instance")
             }
             conn.disconnect()
         } catch (e: Exception) {
@@ -1625,12 +1742,30 @@ class YouTubeRepository {
     // ═══════════════════════════════════════════════
     // HTTP helper with robust error handling
     // ═══════════════════════════════════════════════
+    // Browser-like User-Agent for bypassing instance restrictions
+    private val BYPASS_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+
+    private fun applyBypassHeaders(conn: HttpURLConnection, referer: String? = null) {
+        conn.setRequestProperty("User-Agent", BYPASS_USER_AGENT)
+        conn.setRequestProperty("Accept", "application/json, text/html, */*")
+        conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+        conn.setRequestProperty("Accept-Encoding", "identity") // no gzip — we need raw streams
+        conn.setRequestProperty("Connection", "keep-alive")
+        if (referer != null) {
+            conn.setRequestProperty("Referer", referer)
+        }
+        // Some instances check for these to block bots
+        conn.setRequestProperty("Sec-Fetch-Dest", "empty")
+        conn.setRequestProperty("Sec-Fetch-Mode", "cors")
+        conn.setRequestProperty("Sec-Fetch-Site", "same-origin")
+    }
+
     private fun httpGet(urlString: String, timeout: Int = 10000): String {
         return try {
             val url = URL(urlString)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            applyBypassHeaders(conn)
             conn.connectTimeout = timeout
             conn.readTimeout = timeout
             conn.instanceFollowRedirects = true
@@ -1663,9 +1798,8 @@ class YouTubeRepository {
             val url = URL(urlString)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            applyBypassHeaders(conn)
             conn.setRequestProperty("Authorization", authHeader)
-            conn.setRequestProperty("Accept", "application/json")
             conn.connectTimeout = timeout
             conn.readTimeout = timeout
             conn.instanceFollowRedirects = true
@@ -1689,9 +1823,8 @@ class YouTubeRepository {
             val url = URL(urlString)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            applyBypassHeaders(conn)
             conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
             conn.connectTimeout = timeout
             conn.readTimeout = timeout
             conn.instanceFollowRedirects = true

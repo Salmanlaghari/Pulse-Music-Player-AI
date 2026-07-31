@@ -1,6 +1,8 @@
 package com.salmanlaghari.pulsemusicplayerai.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -17,6 +19,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,6 +47,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsFeedba
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivacyScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsTermsScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.splash.LoadingOverlay
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.SplashScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.FullPlayerScreen
@@ -69,6 +73,9 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Loading state from MusicViewModel — shown as overlay during initial data load
+    val isLoading by musicViewModel.isLoading.collectAsState()
+
     // Define bottom nav items
     val bottomNavItems = listOf(
         BottomNavItem.Home,
@@ -87,7 +94,14 @@ fun AppNavigation(
         Screen.Settings.route
     )
 
-    Scaffold(
+    // Show loading overlay when:
+    //  - We're on the Home screen (or transitioning to it from splash)
+    //  - MusicViewModel is still loading initial data
+    //  - We're NOT still on the splash screen (splash has its own animation)
+    val showLoadingOverlay = isLoading && currentRoute != Screen.Splash.route
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         bottomBar = {
             if (showNavigationAndPlayer) {
                 Column {
@@ -273,6 +287,14 @@ fun AppNavigation(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+        }
+    }
+
+        // Loading overlay — shown on top of everything during initial data load.
+        // This prevents the user from seeing a blank/blue screen while the app
+        // scans MediaStore and loads albums/artists (can take 5-30 seconds).
+        if (showLoadingOverlay) {
+            LoadingOverlay()
         }
     }
 }

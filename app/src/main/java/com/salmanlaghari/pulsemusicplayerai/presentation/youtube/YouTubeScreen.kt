@@ -67,7 +67,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.launch
 
-enum class MusicSource { ALL, JIOSAAVN, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, ARCHIVE, DEEZER }
+enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, ARCHIVE, DEEZER }
 enum class ViewMode { LIST, GRID }
 
 @Composable
@@ -81,6 +81,9 @@ fun YouTubeScreen(
     val isTrendingLoading by viewModel.isTrendingLoading.collectAsState()
     val youTubeTrending by viewModel.youTubeTrending.collectAsState()
     val isYouTubeTrendingLoading by viewModel.isYouTubeTrendingLoading.collectAsState()
+    val southAsianSongs by viewModel.southAsianSongs.collectAsState()
+    val isSouthAsianLoading by viewModel.isSouthAsianLoading.collectAsState()
+    val southAsianProgress by viewModel.southAsianProgress.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
     val playLoadingMessage by viewModel.playLoadingMessage.collectAsState()
@@ -95,6 +98,9 @@ fun YouTubeScreen(
     androidx.compose.runtime.LaunchedEffect(selectedSource) {
         if (selectedSource == MusicSource.YOUTUBE_MUSIC) {
             viewModel.loadYouTubeTrending()
+        }
+        if (selectedSource == MusicSource.DESI_HITS) {
+            viewModel.loadSouthAsianCatalog()
         }
     }
 
@@ -113,6 +119,7 @@ fun YouTubeScreen(
         when (selectedSource) {
             MusicSource.ALL -> viewModel.searchAllSources(query)
             MusicSource.JIOSAAVN -> viewModel.searchJioSaavn(query)
+            MusicSource.DESI_HITS -> viewModel.searchJioSaavn(query)
             MusicSource.APPLE_MUSIC -> viewModel.searchAppleMusic(query)
             MusicSource.SPOTIFY -> viewModel.searchSpotify(query)
             MusicSource.YOUTUBE_MUSIC -> viewModel.searchYouTubeMusic(query)
@@ -320,6 +327,15 @@ fun YouTubeScreen(
                     }
                     item {
                         SourceChip(
+                            text = "🎭 Desi Hits",
+                            selected = selectedSource == MusicSource.DESI_HITS,
+                            onClick = {
+                                selectedSource = MusicSource.DESI_HITS
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
                             text = "🍎 Apple Music",
                             selected = selectedSource == MusicSource.APPLE_MUSIC,
                             onClick = {
@@ -500,6 +516,102 @@ fun YouTubeScreen(
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = { playAndNavigate(song, youTubeTrending) }
                             )
+                        }
+                    }
+                }
+            } else if (selectedSource == MusicSource.DESI_HITS && searchQuery.isBlank()) {
+                // Desi Hits tab — Bollywood / Pakistani / South Asian / Northern songs catalog
+                Text(
+                    text = "DESI HITS — BOLLYWOOD & SOUTH ASIAN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PurplePrimary,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isSouthAsianLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = CyanGlow)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val (completed, total) = southAsianProgress
+                            val progressText = if (total > 0) {
+                                "Loading $completed / $total playlists…"
+                            } else {
+                                "Loading Desi Hits catalog…"
+                            }
+                            Text(
+                                text = progressText,
+                                color = TextDim,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Fetching Bollywood, Pakistani, Punjabi & South Indian songs",
+                                color = TextDim,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                } else if (southAsianSongs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "🎭",
+                                fontSize = 40.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No Desi Hits available right now",
+                                color = TextDim,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            androidx.compose.material3.TextButton(
+                                onClick = { viewModel.loadSouthAsianCatalog() }
+                            ) {
+                                Text(
+                                    text = "Retry",
+                                    color = CyanGlow,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column {
+                        Text(
+                            text = "${southAsianSongs.size} songs loaded • Tap to play",
+                            color = TextDim,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(southAsianSongs) { index, song ->
+                                YouTubeSongCard(
+                                    song = song,
+                                    isCurrentlyPlaying = currentlyPlaying?.id == song.id,
+                                    onClick = { playAndNavigate(song, southAsianSongs) }
+                                )
+                            }
                         }
                     }
                 }

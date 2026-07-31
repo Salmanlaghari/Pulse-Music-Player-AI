@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration for Pulse Music Player AI
+
+    Allows cleartext (HTTP) traffic for all streaming media domains.
+    Many free music APIs and CDN endpoints (Invidious, Piped, Cobalt, JioSaavn CDN,
+    Internet Archive, Free Music Archive) serve audio over HTTP.
+    Without this config, Android 9+ (API 28+) blocks all cleartext traffic by default,
+    which prevents online song playback entirely.
+
+    This is a deliberate security bypass to enable free music streaming from
+    public-domain and community-maintained sources.
+-->
+<network-security-config>
+
+    <!-- Base configuration: trust system + user CAs for HTTPS -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Explicitly allow cleartext HTTP for all known streaming domains -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- JioSaavn CDN (full 320kbps songs) -->
+        <domain includeSubdomains="true">saavncdn.com</domain>
+        <domain includeSubdomains="true">jiosaavn.com</domain>
+        <domain includeSubdomains="true">sumit.co</domain>
+
+        <!-- Internet Archive (free public domain music) -->
+        <domain includeSubdomains="true">archive.org</domain>
+
+        <!-- Free Music Archive -->
+        <domain includeSubdomains="true">freemusicarchive.org</domain>
+
+        <!-- Invidious instances (YouTube frontends) -->
+        <domain includeSubdomains="true">f5.si</domain>
+        <domain includeSubdomains="true">nadeko.net</domain>
+        <domain includeSubdomains="true">nerdvpn.de</domain>
+        <domain includeSubdomains="true">tiekoetter.com</domain>
+        <domain includeSubdomains="true">chocolatemoo53.com</domain>
+        <domain includeSubdomains="true">yewtu.be</domain>
+        <domain includeSubdomains="true">ggtyler.dev</domain>
+        <domain includeSubdomains="true">fdn.fr</domain>
+        <domain includeSubdomains="true">futo.org</domain>
+        <domain includeSubdomains="true">perennialte.ch</domain>
+        <domain includeSubdomains="true">protokolla.fi</domain>
+        <domain includeSubdomains="true">privacyredirect.com</domain>
+        <domain includeSubdomains="true">lunar.icu</domain>
+        <domain includeSubdomains="true">artemislena.eu</domain>
+        <domain includeSubdomains="true">drgns.space</domain>
+
+        <!-- Piped instances (YouTube frontends) -->
+        <domain includeSubdomains="true">kavin.rocks</domain>
+        <domain includeSubdomains="true">adminforge.de</domain>
+        <domain includeSubdomains="true">leptons.xyz</domain>
+        <domain includeSubdomains="true">nosebs.ru</domain>
+        <domain includeSubdomains="true">piped.yt</domain>
+        <domain includeSubdomains="true">owo.si</domain>
+        <domain includeSubdomains="true">ducks.party</domain>
+        <domain includeSubdomains="true">private.coffee</domain>
+        <domain includeSubdomains="true">darkness.services</domain>
+        <domain includeSubdomains="true">orangenet.cc</domain>
+        <domain includeSubdomains="true">codespace.cz</domain>
+        <domain includeSubdomains="true">reallyaweso.me</domain>
+        <domain includeSubdomains="true">hostux.net</domain>
+        <domain includeSubdomains="true">r4fo.com</domain>
+
+        <!-- Cobalt instances (media download/relay) -->
+        <domain includeSubdomains="true">canine.tools</domain>
+        <domain includeSubdomains="true">eepy.today</domain>
+        <domain includeSubdomains="true">hyper.lol</domain>
+        <domain includeSubdomains="true">timelessnesses.me</domain>
+
+        <!-- YouTube / Googlevideo (direct audio streams) -->
+        <domain includeSubdomains="true">youtube.com</domain>
+        <domain includeSubdomains="true">googlevideo.com</domain>
+        <domain includeSubdomains="true">ytimg.com</domain>
+
+        <!-- Deezer preview CDN -->
+        <domain includeSubdomains="true">deezer.com</domain>
+        <domain includeSubdomains="true">dzcdn.net</domain>
+
+        <!-- iTunes / Apple preview CDN -->
+        <domain includeSubdomains="true">apple.com</domain>
+        <domain includeSubdomains="true">mzstatic.com</domain>
+
+        <!-- Jamendo (free music) -->
+        <domain includeSubdomains="true">jamendo.com</domain>
+
+        <!-- Google APIs (YouTube innerTube) -->
+        <domain includeSubdomains="true">googleapis.com</domain>
+    </domain-config>
+
+</network-security-config>

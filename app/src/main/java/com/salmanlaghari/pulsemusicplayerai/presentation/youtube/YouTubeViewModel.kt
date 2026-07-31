@@ -49,6 +49,19 @@ class YouTubeViewModel(
     private val _isYouTubeTrendingLoading = MutableStateFlow(false)
     val isYouTubeTrendingLoading: StateFlow<Boolean> = _isYouTubeTrendingLoading.asStateFlow()
 
+    // South Asian catalog (Bollywood/Pakistani/South Indian/Northern — 500-1000 songs)
+    private val _southAsianSongs = MutableStateFlow<List<YouTubeSong>>(emptyList())
+    val southAsianSongs: StateFlow<List<YouTubeSong>> = _southAsianSongs.asStateFlow()
+
+    private val _isSouthAsianLoading = MutableStateFlow(false)
+    val isSouthAsianLoading: StateFlow<Boolean> = _isSouthAsianLoading.asStateFlow()
+
+    private val _southAsianProgress = MutableStateFlow(0 to 0) // (completed, total)
+    val southAsianProgress: StateFlow<Pair<Int, Int>> = _southAsianProgress.asStateFlow()
+
+    private var southAsianJob: Job? = null
+    private var southAsianLoaded = false
+
     private var youTubeTrendingJob: Job? = null
     private var youTubeTrendingLoaded = false
 
@@ -123,6 +136,35 @@ class YouTubeViewModel(
                 Log.e(TAG, "Failed to load YouTube trending", e)
             } finally {
                 _isYouTubeTrendingLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Load 500-1000 Bollywood/Pakistani/South Asian/Northern songs from JioSaavn.
+     * Uses curated search queries to build a large deduplicated catalog.
+     * All songs come with full 320kbps stream URLs (confirmed working).
+     */
+    fun loadSouthAsianCatalog() {
+        if (southAsianLoaded && _southAsianSongs.value.isNotEmpty()) {
+            Log.d(TAG, "South Asian catalog already loaded (${_southAsianSongs.value.size} songs), skipping")
+            return
+        }
+        southAsianJob?.cancel()
+        southAsianJob = viewModelScope.launch {
+            _isSouthAsianLoading.value = true
+            try {
+                kotlinx.coroutines.delay(100)
+                val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
+                    _southAsianProgress.value = completed to total
+                }
+                _southAsianSongs.value = songs
+                southAsianLoaded = true
+                Log.d(TAG, "Loaded ${songs.size} South Asian songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load South Asian catalog", e)
+            } finally {
+                _isSouthAsianLoading.value = false
             }
         }
     }
