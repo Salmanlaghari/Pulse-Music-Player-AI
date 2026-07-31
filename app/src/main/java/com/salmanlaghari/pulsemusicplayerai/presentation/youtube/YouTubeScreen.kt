@@ -83,6 +83,7 @@ fun YouTubeScreen(
     val isYouTubeTrendingLoading by viewModel.isYouTubeTrendingLoading.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
+    val playLoadingMessage by viewModel.playLoadingMessage.collectAsState()
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -142,14 +143,14 @@ fun YouTubeScreen(
                     CircularProgressIndicator(color = CyanGlow, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Loading audio...",
+                        text = playLoadingMessage.ifBlank { "Loading..." },
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Finding full song from all sources",
+                        text = if (playLoadingMessage.startsWith("Finding")) "Searching all music sources" else "Preparing your track",
                         color = TextDim,
                         fontSize = 12.sp
                     )
