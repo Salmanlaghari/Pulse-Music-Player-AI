@@ -897,7 +897,7 @@ class YouTubeRepository {
                 }
                 if (songs.size >= 30) break
             } catch (e: Exception) {
-                Log.w(TAG, "YouTube trending query failed: ${'$'}{e.message}")
+                Log.w(TAG, "YouTube trending query failed: ${e.message}")
             }
         }
 
@@ -913,11 +913,11 @@ class YouTubeRepository {
                     if (songs.size >= 30) break
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "JioSaavn trending fallback failed: ${'$'}{e.message}")
+                Log.w(TAG, "JioSaavn trending fallback failed: ${e.message}")
             }
         }
 
-        Log.d(TAG, "YouTube Music trending: ${'$'}{songs.size} songs")
+        Log.d(TAG, "YouTube Music trending: ${songs.size} songs")
         songs.take(40)
     }
 
