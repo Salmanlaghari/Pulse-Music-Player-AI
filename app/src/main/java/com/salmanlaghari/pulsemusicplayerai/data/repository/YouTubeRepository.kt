@@ -10,6 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import android.text.Html
 
 class YouTubeRepository {
 
@@ -378,14 +379,36 @@ class YouTubeRepository {
     // ═══════════════════════════════════════════════
     // JIOSAAVN SEARCH - FULL SONGS! Bollywood, Hindi, Punjabi
     // ═══════════════════════════════════════════════
+
+    // Decode HTML entities like &quot; &amp; &#39; &lt; &gt; in JioSaavn API responses
+    private fun decodeHtmlEntities(text: String): String {
+        if (text.isBlank()) return text
+        return try {
+            Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+        } catch (e: Exception) {
+            // Fallback: manual common entity replacement
+            text
+                .replace("&quot;", """)
+                .replace("&amp;", "&")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&nbsp;", " ")
+                .trim()
+        }
+    }
+    // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<YouTubeSong>()
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
             val searchUrl = "$JIOSAAVN_API/search/songs?query=$encodedQuery"
-            val searchResponse = httpGet(searchUrl, timeout = NORMAL_TIMEOUT)
+            val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+            Log.d(TAG, "JioSaavn search response length: ${searchResponse.length} for query: $query")
 
             if (searchResponse.isNotBlank()) {
+                Log.d(TAG, "JioSaavn: parsing response for query: $query")
                 val searchJson = JSONObject(searchResponse)
                 // New saavn.sumit.co API format: { "success": true, "data": { "results": [...] } }
                 val dataObj = searchJson.optJSONObject("data")
@@ -397,7 +420,7 @@ class YouTubeRepository {
                     try {
                         val result = results.getJSONObject(i)
                         val id = result.optString("id", "")
-                        val title = result.optString("name", result.optString("title", "Unknown"))
+                        val title = decodeHtmlEntities(result.optString("name", result.optString("title", "Unknown")))
 
                         // Artists: array of { name, role } - collect primary artists
                         val artistsArr = result.optJSONArray("artists")
@@ -411,7 +434,7 @@ class YouTubeRepository {
                                     val name = aObj.optString("name", "")
                                     if (name.isNotBlank()) {
                                         if (artistName.isNotEmpty()) artistName.append(", ")
-                                        artistName.append(name)
+                                        artistName.append(decodeHtmlEntities(name))
                                     }
                                 } catch (e: Exception) { }
                             }
@@ -836,6 +859,68 @@ class YouTubeRepository {
 
     // TRENDING — Deezer + Internet Archive + local
     // ═══════════════════════════════════════════════
+    // YouTube Music Trending - auto-populate trending songs without search
+    // Uses YouTube innerTube search with trending keywords, filters to individual songs
+    suspend fun getYouTubeTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val region = getUserRegion()
+        Log.d(TAG, "Loading YouTube Music trending for region: $region")
+
+        val songs = mutableListOf<YouTubeSong>()
+        val seenIds = mutableSetOf<String>()
+
+        // Region-specific trending queries - return individual songs, not playlists
+        val trendingQueries = when (region) {
+            "IN" -> listOf("trending hindi songs 2025", "new bollywood songs 2025", "top punjabi songs 2025")
+            "PK" -> listOf("trending pakistani songs 2025", "new urdu songs 2025", "top punjabi songs 2025")
+            "BD" -> listOf("trending bangla songs 2025", "new bangladeshi songs 2025")
+            "US", "GB", "CA", "AU" -> listOf("trending pop songs 2025", "top hits 2025 songs", "new music 2025 songs")
+            "BR" -> listOf("trending musica 2025", "top songs 2025")
+            "ES", "MX", "AR", "CO" -> listOf("trending canciones 2025", "top reggaeton 2025")
+            "KR" -> listOf("trending kpop 2025", "new kpop songs 2025")
+            "JP" -> listOf("trending jpop 2025", "new jpop songs 2025")
+            "AE", "SA", "EG" -> listOf("trending arabic songs 2025", "new arabic music 2025")
+            "TR" -> listOf("trending turkish songs 2025", "new turkce sarkilar 2025")
+            "NG", "ZA" -> listOf("trending afrobeats 2025", "top amapiano 2025")
+            else -> listOf("trending songs 2025", "top hits 2025 songs", "new music 2025")
+        }
+
+        for (query in trendingQueries) {
+            try {
+                val results = searchYouTubeInnerTube(query)
+                for (song in results) {
+                    // Filter: only individual songs (duration 1-600 seconds)
+                    // This removes long playlist videos (2+ hours)
+                    if (song.duration in 1..600 && seenIds.add(song.id)) {
+                        songs.add(song)
+                    }
+                    if (songs.size >= 30) break
+                }
+                if (songs.size >= 30) break
+            } catch (e: Exception) {
+                Log.w(TAG, "YouTube trending query failed: ${'$'}{e.message}")
+            }
+        }
+
+        // Also add JioSaavn trending songs for variety (full songs, no preview)
+        if (songs.size < 20) {
+            try {
+                val jsavnQuery = trendingQueries.firstOrNull() ?: "trending songs 2025"
+                val jsavnResults = searchJioSaavn(jsavnQuery)
+                for (song in jsavnResults) {
+                    if (seenIds.add(song.id) && song.hasValidAudio()) {
+                        songs.add(song)
+                    }
+                    if (songs.size >= 30) break
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "JioSaavn trending fallback failed: ${'$'}{e.message}")
+            }
+        }
+
+        Log.d(TAG, "YouTube Music trending: ${'$'}{songs.size} songs")
+        songs.take(40)
+    }
+
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val region = getUserRegion()
         val currentTime = System.currentTimeMillis()
@@ -1257,7 +1342,7 @@ class YouTubeRepository {
             Log.w(TAG, "resolveFullSong: YouTube Music fail: ${e.message}")
         }
 
-        // 3. Try Internet Archive as last resort
+        // 3. Try Internet Archive
         try {
             val iaResults = searchInternetArchive(searchQuery)
             if (iaResults.isNotEmpty()) {
@@ -1269,6 +1354,27 @@ class YouTubeRepository {
             }
         } catch (e: Exception) {
             Log.w(TAG, "resolveFullSong: Internet Archive fail: ${e.message}")
+        }
+
+        // 4. Try direct YouTube search (innerTube) as final fallback
+        // This is very reliable for finding songs - YouTube has almost everything
+        try {
+            val ytResults = searchYouTubeInnerTube(searchQuery)
+            // Filter to individual songs (not long playlists/live streams)
+            val songResults = ytResults.filter { it.duration in 1..600 }
+            if (songResults.isNotEmpty()) {
+                val match = findBestMatch(songResults, cleanTitle, cleanArtist)
+                if (match != null) {
+                    // YouTube results need stream resolution via Invidious/Piped/Cobalt
+                    val resolved = getAudioStream(match.id.removePrefix("yt_"))
+                    if (resolved != null && resolved.hasValidAudio()) {
+                        Log.d(TAG, "✓ resolveFullSong: YouTube direct match '${match.title}'")
+                        return@withContext resolved
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveFullSong: YouTube direct fail: ${e.message}")
         }
 
         Log.w(TAG, "✗ resolveFullSong: no full stream found for '$title' by '$artist'")
@@ -1532,6 +1638,15 @@ class YouTubeRepository {
         } catch (e: Exception) {
             Log.w(TAG, "HTTP GET failed for $urlString: ${e.message}")
             throw e
+        }
+    }
+
+    // HTTP GET that returns empty string on failure instead of throwing (safer for search)
+    private fun httpGetSafe(urlString: String, timeout: Int = 10000): String {
+        return try {
+            httpGet(urlString, timeout)
+        } catch (e: Exception) {
+            ""
         }
     }
 

@@ -1,0 +1,28 @@
+{
+  "ambient_presets": [
+    {
+      "id": "deep_relaxation",
+      "name": "Deep Relaxation",
+      "description": "136 Hz Om frequency drone for deep meditation and relaxation",
+      "file": "deep_relaxation.wav",
+      "duration_seconds": 40,
+      "category": "Meditation"
+    },
+    {
+      "id": "ocean_waves",
+      "name": "Ocean Waves",
+      "description": "Gentle ocean waves with natural swelling rhythm for calm focus",
+      "file": "ocean_waves.wav",
+      "duration_seconds": 40,
+      "category": "Nature"
+    },
+    {
+      "id": "cosmic_drift",
+      "name": "Cosmic Drift",
+      "description": "Ethereal space ambience with sweeping harmonic pads",
+      "file": "cosmic_drift.wav",
+      "duration_seconds": 40,
+      "category": "Ambient"
+    }
+  ]
+}
