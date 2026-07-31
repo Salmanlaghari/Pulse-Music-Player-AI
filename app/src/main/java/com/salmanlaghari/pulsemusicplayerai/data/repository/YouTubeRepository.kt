@@ -788,7 +788,7 @@ class YouTubeRepository {
 
                                             // Duration from lengthText.simpleText
                                             val lengthText = videoRenderer.optJSONObject("lengthText")?.optString("simpleText", "")
-                                            val duration = if (lengthText.isNotBlank()) parseDurationString(lengthText) else 0L
+                                            val duration = if (lengthText != null && lengthText.isNotBlank()) parseDurationString(lengthText) else 0L
 
                                             // Thumbnail from thumbnail.thumbnails (largest)
                                             var thumbnail = ""
@@ -1179,15 +1179,15 @@ class YouTubeRepository {
     private fun cleanYouTubeTitle(title: String): String {
         var cleaned = title.trim()
         // Remove content in brackets/parentheses at the end
-        cleaned = cleaned.replace(Regex("\s*\(.*?\)\s*$"), "")
+        cleaned = cleaned.replace(Regex("\\s*\\(.*?\\)\\s*$"), "")
         // Remove " - Official Video", " | Official Music Video", etc.
-        cleaned = cleaned.replace(Regex("\s*[-|]\s*(Official\s*(Music\s*)?Video|Lyric\s*Video|Audio|Visualizer|MV|M/V|Full\s*Song|4K|HD)\s*$", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\s*[-|]\\s*(Official\\s*(Music\\s*)?Video|Lyric\\s*Video|Audio|Visualizer|MV|M/V|Full\\s*Song|4K|HD)\\s*$", RegexOption.IGNORE_CASE), "")
         // Remove " | something" at the end
-        cleaned = cleaned.replace(Regex("\s*\|\s*[^|]+$"), "")
-        // Remove "feat. ..." 
-        cleaned = cleaned.replace(Regex("\s*feat\..*", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\s*\\|\\s*[^|]+$"), "")
+        // Remove "feat. ..."
+        cleaned = cleaned.replace(Regex("\\s*feat\\..*", RegexOption.IGNORE_CASE), "")
         // Remove " - something" if what follows looks like a video descriptor
-        cleaned = cleaned.replace(Regex("\s*-\s*(video|lyrics?|audio|full song|official)\s*$", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\s*-\\s*(video|lyrics?|audio|full song|official)\\s*$", RegexOption.IGNORE_CASE), "")
         return cleaned.trim()
     }
 
