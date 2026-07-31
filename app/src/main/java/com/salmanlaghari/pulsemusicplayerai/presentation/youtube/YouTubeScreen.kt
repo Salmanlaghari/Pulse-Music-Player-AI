@@ -119,6 +119,7 @@ fun YouTubeScreen(
         when (selectedSource) {
             MusicSource.ALL -> viewModel.searchAllSources(query)
             MusicSource.JIOSAAVN -> viewModel.searchJioSaavn(query)
+            MusicSource.DESI_HITS -> viewModel.searchJioSaavn(query)
             MusicSource.APPLE_MUSIC -> viewModel.searchAppleMusic(query)
             MusicSource.SPOTIFY -> viewModel.searchSpotify(query)
             MusicSource.YOUTUBE_MUSIC -> viewModel.searchYouTubeMusic(query)
