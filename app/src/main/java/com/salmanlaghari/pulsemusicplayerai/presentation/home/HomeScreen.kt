@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.salmanlaghari.pulsemusicplayerai.common.PulseBranding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ElectricBolt
@@ -281,7 +282,7 @@ fun HomeScreenContent(
 
             // 3. Recently Added list (Functional MediaStore integration)
             if (recentlyAdded.isNotEmpty()) {
-                SectionHeader(title = "Recently Added") { viewModel.loadMusicData() }
+                SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = recentlyAdded, onSongClick = { viewModel.playSong(it, recentlyAdded) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -289,7 +290,7 @@ fun HomeScreenContent(
 
             // 4. Favorite Songs list (Functional persistent cache)
             if (favoriteSongs.isNotEmpty()) {
-                SectionHeader(title = "Favorite Songs") {}
+                SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = favoriteSongs, onSongClick = { viewModel.playSong(it, favoriteSongs) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -297,7 +298,7 @@ fun HomeScreenContent(
 
             // 5. Recently Played (Functional stream load)
             if (allSongs.isNotEmpty()) {
-                SectionHeader(title = "Recently Played") {}
+                SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = allSongs.take(5), onSongClick = { viewModel.playSong(it) })
                 Spacer(modifier = Modifier.height(24.dp))
@@ -305,11 +306,15 @@ fun HomeScreenContent(
 
             // 6. Most Played placeholder
             if (allSongs.isNotEmpty()) {
-                SectionHeader(title = "Most Played") {}
+                SectionHeader(title = "Most Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
                 SongHorizontalLazyRow(songs = allSongs.sortedBy { it.title.length }.take(5), onSongClick = { viewModel.playSong(it) })
                 Spacer(modifier = Modifier.height(24.dp))
             }
+
+            // Pulse branding at the bottom of the home feed
+            PulseBranding(modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
 
             Spacer(modifier = Modifier.height(140.dp))
         }
