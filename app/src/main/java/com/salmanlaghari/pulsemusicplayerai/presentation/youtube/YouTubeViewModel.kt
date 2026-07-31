@@ -206,6 +206,34 @@ class YouTubeViewModel(
         }
     }
 
+    /**
+     * Search the Desi Hits catalog (JioSaavn-backed, but remapped to dh_ prefix
+     * so the source badge shows "Desi Hits" instead of "JioSaavn").
+     * This keeps Desi Hits as its own distinct source while using working streams.
+     */
+    fun searchDesiHits(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchJioSaavn(query)
+                // Remap js_ → dh_ so the badge shows "Desi Hits"
+                val desiResults = results.map { song ->
+                    val rawId = song.id.removePrefix("js_")
+                    song.copy(id = "dh_$rawId")
+                }
+                _searchResults.value = desiResults
+                Log.d(TAG, "Desi Hits found ${desiResults.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "Desi Hits search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     fun searchAppleMusic(query: String) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {

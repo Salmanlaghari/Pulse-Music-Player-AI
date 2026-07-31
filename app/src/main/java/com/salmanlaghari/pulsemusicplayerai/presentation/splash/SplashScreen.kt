@@ -124,27 +124,27 @@ fun SplashScreen(onNavigateToHome: () -> Unit) {
     val progress = remember { Animatable(0f) }
 
     LaunchedEffect(key1 = true) {
-        // Fast, snappy scale-in (400ms — feels instant, not sluggish)
+        // Fast, snappy scale-in (300ms — feels instant, not sluggish)
         scale.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 400, easing = EaseOutCubic)
+            animationSpec = tween(durationMillis = 300, easing = EaseOutCubic)
         )
-        // Quick fade in (300ms)
-        opacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 300))
-        contentOpacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 300, delayMillis = 100))
-        // Tagline slides up quickly (250ms)
-        taglineOffset.animateTo(targetValue = 0f, animationSpec = tween(durationMillis = 250, delayMillis = 100, easing = EaseOutCubic))
+        // Quick fade in (250ms)
+        opacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 250))
+        contentOpacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 250, delayMillis = 80))
+        // Tagline slides up quickly (200ms)
+        taglineOffset.animateTo(targetValue = 0f, animationSpec = tween(durationMillis = 200, delayMillis = 80, easing = EaseOutCubic))
         // Loading progress: fast fill to 60% then to 100% — feels like real loading
         progress.animateTo(
             targetValue = 0.6f,
-            animationSpec = tween(durationMillis = 500, easing = EaseOutCubic)
+            animationSpec = tween(durationMillis = 400, easing = EaseOutCubic)
         )
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 400, easing = EaseOutCubic)
+            animationSpec = tween(durationMillis = 300, easing = EaseOutCubic)
         )
         // Brief settle delay so the 100% bar is visible, then go
-        delay(150)
+        delay(100)
         onNavigateToHome()
     }
 
