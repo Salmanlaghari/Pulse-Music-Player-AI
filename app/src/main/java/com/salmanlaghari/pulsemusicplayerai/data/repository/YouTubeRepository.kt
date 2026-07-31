@@ -600,7 +600,10 @@ class YouTubeRepository {
                     // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
                     val rawId = song.id.removePrefix("js_")
                     if (rawId.isNotBlank() && !allSongs.containsKey(rawId) && song.hasValidAudio()) {
-                        allSongs[rawId] = song
+                        // Remap to dh_ prefix so the source badge shows "Desi Hits"
+                        // instead of "JioSaavn". This makes Desi Hits its own distinct
+                        // source while still using the working JioSaavn stream URLs.
+                        allSongs[rawId] = song.copy(id = "dh_$rawId")
                     }
                 }
             } catch (e: Exception) {

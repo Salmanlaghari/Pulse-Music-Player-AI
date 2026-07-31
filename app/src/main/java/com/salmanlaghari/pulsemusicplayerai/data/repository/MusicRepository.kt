@@ -25,6 +25,21 @@ class MusicRepository(
     // Cached current song list
     private var cachedSongs: List<Song> = emptyList()
 
+    // Cached favorite IDs — read from DataStore ONCE, then reused across all
+    // getAllSongs() / getAlbums() / getArtists() / getFolders() / getRecentlyAdded()
+    // calls during a single load cycle. Without this, each of those 5+ calls
+    // reads DataStore separately (6+ DataStore I/O reads), causing a noticeable
+    // startup hang. The cache is invalidated whenever favorites change.
+    private var cachedFavIds: Set<String>? = null
+
+    /**
+     * Force a refresh of the cached favorite IDs on the next getAllSongs() call.
+     * Call this after toggleFavorite() so the cache stays in sync.
+     */
+    fun invalidateFavoritesCache() {
+        cachedFavIds = null
+    }
+
     // 1. Get/Set Favorites Flow
     val favoriteIdsFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[FAVORITES_KEY] ?: emptySet()
@@ -41,6 +56,8 @@ class MusicRepository(
             }
             preferences[FAVORITES_KEY] = currentFavs
         }
+        // Invalidate the cache so the next getAllSongs() picks up the change
+        cachedFavIds = null
     }
 
     // 2. Scan and fetch raw Songs
@@ -48,7 +65,9 @@ class MusicRepository(
         if (cachedSongs.isEmpty() || forceRefresh) {
             cachedSongs = audioScanner.scanLocalAudio()
         }
-        val favIds = favoriteIdsFlow.first()
+        // Use cached favorites if available, otherwise read from DataStore once.
+        // This avoids reading DataStore 6+ times during loadMusicData().
+        val favIds = cachedFavIds ?: favoriteIdsFlow.first().also { cachedFavIds = it }
         return cachedSongs.map { song ->
             song.copy(isFavorite = favIds.contains(song.id.toString()))
         }

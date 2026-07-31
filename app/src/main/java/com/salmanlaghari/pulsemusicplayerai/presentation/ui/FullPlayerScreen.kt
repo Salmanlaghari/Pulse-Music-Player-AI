@@ -306,27 +306,27 @@ fun FullPlayerScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToPrevious()
                             }) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(48.dp))
                             }
                             IconButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.togglePlayPause()
                                 },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(56.dp)
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(80.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier.size(42.dp)
                                 )
                             }
                             IconButton(onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToNext()
                             }) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(32.dp))
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
                             }
                         }
                     }
@@ -751,7 +751,7 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = "Shuffle",
                                 tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                         }
 
@@ -763,13 +763,13 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(56.dp)
                             )
                         }
 
                         Box(
                             modifier = Modifier
-                                .size(76.dp)
+                                .size(96.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
@@ -782,7 +782,7 @@ fun FullPlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(52.dp)
                             )
                         }
 
@@ -794,7 +794,7 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(56.dp)
                             )
                         }
 
@@ -814,7 +814,7 @@ fun FullPlayerScreen(
                                 imageVector = repeatIcon,
                                 contentDescription = "Repeat Settings",
                                 tint = repeatColor,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
