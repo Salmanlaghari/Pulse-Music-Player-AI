@@ -92,8 +92,8 @@ class YouTubeRepository {
 
         // ═══ Invidious instances (ordered by reliability) ═══
         private val INVIDIOUS_INSTANCES = listOf(
+            "https://inv.zoomerville.com",
             "https://yewtu.be",
-            "https://vid.puffyan.us",
             "https://inv.tux.pizza",
             "https://iv.ggtyler.dev",
             "https://invidious.fdn.fr",
@@ -104,15 +104,14 @@ class YouTubeRepository {
             "https://invidious.nerdvpn.de",
             "https://inv.nadeko.net",
             "https://invidious.lunar.icu",
-            "https://invidious.io.lol",
             "https://yt.artemislena.eu",
             "https://invidious.drgns.space"
         )
 
         // ═══ Piped instances (ordered by reliability) ═══
         private val PIPED_INSTANCES = listOf(
+            "https://api.piped.private.coffee",
             "https://pipedapi.kavin.rocks",
-            "https://api.piped.yt",
             "https://pipedapi.adminforge.de",
             "https://pipedapi.hostux.net",
             "https://pipedapi.darkness.services",
@@ -284,7 +283,7 @@ class YouTubeRepository {
         private const val JAMENDO_API_BASE = "https://api.jamendo.com/v3.0"
         
         // ═══ JioSaavn API - FULL SONGS! (FREE) ═══
-        private const val JIOSAAVN_API = "https://jiosaavn-api-cyan.vercel.app"
+        private const val JIOSAAVN_API = "https://saavn.sumit.co/api"
     }
 
     data class FreeSong(
@@ -335,7 +334,7 @@ class YouTubeRepository {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
-                val url = "$instance/ytsearch?q=$encodedQuery"
+                val url = "$instance/search?q=$encodedQuery&filter=videos"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
                     val json = JSONObject(response)
@@ -385,61 +384,75 @@ class YouTubeRepository {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
             val searchUrl = "$JIOSAAVN_API/search/songs?query=$encodedQuery"
             val searchResponse = httpGet(searchUrl, timeout = NORMAL_TIMEOUT)
-            
+
             if (searchResponse.isNotBlank()) {
                 val searchJson = JSONObject(searchResponse)
-                val results = searchJson.optJSONArray("results") ?: return@withContext emptyList()
-                
-                // Batch fetch song details for faster loading
-                val songIds = mutableListOf<String>()
-                for (i in 0 until minOf(results.length(), 15)) {
+                // New saavn.sumit.co API format: { "success": true, "data": { "results": [...] } }
+                val dataObj = searchJson.optJSONObject("data")
+                val results = dataObj?.optJSONArray("results")
+                    ?: searchJson.optJSONArray("results") // fallback to old format
+                    ?: return@withContext emptyList()
+
+                for (i in 0 until minOf(results.length(), 20)) {
                     try {
                         val result = results.getJSONObject(i)
                         val id = result.optString("id", "")
-                        if (id.isNotBlank()) songIds.add(id)
-                    } catch (e: Exception) { }
-                }
-                
-                // Batch fetch all songs at once
-                val songDetailsMap = mutableMapOf<String, JSONObject?>()
-                songIds.forEach { id ->
-                    songDetailsMap[id] = getJioSaavnSongDetails(id)
-                }
-                
-                // Now build songs list
-                for (i in 0 until results.length()) {
-                    try {
-                        val result = results.getJSONObject(i)
-                        val id = result.optString("id", "")
-                        val title = result.optString("title", "Unknown")
-                        val image = result.optString("image", "")
-                        val moreInfo = result.optJSONObject("more_info")
-                        val singers = moreInfo?.optString("singers", "") ?: ""
-                        
-                        // Get full song URL from cached details
-                        val songDetails = songDetailsMap[id]
-                        val mediaUrls = songDetails?.optJSONObject("media_urls")
-                        
-                        // Prefer 320kbps, fallback to 160kbps or media_url
-                        val mediaUrl = mediaUrls?.optString("320_KBPS") 
-                            ?: mediaUrls?.optString("160_KBPS")
-                            ?: songDetails?.optString("media_url", "")
-                            ?: ""
-                        
-                        if (id.isNotBlank() && mediaUrl.isNotBlank()) {
-                            val durationStr = songDetails?.optString("duration", "0:00") ?: "0:00"
-                            val durationParts = durationStr.split(":")
-                            val durationSec = if (durationParts.size == 2) {
-                                (durationParts[0].toLongOrNull() ?: 0) * 60 + (durationParts[1].toLongOrNull() ?: 0)
-                            } else durationParts.getOrNull(0)?.toLongOrNull() ?: 0
-                            
+                        val title = result.optString("name", result.optString("title", "Unknown"))
+
+                        // Artists: array of { name, role } - collect primary artists
+                        val artistsArr = result.optJSONArray("artists")
+                        val primaryArr = result.optJSONObject("artists")?.optJSONArray("primary")
+                        val artistName = StringBuilder()
+                        val artistSource = primaryArr ?: artistsArr
+                        if (artistSource != null) {
+                            for (a in 0 until artistSource.length()) {
+                                try {
+                                    val aObj = artistSource.getJSONObject(a)
+                                    val name = aObj.optString("name", "")
+                                    if (name.isNotBlank()) {
+                                        if (artistName.isNotEmpty()) artistName.append(", ")
+                                        artistName.append(name)
+                                    }
+                                } catch (e: Exception) { }
+                            }
+                        }
+                        // Fallback to old more_info.singers format
+                        if (artistName.isBlank()) {
+                            val moreInfo = result.optJSONObject("more_info")
+                            val singers = moreInfo?.optString("singers", "") ?: ""
+                            if (singers.isNotBlank()) artistName.append(singers)
+                        }
+
+                        // Image: array of { quality, url } - pick the largest
+                        var thumbnail = ""
+                        val imageArr = result.optJSONArray("image")
+                        if (imageArr != null && imageArr.length() > 0) {
+                            thumbnail = imageArr.getJSONObject(imageArr.length() - 1).optString("url", "")
+                        }
+                        if (thumbnail.isBlank()) {
+                            thumbnail = result.optString("image", "")
+                        }
+
+                        // Download URL: array of { quality, url } - pick highest quality
+                        val downloadArr = result.optJSONArray("downloadUrl")
+                        val mediaUrl = pickJioSaavnMediaUrl(downloadArr)
+
+                        // Duration: integer seconds in new API
+                        val durationSec = result.optLong("duration", 0)
+                        val duration = if (durationSec > 0) durationSec else {
+                            // Fallback to old format "M:SS"
+                            val durationStr = result.optString("duration", "0")
+                            parseDurationString(durationStr)
+                        }
+
+                        if (id.isNotBlank()) {
                             songs.add(YouTubeSong(
                                 id = "js_$id",
                                 title = title,
-                                artist = singers.ifBlank { "Unknown Artist" },
-                                duration = durationSec,
-                                thumbnailUrl = image,
-                                audioUrl = mediaUrl
+                                artist = artistName.toString().ifBlank { "Unknown Artist" },
+                                duration = duration,
+                                thumbnailUrl = thumbnail,
+                                audioUrl = mediaUrl ?: ""
                             ))
                         }
                     } catch (e: Exception) { /* skip invalid */ }
@@ -450,14 +463,36 @@ class YouTubeRepository {
         }
         songs
     }
-    
-    // Get full song URL from JioSaavn (320kbps)
+
+    // Pick the highest quality media URL from JioSaavn downloadUrl array
+    private fun pickJioSaavnMediaUrl(downloadArr: JSONArray?): String? {
+        if (downloadArr == null || downloadArr.length() == 0) return null
+        // The array is ordered from lowest to highest quality typically
+        // Pick the last entry (highest quality, usually 320kbps)
+        for (i in downloadArr.length() - 1 downTo 0) {
+            try {
+                val item = downloadArr.getJSONObject(i)
+                val url = item.optString("url", "")
+                if (url.isNotBlank() && url.startsWith("http")) {
+                    return url
+                }
+            } catch (e: Exception) { }
+        }
+        return null
+    }
+
+    // Get full song URL from JioSaavn (320kbps) - new saavn.sumit.co API
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
         try {
-            val url = "$JIOSAAVN_API/song?id=$songId"
+            val url = "$JIOSAAVN_API/songs/$songId"
             val response = httpGet(url, timeout = NORMAL_TIMEOUT)
             if (response.isNotBlank()) {
                 val json = JSONObject(response)
+                val data = json.optJSONObject("data")
+                if (data != null) {
+                    return@withContext data
+                }
+                // Fallback to old format
                 if (json.optBoolean("status", false)) {
                     return@withContext json
                 }
@@ -647,12 +682,21 @@ class YouTubeRepository {
         val searchQuery = query.trim()
         val songs = mutableListOf<YouTubeSong>()
 
-        // 1. Piped instances first (returns direct audio streams)
+        // 1. YouTube WEB innerTube search (PRIMARY - works directly, no third-party needed)
+        try {
+            val innerTubeResults = searchYouTubeInnerTube(searchQuery)
+            if (innerTubeResults.isNotEmpty()) {
+                Log.d(TAG, "YouTube innerTube search: ${innerTubeResults.size} results")
+                return@withContext innerTubeResults.take(30)
+            }
+        } catch (e: Exception) { Log.w(TAG, "YouTube innerTube search fail: ${e.message}") }
+
+        // 2. Piped fallback
         for (i in 0 until minOf(3, PIPED_INSTANCES.size)) {
             try {
                 val instance = PIPED_INSTANCES[(currentPipedIndex + i) % PIPED_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
-                val url = "$instance/ytsearch?q=$encodedQuery"
+                val url = "$instance/search?q=$encodedQuery&filter=music_songs"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
                     val json = JSONObject(response)
@@ -669,13 +713,13 @@ class YouTubeRepository {
             } catch (e: Exception) { Log.w(TAG, "Piped YTM search fail: ${e.message}") }
         }
 
-        // 2. Invidious fallback
+        // 3. Invidious fallback
         for (i in 0 until minOf(3, INVIDIOUS_INSTANCES.size)) {
             try {
                 val instance = INVIDIOUS_INSTANCES[(currentInvidiousIndex + i) % INVIDIOUS_INSTANCES.size]
                 val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
                 val region = getUserRegion()
-                val url = "$instance/api/v1/search?q=$encodedQuery&type=videos&region=$region"
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=video&region=$region"
                 val response = httpGet(url, timeout = NORMAL_TIMEOUT)
                 if (response.isNotBlank()) {
                     val jsonArray = JSONArray(response)
@@ -690,6 +734,104 @@ class YouTubeRepository {
         }
 
         songs
+    }
+
+    // YouTube WEB innerTube search API - works directly from YouTube, no third-party instance needed
+    private fun searchYouTubeInnerTube(query: String): List<YouTubeSong> {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+            val url = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
+            // WEB client context
+            val jsonBody = """{"context":{"client":{"clientName":"WEB","clientVersion":"2.20240726.01.00"}},"query":"$query"}"""
+            val response = httpPostJson(url, jsonBody, timeout = 15000)
+            if (response.isNotBlank()) {
+                val json = JSONObject(response)
+                // Parse: contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[].itemSectionRenderer.contents[].videoRenderer
+                val twoCol = json.optJSONObject("contents")?.optJSONObject("twoColumnSearchResultsRenderer")
+                val primaryContents = twoCol?.optJSONObject("primaryContents")
+                val sectionList = primaryContents?.optJSONObject("sectionListRenderer")
+                val sections = sectionList?.optJSONArray("contents")
+                if (sections != null) {
+                    for (s in 0 until sections.length()) {
+                        try {
+                            val section = sections.getJSONObject(s)
+                            val itemSection = section.optJSONObject("itemSectionRenderer")
+                            val contents = itemSection?.optJSONArray("contents")
+                            if (contents != null) {
+                                for (c in 0 until contents.length()) {
+                                    try {
+                                        val item = contents.getJSONObject(c)
+                                        val videoRenderer = item.optJSONObject("videoRenderer")
+                                        if (videoRenderer != null) {
+                                            val videoId = videoRenderer.optString("videoId", "")
+                                            if (videoId.isBlank()) continue
+
+                                            // Title from title.runs
+                                            val titleRuns = videoRenderer.optJSONObject("title")?.optJSONArray("runs")
+                                            val title = StringBuilder()
+                                            if (titleRuns != null) {
+                                                for (r in 0 until titleRuns.length()) {
+                                                    title.append(titleRuns.getJSONObject(r).optString("text", ""))
+                                                }
+                                            }
+                                            if (title.isBlank()) continue
+
+                                            // Channel from ownerText.runs or shortBylineText.runs
+                                            val ownerRuns = videoRenderer.optJSONObject("ownerText")?.optJSONArray("runs")
+                                                ?: videoRenderer.optJSONObject("shortBylineText")?.optJSONArray("runs")
+                                            val channel = StringBuilder()
+                                            if (ownerRuns != null && ownerRuns.length() > 0) {
+                                                channel.append(ownerRuns.getJSONObject(0).optString("text", ""))
+                                            }
+                                            if (channel.isBlank()) channel.append("Unknown Artist")
+
+                                            // Duration from lengthText.simpleText
+                                            val lengthText = videoRenderer.optJSONObject("lengthText")?.optString("simpleText", "")
+                                            val duration = if (lengthText != null && lengthText.isNotBlank()) parseDurationString(lengthText) else 0L
+
+                                            // Thumbnail from thumbnail.thumbnails (largest)
+                                            var thumbnail = ""
+                                            val thumbsArr = videoRenderer.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
+                                            if (thumbsArr != null && thumbsArr.length() > 0) {
+                                                thumbnail = thumbsArr.getJSONObject(thumbsArr.length() - 1).optString("url", "")
+                                            }
+                                            if (thumbnail.isBlank()) {
+                                                thumbnail = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                                            }
+
+                                            songs.add(YouTubeSong(
+                                                id = "yt_$videoId",
+                                                title = title.toString().trim(),
+                                                artist = channel.toString().trim(),
+                                                duration = duration,
+                                                thumbnailUrl = thumbnail,
+                                                audioUrl = "" // resolved on playback
+                                            ))
+                                        }
+                                    } catch (e: Exception) { /* skip */ }
+                                }
+                            }
+                        } catch (e: Exception) { /* skip section */ }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "YouTube innerTube search error: ${e.message}")
+        }
+        return songs
+    }
+
+    // Parse duration string like "3:45" or "1:23:45" into seconds
+    private fun parseDurationString(duration: String): Long {
+        if (duration.isBlank()) return 0L
+        val parts = duration.split(":")
+        return when (parts.size) {
+            2 -> (parts[0].toLongOrNull() ?: 0) * 60 + (parts[1].toLongOrNull() ?: 0)
+            3 -> (parts[0].toLongOrNull() ?: 0) * 3600 + (parts[1].toLongOrNull() ?: 0) * 60 + (parts[2].toLongOrNull() ?: 0)
+            1 -> parts[0].toLongOrNull() ?: 0L
+            else -> 0L
+        }
     }
 
     // TRENDING — Deezer + Internet Archive + local
@@ -983,8 +1125,70 @@ class YouTubeRepository {
             }
         }
 
+        // 5. JioSaavn fallback: use YouTube video metadata to find the same song on JioSaavn
+        try {
+            val meta = getYouTubeVideoMeta(videoId)
+            if (meta != null) {
+                val (title, channel) = meta
+                val cleanTitle = cleanYouTubeTitle(title)
+                Log.d(TAG, "JioSaavn fallback: searching '$cleanTitle' (from YT: '$title')")
+                val resolved = resolveFullSong(cleanTitle, channel, "")
+                if (resolved != null && resolved.hasValidAudio()) {
+                    // Keep the original YouTube title/channel but use the resolved audio URL
+                    Log.d(TAG, "✓ JioSaavn fallback OK: $title -> ${resolved.title}")
+                    return@withContext YouTubeSong(
+                        id = videoId,
+                        title = title, // keep YouTube title
+                        artist = channel, // keep YouTube channel
+                        duration = resolved.duration,
+                        thumbnailUrl = resolved.thumbnailUrl.ifBlank { "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" },
+                        audioUrl = resolved.audioUrl
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "JioSaavn fallback fail: ${e.message}")
+        }
+
         Log.e(TAG, "✗ ALL APIs failed for: $videoId")
         null
+    }
+
+    // Get YouTube video metadata (title + channel) via oembed API
+    private fun getYouTubeVideoMeta(videoId: String): Pair<String, String>? {
+        return try {
+            val url = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
+            val response = httpGet(url, timeout = 10000)
+            if (response.isNotBlank()) {
+                val json = JSONObject(response)
+                val title = json.optString("title", "")
+                val author = json.optString("author_name", "")
+                if (title.isNotBlank()) {
+                    return Pair(title, author.ifBlank { "Unknown Artist" })
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "YouTube oembed fail for $videoId: ${e.message}")
+            null
+        }
+    }
+
+    // Clean YouTube video title for better JioSaavn matching
+    // Removes common YouTube suffixes like " - Official Video", " | Lyric Video", etc.
+    private fun cleanYouTubeTitle(title: String): String {
+        var cleaned = title.trim()
+        // Remove content in brackets/parentheses at the end
+        cleaned = cleaned.replace(Regex("\\s*\\(.*?\\)\\s*$"), "")
+        // Remove " - Official Video", " | Official Music Video", etc.
+        cleaned = cleaned.replace(Regex("\\s*[-|]\\s*(Official\\s*(Music\\s*)?Video|Lyric\\s*Video|Audio|Visualizer|MV|M/V|Full\\s*Song|4K|HD)\\s*$", RegexOption.IGNORE_CASE), "")
+        // Remove " | something" at the end
+        cleaned = cleaned.replace(Regex("\\s*\\|\\s*[^|]+$"), "")
+        // Remove "feat. ..."
+        cleaned = cleaned.replace(Regex("\\s*feat\\..*", RegexOption.IGNORE_CASE), "")
+        // Remove " - something" if what follows looks like a video descriptor
+        cleaned = cleaned.replace(Regex("\\s*-\\s*(video|lyrics?|audio|full song|official)\\s*$", RegexOption.IGNORE_CASE), "")
+        return cleaned.trim()
     }
 
     /**
@@ -1353,6 +1557,38 @@ class YouTubeRepository {
             }
         } catch (e: Exception) {
             Log.w(TAG, "HTTP GET(auth) failed for $urlString: ${e.message}")
+            throw e
+        }
+    }
+
+    // HTTP POST with JSON body (used for YouTube innerTube API)
+    private fun httpPostJson(urlString: String, jsonBody: String, timeout: Int = 10000): String {
+        return try {
+            val url = URL(urlString)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) PulseMusicPlayer/1.0")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.connectTimeout = timeout
+            conn.readTimeout = timeout
+            conn.instanceFollowRedirects = true
+            conn.doOutput = true
+
+            val outputStream = conn.outputStream
+            outputStream.write(jsonBody.toByteArray(Charsets.UTF_8))
+            outputStream.flush()
+            outputStream.close()
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                Log.w(TAG, "HTTP POST error: $responseCode for URL: $urlString")
+                throw Exception("HTTP $responseCode")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "HTTP POST failed for $urlString: ${e.message}")
             throw e
         }
     }

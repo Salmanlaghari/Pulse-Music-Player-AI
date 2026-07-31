@@ -2,6 +2,8 @@ package com.salmanlaghari.pulsemusicplayerai.data.ads
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.google.android.gms.ads.*
 import com.google.android.gms.ads.appopen.AppOpenAd
@@ -19,6 +21,9 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 object AdManager {
 
     private const val TAG = "PluseAds"
+
+    // Handler for scheduling delayed ad loads on the main thread
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // ✅ REAL AdMob IDs — DO NOT MODIFY
     private const val APP_OPEN_ID = "ca-app-pub-8178045957849630/9910636842"
@@ -104,15 +109,29 @@ object AdManager {
     }
 
     fun showAppOpen(activity: Activity) {
-        appOpenAd?.let { ad ->
-            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                override fun onAdDismissedFullScreenContent() {
-                    appOpenAd = null
-                    loadAppOpen(activity)
+        // Show the app-open ad only after a short delay so the app's first frame
+        // renders instantly. If the ad isn't loaded yet, we skip it entirely —
+        // the user sees the app immediately instead of waiting for an ad.
+        mainHandler.postDelayed({
+            if (activity.isFinishing || activity.isDestroyed) return@postDelayed
+            appOpenAd?.let { ad ->
+                ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        appOpenAd = null
+                        loadAppOpen(activity)
+                    }
+                    override fun onAdFailedToShowFullScreenContent(p0: AdError) {
+                        appOpenAd = null
+                        loadAppOpen(activity)
+                    }
+                }
+                try {
+                    ad.show(activity)
+                } catch (e: Exception) {
+                    Log.w(TAG, "App Open show failed: ${e.message}")
                 }
             }
-            ad.show(activity)
-        }
+        }, 800)
     }
 
     // ═══ BANNER ADS ═══
