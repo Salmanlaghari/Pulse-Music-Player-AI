@@ -27,6 +27,12 @@ class MusicViewModel(
     private val _isPermissionGranted = MutableStateFlow(false)
     val isPermissionGranted: StateFlow<Boolean> = _isPermissionGranted.asStateFlow()
 
+    // Loading state — true during initial data load (MediaStore scan, albums, artists, etc.)
+    // The splash screen navigates here quickly, but data loading takes several seconds.
+    // We show a loading overlay until this becomes false so the user doesn't see a blank/blue screen.
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     // 2. Local Lists States
     private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
     val allSongs: StateFlow<List<Song>> = _allSongs.asStateFlow()
@@ -100,25 +106,32 @@ class MusicViewModel(
 
     fun loadMusicData() {
         viewModelScope.launch {
-            // Fetch list from repository
-            val songsList = musicRepository.getAllSongs(forceRefresh = true)
-            _allSongs.value = songsList
-            playbackConnectionManager.setAllSongsReference(songsList)
+            _isLoading.value = true
+            try {
+                // Fetch list from repository
+                val songsList = musicRepository.getAllSongs(forceRefresh = true)
+                _allSongs.value = songsList
+                playbackConnectionManager.setAllSongsReference(songsList)
 
-            _albums.value = musicRepository.getAlbums()
-            _artists.value = musicRepository.getArtists()
-            _folders.value = musicRepository.getFolders()
-            _recentlyAdded.value = musicRepository.getRecentlyAdded()
+                _albums.value = musicRepository.getAlbums()
+                _artists.value = musicRepository.getArtists()
+                _folders.value = musicRepository.getFolders()
+                _recentlyAdded.value = musicRepository.getRecentlyAdded()
 
-            // Listen to dynamic favorites updates
-            musicRepository.favoriteIdsFlow.collect { favIds ->
-                val updatedSongs = songsList.map { song ->
-                    song.copy(isFavorite = favIds.contains(song.id.toString()))
+                // Listen to dynamic favorites updates
+                musicRepository.favoriteIdsFlow.collect { favIds ->
+                    val updatedSongs = songsList.map { song ->
+                        song.copy(isFavorite = favIds.contains(song.id.toString()))
+                    }
+                    _allSongs.value = updatedSongs
+                    playbackConnectionManager.setAllSongsReference(updatedSongs)
+                    _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
+                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
                 }
-                _allSongs.value = updatedSongs
-                playbackConnectionManager.setAllSongsReference(updatedSongs)
-                _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
-                _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicVM", "loadMusicData failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
