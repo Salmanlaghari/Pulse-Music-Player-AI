@@ -135,7 +135,7 @@ fun PulseBranding(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Top
     ) {
         Row(
-            verticalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             BrandBar(scaleFraction = bar1)
