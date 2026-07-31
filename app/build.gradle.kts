@@ -12,10 +12,19 @@ android {
         applicationId = "com.salmanlaghari.pulsemusicplayerai"
         minSdk = 24
         targetSdk = 35
-        versionCode = 10800
-        versionName = "1.08.0"
+        versionCode = 10900
+        versionName = "1.09.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/pulse-release.keystore")
+            storePassword = "pulseMusic2025"
+            keyAlias = "pulse-release"
+            keyPassword = "pulseMusic2025"
+        }
     }
 
     buildTypes {
@@ -25,8 +34,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Sign release with debug key for installability
-            signingConfig = signingConfigs.getByName("debug")
+            // Sign release with a proper release keystore so Google Play Protect
+            // does not flag it as an unsigned/debug app.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
