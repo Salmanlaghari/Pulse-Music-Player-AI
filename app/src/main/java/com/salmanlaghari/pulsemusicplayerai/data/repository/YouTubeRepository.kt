@@ -388,7 +388,7 @@ class YouTubeRepository {
         } catch (e: Exception) {
             // Fallback: manual common entity replacement
             text
-                .replace("&quot;", """)
+                .replace("&quot;", "\"")
                 .replace("&amp;", "&")
                 .replace("&#39;", "'")
                 .replace("&apos;", "'")
