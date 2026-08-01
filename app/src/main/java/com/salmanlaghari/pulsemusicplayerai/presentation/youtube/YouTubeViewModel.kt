@@ -83,6 +83,8 @@ class YouTubeViewModel(
     init {
         // Load trending songs asynchronously with proper error handling
         loadTrending()
+        // Auto-load Desi Hits catalog on startup (it's the default tab)
+        loadSouthAsianCatalog()
     }
 
     fun loadTrending() {
@@ -350,6 +352,22 @@ class YouTubeViewModel(
     suspend fun playSong(song: YouTubeSong, queue: List<YouTubeSong>): Boolean {
         _isPlayLoading.value = true
         try {
+            // Safety timeout: if playback resolution takes more than 15 seconds, abort
+            return withTimeoutOrNull(15_000) {
+                playSongInternal(song, queue)
+            } ?: run {
+                Log.e(TAG, "playSong timed out for: ${song.title}")
+                try {
+                    Toast.makeText(getApplication(), "Song took too long. Try another.", Toast.LENGTH_SHORT).show()
+                } catch (t: Exception) { }
+                false
+            }
+        } finally {
+            _isPlayLoading.value = false
+        }
+    }
+
+    private suspend fun playSongInternal(song: YouTubeSong, queue: List<YouTubeSong>): Boolean {
             AdManager.incrementSongChangeCount()
 
             Log.d(TAG, "Attempting to play: ${song.title}")
@@ -455,8 +473,6 @@ class YouTubeViewModel(
                 ).show()
             } catch (t: Exception) { }
             return false
-        } finally {
-            _isPlayLoading.value = false
         }
     }
 

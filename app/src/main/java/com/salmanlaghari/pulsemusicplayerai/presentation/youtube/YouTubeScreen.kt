@@ -94,7 +94,7 @@ fun YouTubeScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
-    var selectedSource by remember { mutableStateOf(MusicSource.ALL) }
+    var selectedSource by remember { mutableStateOf(MusicSource.DESI_HITS) }
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
 
     // Auto-load YouTube trending when YouTube Music tab is selected (no search needed)
@@ -306,15 +306,14 @@ fun YouTubeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Source Tabs (scrollable)
+                // Source Tabs (scrollable) — Desi Hits first!
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         SourceChip(
-                            text = "🌐 All",
-                            selected = selectedSource == MusicSource.ALL,
+                            text = "🎭 Desi Hits",
+                            selected = selectedSource == MusicSource.DESI_HITS,
                             onClick = {
-                                selectedSource = MusicSource.ALL
-                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                                selectedSource = MusicSource.DESI_HITS
                             }
                         )
                     }
@@ -330,10 +329,11 @@ fun YouTubeScreen(
                     }
                     item {
                         SourceChip(
-                            text = "🎭 Desi Hits",
-                            selected = selectedSource == MusicSource.DESI_HITS,
+                            text = "▶ YouTube Music",
+                            selected = selectedSource == MusicSource.YOUTUBE_MUSIC,
                             onClick = {
-                                selectedSource = MusicSource.DESI_HITS
+                                selectedSource = MusicSource.YOUTUBE_MUSIC
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
                             }
                         )
                     }
@@ -359,10 +359,10 @@ fun YouTubeScreen(
                     }
                     item {
                         SourceChip(
-                            text = "▶ YouTube Music",
-                            selected = selectedSource == MusicSource.YOUTUBE_MUSIC,
+                            text = "🌐 All",
+                            selected = selectedSource == MusicSource.ALL,
                             onClick = {
-                                selectedSource = MusicSource.YOUTUBE_MUSIC
+                                selectedSource = MusicSource.ALL
                                 if (searchQuery.length >= 3) searchWithSource(searchQuery)
                             }
                         )
