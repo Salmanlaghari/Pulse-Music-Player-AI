@@ -35,14 +35,13 @@ class PlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
-        // Smooth playback LoadControl: larger buffer + min buffer before playing
-        // prevents the "hung/stutter" behaviour during network streaming.
+        // Smooth playback LoadControl: optimized buffer for instant start + no stutter
         val loadControl: LoadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs       = */ 30_000, // buffer up to 30s before playing
-                /* maxBufferMs       = */ 90_000, // keep up to 90s buffered
-                /* playbackBufferMs  = */ 1_500,  // start playback once 1.5s buffered
-                /* rebufferBufferMs  = */ 3_000   // resume once 3s buffered after stall
+                /* minBufferMs       = */ 15_000, // buffer 15s before playing (faster start)
+                /* maxBufferMs       = */ 60_000, // keep up to 60s buffered
+                /* playbackBufferMs  = */ 1_000,  // start playback once 1s buffered (snappy)
+                /* rebufferBufferMs  = */ 2_000   // resume once 2s buffered after stall
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()

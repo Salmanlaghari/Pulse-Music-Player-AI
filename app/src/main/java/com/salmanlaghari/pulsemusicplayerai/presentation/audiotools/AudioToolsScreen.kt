@@ -125,10 +125,6 @@ fun AudioToolsScreen() {
                     },
                     onOpenVideoStudio = {
                         showVideoStudioSheet = true
-                    },
-                    onOpenMp3HdVideo = {
-                        selectedVideoType = VideoStudioType.MP3_HD
-                        currentScreen = StudioScreen.VIDEO_STUDIO
                     }
                 )
             }
@@ -456,19 +452,17 @@ fun AudioToolsScreen() {
 @Composable
 fun AudioToolsMainList(
     onNavigateToTool: (StudioScreen) -> Unit,
-    onOpenVideoStudio: () -> Unit,
-    onOpenMp3HdVideo: () -> Unit = {}
+    onOpenVideoStudio: () -> Unit
 ) {
     // Continuous single list including ALL 7 required Audio Tools as specified
     val toolsList = listOf(
-        AudioToolData("MP3 Cutter", "Cut, trim, and make ringtones out of any sound file.", Icons.Default.ContentCut, StudioScreen.CUTTER),
-        AudioToolData("Audio Merger", "Merge two or more MP3 files together seamlessly", Icons.Default.MergeType, StudioScreen.MERGER),
-        AudioToolData("Audio Converter", "Convert audio files to any format (MP3, WAV, AAC...)", Icons.Default.Transform, StudioScreen.CONVERTER),
-        AudioToolData("MP3-HD Video", "Convert MP3 to HD video with visualizer — ready to post", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
-        AudioToolData("Video Studio Pro", "Turn MP3 into MP4 with live spectrum/waveform visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
-        AudioToolData("Extract Audio", "Pull high quality music track directly from video files", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
-        AudioToolData("Compressor", "Reduce file size while preserving audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
-        AudioToolData("Speed Changer", "Alter speed/pitch of any audio track easily.", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)
+        AudioToolData("MP3 Cutter", "Cut, trim & make ringtones from any audio file", Icons.Default.ContentCut, StudioScreen.CUTTER),
+        AudioToolData("Audio Merger", "Merge multiple MP3 files into one seamless track", Icons.Default.MergeType, StudioScreen.MERGER),
+        AudioToolData("Audio Converter", "Convert between MP3, WAV, AAC, FLAC & more", Icons.Default.Transform, StudioScreen.CONVERTER),
+        AudioToolData("Video Studio Pro", "MP3 → MP4 with live visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
+        AudioToolData("Extract Audio", "Pull audio track directly from any video file", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
+        AudioToolData("Compressor", "Reduce file size while keeping audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
+        AudioToolData("Speed Changer", "Adjust playback speed & pitch of any track", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)
     )
 
     // Base background with Navy Blue base and radial glows
@@ -598,7 +592,7 @@ fun AudioToolsMainList(
                     GlassmorphicCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(if (isFeatured) 100.dp else 80.dp)
+                            .height(76.dp)
                             .shadow(if (isFeatured) 18.dp else 8.dp, RoundedCornerShape(18.dp), clip = false),
                         shape = RoundedCornerShape(18.dp),
                         is3D = isFeatured,
@@ -611,11 +605,7 @@ fun AudioToolsMainList(
                         } else null,
                         onClick = {
                             if (tool.targetScreen == StudioScreen.VIDEO_STUDIO) {
-                                if (tool.title == "MP3-HD Video") {
-                                    onOpenMp3HdVideo()
-                                } else {
-                                    onOpenVideoStudio()
-                                }
+                                onOpenVideoStudio()
                             } else {
                                 onNavigateToTool(tool.targetScreen)
                             }
@@ -624,78 +614,77 @@ fun AudioToolsMainList(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(if (isFeatured) 44.dp else 48.dp)
-                                        .clip(RoundedCornerShape(13.dp))
-                                        .shadow(6.dp, RoundedCornerShape(13.dp), ambientColor = PurpleAccent, spotColor = CyanGlow)
-                                        .background(
-                                            brush = Brush.linearGradient(
-                                                colors = listOf(PurpleAccent.copy(alpha = 0.4f), CyanGlow.copy(alpha = 0.22f))
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = tool.icon,
-                                        contentDescription = tool.title,
-                                        tint = CyanGlow,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = tool.title,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                            // Icon box — fixed size, centered
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .shadow(6.dp, RoundedCornerShape(12.dp), ambientColor = PurpleAccent, spotColor = CyanGlow)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(PurpleAccent.copy(alpha = 0.4f), CyanGlow.copy(alpha = 0.22f))
                                         )
-                                        if (isFeatured) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .padding(start = 6.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(
-                                                        brush = Brush.linearGradient(
-                                                            colors = listOf(CyanGlow, Color(0xFF7EF9FF))
-                                                        )
-                                                    )
-                                                    .padding(horizontal = 7.dp, vertical = 2.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text("AVee Style", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF04262A))
-                                            }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = tool.description,
-                                        fontSize = 11.sp,
-                                        color = TextDim,
-                                        maxLines = 2,
-                                        lineHeight = 14.sp,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = tool.icon,
+                                    contentDescription = tool.title,
+                                    tint = CyanGlow,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
 
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            // Text content — fills remaining space
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = tool.title,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    if (isFeatured) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(start = 6.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(
+                                                    brush = Brush.linearGradient(
+                                                        colors = listOf(CyanGlow, Color(0xFF7EF9FF))
+                                                    )
+                                                )
+                                                .padding(horizontal = 7.dp, vertical = 2.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("PRO", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF04262A))
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = tool.description,
+                                    fontSize = 11.sp,
+                                    color = TextDim,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // Chevron — fixed at end
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = "Open Tool",
                                 tint = CyanGlow,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }

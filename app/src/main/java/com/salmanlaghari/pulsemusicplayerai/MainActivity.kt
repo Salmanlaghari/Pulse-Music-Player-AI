@@ -2,8 +2,11 @@ package com.salmanlaghari.pulsemusicplayerai
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
+import android.view.Display
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -51,6 +54,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 120fps Ultra Smooth Rendering — request highest refresh rate
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val display = display ?: return
+            val modes = display.supportedModes
+            val highestMode = modes.maxByOrNull { it.refreshRate }
+            if (highestMode != null) {
+                val params = window.attributes
+                params.preferredDisplayModeId = highestMode.modeId
+                window.attributes = params
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+            )
+        }
+
+        // Enable hardware accelerated rendering for silky smooth animations
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        )
 
         // Setup Coil image loader for premium custom artwork fetching and caching
         val imageLoader = ImageLoader.Builder(applicationContext)

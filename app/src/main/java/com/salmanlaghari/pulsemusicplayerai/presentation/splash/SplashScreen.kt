@@ -124,27 +124,26 @@ fun SplashScreen(onNavigateToHome: () -> Unit) {
     val progress = remember { Animatable(0f) }
 
     LaunchedEffect(key1 = true) {
-        // Fast, snappy scale-in (300ms — feels instant, not sluggish)
+        // Ultra-fast scale-in (150ms — snappy, premium feel)
         scale.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 300, easing = EaseOutCubic)
+            animationSpec = tween(durationMillis = 150, easing = EaseOutCubic)
         )
-        // Quick fade in (250ms)
-        opacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 250))
-        contentOpacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 250, delayMillis = 80))
-        // Tagline slides up quickly (200ms)
-        taglineOffset.animateTo(targetValue = 0f, animationSpec = tween(durationMillis = 200, delayMillis = 80, easing = EaseOutCubic))
-        // Loading progress: fast fill to 60% then to 100% — feels like real loading
+        // Quick fade in (120ms)
+        opacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 120))
+        contentOpacity.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 120, delayMillis = 40))
+        taglineOffset.animateTo(targetValue = 0f, animationSpec = tween(durationMillis = 100, delayMillis = 40, easing = EaseOutCubic))
+        // Loading progress: fast fill — real data loads in background
         progress.animateTo(
-            targetValue = 0.6f,
-            animationSpec = tween(durationMillis = 400, easing = EaseOutCubic)
+            targetValue = 0.7f,
+            animationSpec = tween(durationMillis = 250, easing = EaseOutCubic)
         )
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 300, easing = EaseOutCubic)
+            animationSpec = tween(durationMillis = 200, easing = EaseOutCubic)
         )
-        // Brief settle delay so the 100% bar is visible, then go
-        delay(100)
+        // Minimal settle — then navigate immediately
+        delay(50)
         onNavigateToHome()
     }
 
