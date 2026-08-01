@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -240,6 +241,22 @@ fun SettingsScreen(
                         subtitle = "View license terms & conditions",
                         icon = Icons.Default.Lock,
                         onClick = onNavigateToTerms
+                    )
+                    SettingsClickableItem(
+                        title = "Share App",
+                        subtitle = "Share Pulse Music with friends (link only)",
+                        icon = Icons.Default.Share,
+                        onClick = {
+                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    android.content.Intent.EXTRA_TEXT,
+                                    "Check out Pulse Music Player AI! 🎵\n" +
+                                    "Download: https://play.google.com/store/apps/details?id=com.salmanlaghari.pulsemusicplayerai"
+                                )
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Pulse Music"))
+                        }
                     )
                 }
             }

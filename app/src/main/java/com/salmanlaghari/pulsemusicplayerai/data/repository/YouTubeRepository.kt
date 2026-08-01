@@ -530,6 +530,52 @@ class YouTubeRepository {
         null
     }
 
+    /**
+     * Refresh a JioSaavn song's audio URL. CDN URLs expire after some time,
+     * so this fetches a fresh URL right before playback.
+     *
+     * @param songId The raw JioSaavn song ID (without js_ or dh_ prefix)
+     * @return A fresh 320kbps audio URL, or null if resolution fails
+     */
+    suspend fun refreshJioSaavnUrl(songId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val details = getJioSaavnSongDetails(songId)
+            if (details != null) {
+                // Try downloadUrl array first
+                val downloadArr = details.optJSONArray("downloadUrl")
+                val url = pickJioSaavnMediaUrl(downloadArr)
+                if (url != null && url.startsWith("http")) {
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: got fresh URL for $songId")
+                    return@withContext url
+                }
+                // Try media_url field (old API format)
+                val mediaUrl = details.optString("media_url", "")
+                if (mediaUrl.isNotBlank() && mediaUrl.startsWith("http")) {
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
+                    return@withContext mediaUrl
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshJioSaavnUrl failed for $songId: ${e.message}")
+        }
+        null
+    }
+
+    /**
+     * Refresh a YouTubeSong's audio URL if it's from JioSaavn/Desi Hits.
+     * Returns the song with a fresh URL, or the original if refresh fails.
+     */
+    suspend fun refreshSongAudio(song: YouTubeSong): YouTubeSong = withContext(Dispatchers.IO) {
+        val rawId = song.id.removePrefix("js_").removePrefix("dh_")
+        if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            val freshUrl = refreshJioSaavnUrl(rawId)
+            if (freshUrl != null) {
+                return@withContext song.copy(audioUrl = freshUrl)
+            }
+        }
+        song
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // SOUTH ASIAN CATALOG — 500-1000 Bollywood/Pakistani/South Asian/Northern songs
     // Uses JioSaavn (the only confirmed working full-song source) with curated
@@ -599,11 +645,14 @@ class YouTubeRepository {
                 for (song in results) {
                     // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
                     val rawId = song.id.removePrefix("js_")
-                    if (rawId.isNotBlank() && !allSongs.containsKey(rawId) && song.hasValidAudio()) {
+                    if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
                         // Remap to dh_ prefix so the source badge shows "Desi Hits"
-                        // instead of "JioSaavn". This makes Desi Hits its own distinct
-                        // source while still using the working JioSaavn stream URLs.
-                        allSongs[rawId] = song.copy(id = "dh_$rawId")
+                        // instead of "JioSaavn". URLs are resolved on-demand at playback
+                        // time via refreshJioSaavnUrl() since CDN URLs expire over time.
+                        allSongs[rawId] = song.copy(
+                            id = "dh_$rawId",
+                            audioUrl = "" // clear cached URL — resolve fresh on play
+                        )
                     }
                 }
             } catch (e: Exception) {

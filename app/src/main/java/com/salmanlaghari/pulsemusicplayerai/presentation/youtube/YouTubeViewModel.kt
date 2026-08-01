@@ -361,10 +361,16 @@ class YouTubeViewModel(
             if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
                 _playLoadingMessage.value = "Loading..."
                 Log.d(TAG, "Fast path: song has valid audio, playing immediately")
-                _currentlyPlaying.value = song
+                // JioSaavn/Desi Hits URLs expire — refresh before playing
+                val refreshedSong = if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+                    _playLoadingMessage.value = "Refreshing stream..."
+                    val fresh = youTubeRepository.refreshSongAudio(song)
+                    if (fresh.hasValidAudio()) fresh else song
+                } else song
+                _currentlyPlaying.value = refreshedSong
                 playbackConnectionManager.setYouTubeSongsReference(queue)
-                val songAsLocal = song.toSong() ?: run {
-                    Log.e(TAG, "toSong() returned null for ${song.title}")
+                val songAsLocal = refreshedSong.toSong() ?: run {
+                    Log.e(TAG, "toSong() returned null for ${refreshedSong.title}")
                     try {
                         Toast.makeText(
                             getApplication(),
@@ -378,9 +384,9 @@ class YouTubeViewModel(
                 // resolve the rest of the queue in the background for smooth skipping.
                 val initialQueue = mutableListOf(songAsLocal)
                 playbackConnectionManager.playSong(songAsLocal, initialQueue)
-                Log.d(TAG, "✓ Playing (fast path): ${song.title}")
+                Log.d(TAG, "✓ Playing (fast path): ${refreshedSong.title}")
                 // Background queue resolution (best effort, non-blocking)
-                resolveQueueInBackground(song, queue, songAsLocal)
+                resolveQueueInBackground(refreshedSong, queue, songAsLocal)
                 return true
             }
 
@@ -473,7 +479,10 @@ class YouTubeViewModel(
                     if (resolvedQueue.size >= 6) break
                     try {
                         val resolved = if (qSong.hasValidAudio() && !isPreviewOnlySource(qSong.id)) {
-                            qSong
+                            // Refresh JioSaavn/Desi Hits URLs in background queue
+                            if (qSong.id.startsWith("js_") || qSong.id.startsWith("dh_")) {
+                                youTubeRepository.refreshSongAudio(qSong)
+                            } else qSong
                         } else {
                             resolveAudio(qSong)
                         }
@@ -499,6 +508,16 @@ class YouTubeViewModel(
         // YouTube Music by matching title + artist.
         if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
             return song
+        }
+
+        // JioSaavn/Desi Hits songs: refresh the URL directly (faster than full search)
+        if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            Log.d(TAG, "resolveAudio: refreshing JioSaavn URL for '${song.title}'")
+            val refreshed = youTubeRepository.refreshSongAudio(song)
+            if (refreshed.hasValidAudio()) {
+                Log.d(TAG, "✓ resolveAudio: JioSaavn URL refreshed for '${song.title}'")
+                return refreshed
+            }
         }
 
         // For preview-only sources (or empty audio), try to find the full song
