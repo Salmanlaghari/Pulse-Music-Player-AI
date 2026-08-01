@@ -368,112 +368,90 @@ class YouTubeViewModel(
     }
 
     private suspend fun playSongInternal(song: YouTubeSong, queue: List<YouTubeSong>): Boolean {
-            AdManager.incrementSongChangeCount()
+        AdManager.incrementSongChangeCount()
 
-            Log.d(TAG, "Attempting to play: ${song.title}")
+        Log.d(TAG, "Attempting to play: ${song.title}")
 
-            // FAST PATH: if the selected song already has a valid, playable audio URL
-            // (i.e. it is NOT a preview-only source like Apple Music / Spotify / Deezer),
-            // start playback immediately and resolve the queue in the background.
-            // This makes valid songs feel instant instead of "stuck finding source".
-            if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
-                _playLoadingMessage.value = "Loading..."
-                Log.d(TAG, "Fast path: song has valid audio, playing immediately")
-                // JioSaavn/Desi Hits URLs expire — refresh before playing
-                val refreshedSong = if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
-                    _playLoadingMessage.value = "Refreshing stream..."
-                    val fresh = youTubeRepository.refreshSongAudio(song)
-                    if (fresh.hasValidAudio()) fresh else song
-                } else song
-                _currentlyPlaying.value = refreshedSong
-                playbackConnectionManager.setYouTubeSongsReference(queue)
-                val songAsLocal = refreshedSong.toSong() ?: run {
-                    Log.e(TAG, "toSong() returned null for ${refreshedSong.title}")
-                    try {
-                        Toast.makeText(
-                            getApplication(),
-                            "Error playing this track. Try another.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } catch (t: Exception) { }
-                    return false
-                }
-                // Start with just the selected song so playback begins instantly;
-                // resolve the rest of the queue in the background for smooth skipping.
-                val initialQueue = mutableListOf(songAsLocal)
-                playbackConnectionManager.playSong(songAsLocal, initialQueue)
-                Log.d(TAG, "✓ Playing (fast path): ${refreshedSong.title}")
-                // Background queue resolution (best effort, non-blocking)
-                resolveQueueInBackground(refreshedSong, queue, songAsLocal)
-                return true
-            }
-
-            // SLOW PATH: preview-only source or no valid audio -> resolve full song
-            _playLoadingMessage.value = "Finding full song..."
-            Log.d(TAG, "Slow path: resolving full song for '${song.title}' (source: ${song.sourceType})")
-            var resolvedSong = resolveAudio(song)
-            Log.d(TAG, "resolveAudio result: ${if (resolvedSong != null) "success" else "failed"}")
-
-            // If selected song fails, try next songs in queue (limited to 3 to avoid long hangs)
-            if (resolvedSong == null) {
-                val fallbackQueue = queue.filter { it.id != song.id }.take(3)
-                Log.d(TAG, "Trying fallback queue: ${fallbackQueue.size} songs")
-                for ((index, fallback) in fallbackQueue.withIndex()) {
-                    Log.d(TAG, "Trying fallback $index: ${fallback.title}")
-                    resolvedSong = resolveAudio(fallback)
-                    if (resolvedSong != null) {
-                        Log.d(TAG, "Fallback $index worked!")
-                        break
-                    }
-                }
-            }
-
-            if (resolvedSong == null) {
-                try {
-                    Toast.makeText(
-                        getApplication(),
-                        "This video may be unavailable. Try another song.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (t: Exception) { }
-                Log.e(TAG, "All audio resolution attempts failed")
-                return false
-            }
-
-            _currentlyPlaying.value = resolvedSong
+        // FAST PATH: if the selected song already has a valid, playable audio URL
+        if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
+            _playLoadingMessage.value = "Loading..."
+            Log.d(TAG, "Fast path: song has valid audio, playing immediately")
+            // JioSaavn/Desi Hits URLs expire — refresh before playing
+            val refreshedSong = if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+                _playLoadingMessage.value = "Refreshing stream..."
+                val fresh = youTubeRepository.refreshSongAudio(song)
+                if (fresh.hasValidAudio()) fresh else song
+            } else song
+            _currentlyPlaying.value = refreshedSong
             playbackConnectionManager.setYouTubeSongsReference(queue)
-
-            val songAsLocal = resolvedSong.toSong() ?: run {
-                Log.e(TAG, "toSong() returned null for ${resolvedSong.title}")
+            val songAsLocal = refreshedSong.toSong() ?: run {
+                Log.e(TAG, "toSong() returned null for ${refreshedSong.title}")
                 try {
-                    Toast.makeText(
-                        getApplication(),
-                        "Error playing this track. Try another.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(getApplication(), "Error playing this track. Try another.", Toast.LENGTH_SHORT).show()
                 } catch (t: Exception) { }
                 return false
             }
-
-            // Play immediately with just the resolved song; build the queue in the background
             val initialQueue = mutableListOf(songAsLocal)
             playbackConnectionManager.playSong(songAsLocal, initialQueue)
-            Log.d(TAG, "✓ Playing (slow path): ${resolvedSong.title}")
-            // Background queue resolution
-            resolveQueueInBackground(resolvedSong, queue, songAsLocal)
+            Log.d(TAG, "✓ Playing (fast path): ${refreshedSong.title}")
+            resolveQueueInBackground(refreshedSong, queue, songAsLocal)
             return true
+        }
 
-        } catch (e: Exception) {
-            Log.e(TAG, "playSong failed", e)
+        // SLOW PATH: preview-only source or no valid audio -> resolve full song
+        _playLoadingMessage.value = "Finding full song..."
+        Log.d(TAG, "Slow path: resolving full song for '${song.title}'")
+
+        // JioSaavn/Desi Hits: fast refresh
+        if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            val refreshed = youTubeRepository.refreshSongAudio(song)
+            if (refreshed.hasValidAudio()) {
+                _currentlyPlaying.value = refreshed
+                playbackConnectionManager.setYouTubeSongsReference(queue)
+                val songAsLocal = refreshed.toSong() ?: return false
+                val initialQueue = mutableListOf(songAsLocal)
+                playbackConnectionManager.playSong(songAsLocal, initialQueue)
+                Log.d(TAG, "✓ Playing (JioSaavn refreshed): ${refreshed.title}")
+                resolveQueueInBackground(refreshed, queue, songAsLocal)
+                return true
+            }
+        }
+
+        var resolvedSong = resolveAudio(song)
+        Log.d(TAG, "resolveAudio result: ${if (resolvedSong != null) "success" else "failed"}")
+
+        if (resolvedSong == null) {
+            val fallbackQueue = queue.filter { it.id != song.id }.take(3)
+            for ((index, fallback) in fallbackQueue.withIndex()) {
+                resolvedSong = resolveAudio(fallback)
+                if (resolvedSong != null) break
+            }
+        }
+
+        if (resolvedSong == null) {
             try {
-                Toast.makeText(
-                    getApplication(),
-                    "Playback error. Please try again.",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(getApplication(), "This video may be unavailable. Try another.", Toast.LENGTH_LONG).show()
+            } catch (t: Exception) { }
+            Log.e(TAG, "All audio resolution attempts failed")
+            return false
+        }
+
+        _currentlyPlaying.value = resolvedSong
+        playbackConnectionManager.setYouTubeSongsReference(queue)
+
+        val songAsLocal = resolvedSong.toSong() ?: run {
+            Log.e(TAG, "toSong() returned null for ${resolvedSong.title}")
+            try {
+                Toast.makeText(getApplication(), "Error playing this track. Try another.", Toast.LENGTH_SHORT).show()
             } catch (t: Exception) { }
             return false
         }
+
+        val initialQueue = mutableListOf(songAsLocal)
+        playbackConnectionManager.playSong(songAsLocal, initialQueue)
+        Log.d(TAG, "✓ Playing (slow path): ${resolvedSong.title}")
+        resolveQueueInBackground(resolvedSong, queue, songAsLocal)
+        return true
     }
 
     /**
