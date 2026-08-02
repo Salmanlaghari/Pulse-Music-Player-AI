@@ -1,3 +1,16 @@
+# Pulse Music Player AI — v1.14.0 Update (JioSaavn Fix)
+
+## CRITICAL FIX: JioSaavn / Desi Hits playback restored
+- [x] Root cause: saavn.sumit.co /songs/{id} now returns "data" as an ARRAY,
+      but getJioSaavnSongDetails() only parsed it as an OBJECT -> resolution
+      returned null -> JioSaavn + Desi Hits songs never resolved / never played
+- [x] Fix getJioSaavnSongDetails() to handle BOTH array and object shapes
+      (plus nested data.results / data.songs)
+- [x] Use httpGetSafe() for song details (no silent throw)
+- [x] getTrending(): JioSaavn full songs first, Deezer as fallback
+- [x] Verified full chain: search -> resolve -> playable 320kbps URL (end-to-end)
+- [x] Bump version to 1.14.0 (versionCode 11400)
+
 # Pulse Music Player AI — v1.13.0 Update
 
 ## Phase 0: SoundCloud Platform + JioSaavn Sync (v1.13.0)
