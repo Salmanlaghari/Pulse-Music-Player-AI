@@ -30,6 +30,7 @@ data class YouTubeSong(
             id.startsWith("am_") -> "Apple Music"
             id.startsWith("sp_") -> "Spotify"
             id.startsWith("yt_") -> "YouTube Music"
+            id.startsWith("sc_") -> "SoundCloud"
             else -> "YouTube"
         }
 

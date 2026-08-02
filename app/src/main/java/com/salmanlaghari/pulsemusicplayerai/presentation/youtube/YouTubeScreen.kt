@@ -70,7 +70,7 @@ import com.salmanlaghari.pulsemusicplayerai.theme.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import kotlinx.coroutines.launch
 
-enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, ARCHIVE, DEEZER }
+enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, SOUNDCLOUD, ARCHIVE, DEEZER }
 enum class ViewMode { LIST, GRID }
 
 @Composable
@@ -126,6 +126,7 @@ fun YouTubeScreen(
             MusicSource.APPLE_MUSIC -> viewModel.searchAppleMusic(query)
             MusicSource.SPOTIFY -> viewModel.searchSpotify(query)
             MusicSource.YOUTUBE_MUSIC -> viewModel.searchYouTubeMusic(query)
+            MusicSource.SOUNDCLOUD -> viewModel.searchSoundCloud(query)
             MusicSource.ARCHIVE -> viewModel.search(query)
             MusicSource.DEEZER -> viewModel.search(query)
         }
@@ -353,6 +354,16 @@ fun YouTubeScreen(
                             selected = selectedSource == MusicSource.SPOTIFY,
                             onClick = {
                                 selectedSource = MusicSource.SPOTIFY
+                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "☁ SoundCloud",
+                            selected = selectedSource == MusicSource.SOUNDCLOUD,
+                            onClick = {
+                                selectedSource = MusicSource.SOUNDCLOUD
                                 if (searchQuery.length >= 3) searchWithSource(searchQuery)
                             }
                         )

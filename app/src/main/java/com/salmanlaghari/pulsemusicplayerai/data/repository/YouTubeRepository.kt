@@ -847,6 +847,160 @@ class YouTubeRepository {
         songs
     }
 
+    // =========================================================================
+    // SOUNDCLOUD SEARCH - FREE full-track streaming via public API v2
+    // No user auth required. A public web client_id is resolved dynamically
+    // from the SoundCloud web player and cached, so it self-heals if rotated.
+    // =========================================================================
+
+    // Cached SoundCloud public web client_id (resolved on demand)
+    @Volatile private var soundCloudClientId: String? = null
+
+    // Resolve the public SoundCloud web client_id by scraping the web player's
+    // JS bundles. This is the same id the public soundcloud.com website uses.
+    private fun resolveSoundCloudClientId(): String? {
+        soundCloudClientId?.let { return it }
+        return try {
+            val homeHtml = httpGetSafe("https://soundcloud.com/", timeout = NORMAL_TIMEOUT)
+            if (homeHtml.isBlank()) return null
+            // Collect candidate JS bundle URLs referenced by the page
+            val scriptRegex = Regex("""https://a-v2\.sndcdn\.com/assets/[^"']+\.js""")
+            val bundles = scriptRegex.findAll(homeHtml).map { it.value }.distinct().toList()
+            val idRegex = Regex("""client_id\s*[:=]\s*"([a-zA-Z0-9]{20,})"""")
+            for (bundleUrl in bundles) {
+                try {
+                    val js = httpGetSafe(bundleUrl, timeout = NORMAL_TIMEOUT)
+                    val match = idRegex.find(js)
+                    if (match != null) {
+                        val id = match.groupValues[1]
+                        if (id.isNotBlank()) {
+                            soundCloudClientId = id
+                            Log.d(TAG, "Resolved SoundCloud client_id")
+                            return id
+                        }
+                    }
+                } catch (e: Exception) { /* try next bundle */ }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "SoundCloud client_id resolve failed: ${e.message}")
+            null
+        }
+    }
+
+    // Convert a SoundCloud progressive/HLS transcoding into a directly playable
+    // URL by hitting its authorized endpoint (returns a temporary CDN url).
+    private fun resolveSoundCloudStreamUrl(transcodingUrl: String, clientId: String): String? {
+        return try {
+            val sep = if (transcodingUrl.contains("?")) "&" else "?"
+            val authUrl = "$transcodingUrl${sep}client_id=$clientId"
+            val resp = httpGetSafe(authUrl, timeout = NORMAL_TIMEOUT)
+            if (resp.isNotBlank()) {
+                JSONObject(resp).optString("url", "").ifBlank { null }
+            } else null
+        } catch (e: Exception) { null }
+    }
+
+    suspend fun searchSoundCloud(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val clientId = resolveSoundCloudClientId() ?: run {
+                Log.w(TAG, "SoundCloud: no client_id; skipping search")
+                return@withContext emptyList()
+            }
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val url = "https://api-v2.soundcloud.com/search/tracks?q=$encodedQuery&client_id=$clientId&limit=30"
+            val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
+            if (response.isBlank()) return@withContext emptyList()
+
+            val json = JSONObject(response)
+            val collection = json.optJSONArray("collection") ?: return@withContext emptyList()
+
+            for (i in 0 until minOf(collection.length(), 30)) {
+                try {
+                    val track = collection.getJSONObject(i)
+                    // Only include streamable tracks with a usable transcoding
+                    val streamable = track.optBoolean("streamable", true)
+                    if (!streamable) continue
+
+                    val id = track.optLong("id", 0L)
+                    if (id == 0L) continue
+
+                    val title = decodeHtmlEntities(track.optString("title", "Unknown"))
+
+                    // Artist: publisher_metadata.artist -> user.username
+                    var artist = ""
+                    val publisher = track.optJSONObject("publisher_metadata")
+                    if (publisher != null) artist = publisher.optString("artist", "")
+                    if (artist.isBlank()) {
+                        artist = track.optJSONObject("user")?.optString("username", "") ?: ""
+                    }
+                    if (artist.isBlank()) artist = "Unknown Artist"
+
+                    // Artwork (replace default -large with -t500x500 for higher res)
+                    var thumbnail = track.optString("artwork_url", "")
+                    if (thumbnail.isBlank()) {
+                        thumbnail = track.optJSONObject("user")?.optString("avatar_url", "") ?: ""
+                    }
+                    if (thumbnail.contains("-large")) {
+                        thumbnail = thumbnail.replace("-large", "-t500x500")
+                    }
+
+                    // Duration is in milliseconds -> seconds
+                    val duration = track.optLong("duration", 0L) / 1000
+
+                    // Find a progressive (direct) transcoding; fall back to HLS
+                    var transcodingUrl = ""
+                    val media = track.optJSONObject("media")
+                    val transcodings = media?.optJSONArray("transcodings")
+                    if (transcodings != null) {
+                        // Prefer progressive mp3 (directly playable), else first available
+                        for (t in 0 until transcodings.length()) {
+                            val tc = transcodings.getJSONObject(t)
+                            val format = tc.optJSONObject("format")
+                            val protocol = format?.optString("protocol", "") ?: ""
+                            val tcUrl = tc.optString("url", "")
+                            if (protocol == "progressive" && tcUrl.isNotBlank()) {
+                                transcodingUrl = tcUrl
+                                break
+                            }
+                        }
+                        if (transcodingUrl.isBlank() && transcodings.length() > 0) {
+                            transcodingUrl = transcodings.getJSONObject(0).optString("url", "")
+                        }
+                    }
+
+                    if (transcodingUrl.isNotBlank()) {
+                        songs.add(YouTubeSong(
+                            id = "sc_$id",
+                            title = title,
+                            artist = artist,
+                            duration = duration,
+                            thumbnailUrl = thumbnail,
+                            // Store the transcoding URL; resolved to a fresh CDN url at playback time
+                            audioUrl = transcodingUrl
+                        ))
+                    }
+                } catch (e: Exception) { /* skip invalid track */ }
+            }
+            Log.d(TAG, "SoundCloud search: ${songs.size} results for '$query'")
+        } catch (e: Exception) {
+            Log.w(TAG, "SoundCloud search error: ${e.message}")
+        }
+        songs
+    }
+
+    /**
+     * Resolve a fresh, directly-playable SoundCloud stream URL for a track whose
+     * audioUrl currently holds a transcoding endpoint. Called on-demand at
+     * playback time (transcoding-signed CDN urls are short-lived).
+     */
+    suspend fun refreshSoundCloudUrl(transcodingUrl: String): String? = withContext(Dispatchers.IO) {
+        val clientId = resolveSoundCloudClientId() ?: return@withContext null
+        resolveSoundCloudStreamUrl(transcodingUrl, clientId)
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════════
     // YOUTUBE MUSIC SEARCH — dedicated Piped/Invidious video search (full streams)
     // ═══════════════════════════════════════════════════════════════════════════════
