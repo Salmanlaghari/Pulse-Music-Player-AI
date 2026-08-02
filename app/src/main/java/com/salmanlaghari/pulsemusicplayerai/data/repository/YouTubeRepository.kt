@@ -511,17 +511,40 @@ class YouTubeRepository {
     }
 
     // Get full song URL from JioSaavn (320kbps) - new saavn.sumit.co API
+    //
+    // IMPORTANT: The saavn.sumit.co /songs/{id} endpoint returns "data" as a
+    // JSON ARRAY of song objects, e.g. { "success": true, "data": [ {...} ] },
+    // NOT a single object. Older API versions returned an object. We handle
+    // BOTH shapes here so song resolution (and therefore JioSaavn/Desi Hits
+    // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
         try {
             val url = "$JIOSAAVN_API/songs/$songId"
-            val response = httpGet(url, timeout = NORMAL_TIMEOUT)
+            val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
             if (response.isNotBlank()) {
                 val json = JSONObject(response)
-                val data = json.optJSONObject("data")
-                if (data != null) {
-                    return@withContext data
+
+                // Case 1: data is an ARRAY -> take the first song object
+                val dataArr = json.optJSONArray("data")
+                if (dataArr != null && dataArr.length() > 0) {
+                    val first = dataArr.optJSONObject(0)
+                    if (first != null) return@withContext first
                 }
-                // Fallback to old format
+
+                // Case 2: data is an OBJECT (older format)
+                val dataObj = json.optJSONObject("data")
+                if (dataObj != null) {
+                    // Some responses nest results inside data.results / data.songs
+                    val nested = dataObj.optJSONArray("results")
+                        ?: dataObj.optJSONArray("songs")
+                    if (nested != null && nested.length() > 0) {
+                        val first = nested.optJSONObject(0)
+                        if (first != null) return@withContext first
+                    }
+                    return@withContext dataObj
+                }
+
+                // Case 3: legacy top-level format with status flag
                 if (json.optBoolean("status", false)) {
                     return@withContext json
                 }
@@ -1240,21 +1263,39 @@ class YouTubeRepository {
         val allSongs = mutableListOf<YouTubeSong>()
         Log.d(TAG, "Loading trending for region: $region")
 
-        // 1. DEEZER FIRST - Best for trending music (30-second previews)
+        // 1. JIOSAAVN FIRST - FULL SONGS (not 30s previews). This is the primary
+        //    trending source so JioSaavn/Desi Hits playback stays consistent.
         try {
-            val regionQuery = when(region) {
-                "IN" -> "indian songs"
-                "US" -> "top hits"
-                "GB" -> "uk hits"
-                "PK" -> "pakistani songs"
-                else -> "popular music"
+            val jioQuery = when(region) {
+                "IN" -> "trending hindi songs"
+                "PK" -> "pakistani hits"
+                "GB" -> "bollywood hits"
+                else -> "top trending songs"
             }
-            val deezerResults = searchDeezer(regionQuery)
-            if (deezerResults.isNotEmpty()) {
-                allSongs.addAll(deezerResults)
-                Log.d(TAG, "Deezer trending: ${deezerResults.size} songs")
+            val jioResults = searchJioSaavn(jioQuery)
+            if (jioResults.isNotEmpty()) {
+                allSongs.addAll(jioResults)
+                Log.d(TAG, "JioSaavn trending: ${jioResults.size} full songs")
             }
-        } catch (e: Exception) { Log.w(TAG, "Deezer trending fail: ${e.message}") }
+        } catch (e: Exception) { Log.w(TAG, "JioSaavn trending fail: ${e.message}") }
+
+        // 2. DEEZER - fill remaining slots (30-second previews)
+        if (allSongs.size < 20) {
+            try {
+                val regionQuery = when(region) {
+                    "IN" -> "indian songs"
+                    "US" -> "top hits"
+                    "GB" -> "uk hits"
+                    "PK" -> "pakistani songs"
+                    else -> "popular music"
+                }
+                val deezerResults = searchDeezer(regionQuery)
+                if (deezerResults.isNotEmpty()) {
+                    allSongs.addAll(deezerResults)
+                    Log.d(TAG, "Deezer trending: ${deezerResults.size} songs")
+                }
+            } catch (e: Exception) { Log.w(TAG, "Deezer trending fail: ${e.message}") }
+        }
 
         // 2. INTERNET ARCHIVE - Free full songs (no preview limit!)
         if (allSongs.size < 20) {
