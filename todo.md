@@ -1,3 +1,14 @@
+# Pulse Music Player AI — v1.13.0 Update
+
+## Phase 0: SoundCloud Platform + JioSaavn Sync (v1.13.0)
+- [x] Add searchSoundCloud() to YouTubeRepository.kt (free full tracks, public API v2)
+- [x] Add dynamic SoundCloud client_id resolver + transcoding->stream resolver
+- [x] Add searchSoundCloud() to YouTubeViewModel.kt
+- [x] Add SOUNDCLOUD to MusicSource enum + filter chip + routing in YouTubeScreen.kt
+- [x] Sync SoundCloud into searchAllSources() (JioSaavn kept first for full-song sync)
+- [x] Resolve SoundCloud stream URL on-demand at playback (fast + slow path)
+- [x] Bump version to 1.13.0 (versionCode 11300)
+
 # Pulse Music Player AI — v1.10.0 Update
 
 ## Phase 1: JioSaavn Search Fix (COMPLETED in prior session)

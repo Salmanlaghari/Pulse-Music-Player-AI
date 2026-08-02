@@ -290,6 +290,24 @@ class YouTubeViewModel(
         }
     }
 
+    fun searchSoundCloud(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.searchSoundCloud(query)
+                _searchResults.value = results
+                Log.d(TAG, "SoundCloud found ${results.size} results for '$query'")
+            } catch (e: Exception) {
+                Log.e(TAG, "SoundCloud search failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     /**
      * Unified synced search — aggregates results from ALL platforms (JioSaavn,
      * Apple Music, Spotify, YouTube Music, Deezer, Internet Archive) so the
@@ -312,17 +330,21 @@ class YouTubeViewModel(
                 val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(null) ?: emptyList() }
                 val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(null) ?: emptyList() }
                 val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(null) ?: emptyList() }
+                val soundcloudDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSoundCloud(query) } }.getOrDefault(null) ?: emptyList() }
                 val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(null) ?: emptyList() }
 
                 val apple = appleDeferred.await().take(10)
                 val saavn = saavnDeferred.await().take(10)
                 val spotify = spotifyDeferred.await().take(10)
                 val ytm = ytmDeferred.await().take(10)
+                val soundcloud = soundcloudDeferred.await().take(10)
                 val general = generalDeferred.await().take(10)
 
-                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} spotify=${spotify.size} ytm=${ytm.size} general=${general.size}")
+                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} spotify=${spotify.size} ytm=${ytm.size} soundcloud=${soundcloud.size} general=${general.size}")
 
-                for (list in listOf(apple, saavn, spotify, ytm, general)) {
+                // JioSaavn kept first so full-song Bollywood/Hindi results stay
+                // synced at the top, then the other synced platforms follow.
+                for (list in listOf(saavn, apple, spotify, ytm, soundcloud, general)) {
                     for (s in list) {
                         if (seen.add(s.id)) combined.add(s)
                     }
@@ -376,12 +398,22 @@ class YouTubeViewModel(
         if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
             _playLoadingMessage.value = "Loading..."
             Log.d(TAG, "Fast path: song has valid audio, playing immediately")
-            // JioSaavn/Desi Hits URLs expire — refresh before playing
-            val refreshedSong = if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
-                _playLoadingMessage.value = "Refreshing stream..."
-                val fresh = youTubeRepository.refreshSongAudio(song)
-                if (fresh.hasValidAudio()) fresh else song
-            } else song
+            // JioSaavn/Desi Hits URLs expire — refresh before playing.
+            // SoundCloud stores a transcoding endpoint that must be resolved
+            // into a fresh, directly-playable CDN url at playback time.
+            val refreshedSong = when {
+                song.id.startsWith("js_") || song.id.startsWith("dh_") -> {
+                    _playLoadingMessage.value = "Refreshing stream..."
+                    val fresh = youTubeRepository.refreshSongAudio(song)
+                    if (fresh.hasValidAudio()) fresh else song
+                }
+                song.id.startsWith("sc_") -> {
+                    _playLoadingMessage.value = "Resolving SoundCloud stream..."
+                    val streamUrl = youTubeRepository.refreshSoundCloudUrl(song.audioUrl)
+                    if (!streamUrl.isNullOrBlank()) song.copy(audioUrl = streamUrl) else song
+                }
+                else -> song
+            }
             _currentlyPlaying.value = refreshedSong
             playbackConnectionManager.setYouTubeSongsReference(queue)
             val songAsLocal = refreshedSong.toSong() ?: run {
@@ -412,6 +444,22 @@ class YouTubeViewModel(
                 val initialQueue = mutableListOf(songAsLocal)
                 playbackConnectionManager.playSong(songAsLocal, initialQueue)
                 Log.d(TAG, "✓ Playing (JioSaavn refreshed): ${refreshed.title}")
+                resolveQueueInBackground(refreshed, queue, songAsLocal)
+                return true
+            }
+        }
+
+        // SoundCloud: resolve the transcoding endpoint into a playable stream url
+        if (song.id.startsWith("sc_")) {
+            val streamUrl = youTubeRepository.refreshSoundCloudUrl(song.audioUrl)
+            if (!streamUrl.isNullOrBlank()) {
+                val refreshed = song.copy(audioUrl = streamUrl)
+                _currentlyPlaying.value = refreshed
+                playbackConnectionManager.setYouTubeSongsReference(queue)
+                val songAsLocal = refreshed.toSong() ?: return false
+                val initialQueue = mutableListOf(songAsLocal)
+                playbackConnectionManager.playSong(songAsLocal, initialQueue)
+                Log.d(TAG, "✓ Playing (SoundCloud resolved): ${refreshed.title}")
                 resolveQueueInBackground(refreshed, queue, songAsLocal)
                 return true
             }
