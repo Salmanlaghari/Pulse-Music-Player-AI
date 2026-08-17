@@ -21,6 +21,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -240,7 +241,7 @@ class AudioStudioProcessor(private val context: Context) {
             try { probe.release() } catch (_: Exception) { }
         }
 
-        if (sourceMime.isEmpty()) return@withContext null
+        if (sourceMime.isEmpty()) { if (tempFile.exists()) tempFile.delete(); return@withContext null }
 
         try {
             if (isMp4MuxableAudio(sourceMime)) {
@@ -251,13 +252,15 @@ class AudioStudioProcessor(private val context: Context) {
             } else {
                 val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
                     onProgress((p * 0.5f).toInt().coerceIn(0, 50))
-                } ?: return@withContext null
+                } ?: run { if (tempFile.exists()) tempFile.delete(); return@withContext null }
                 if (!encodePcmToM4a(pcm, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)) {
                     if (tempFile.exists()) tempFile.delete()
                     return@withContext null
                 }
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Cut failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
@@ -349,7 +352,10 @@ class AudioStudioProcessor(private val context: Context) {
         val tempFile = File(context.cacheDir, "temp_merge_${System.currentTimeMillis()}.m4a")
         try {
             // Decode the first file to establish the common target format.
-            val first = decodeToPcm(sourceUris.first()) ?: return@withContext null
+            val first = decodeToPcm(sourceUris.first()) ?: run {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext null
+            }
             val targetRate = first.sampleRate
             val targetChannels = first.channelCount
 
@@ -373,6 +379,8 @@ class AudioStudioProcessor(private val context: Context) {
                 return@withContext null
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Merge failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
@@ -422,6 +430,8 @@ class AudioStudioProcessor(private val context: Context) {
                 return@withContext null
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Convert failed: " + e.message, e)
         }
@@ -478,13 +488,15 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             } else {
                 val pcm = decodeToPcm(sourceUri) { p -> onProgress((p * 0.5f).toInt().coerceIn(0, 50)) }
-                    ?: return@withContext null
+                    ?: run { if (tempFile.exists()) tempFile.delete(); return@withContext null }
                 if (!encodePcmToM4a(pcm, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)) {
                     if (tempFile.exists()) tempFile.delete()
                     return@withContext null
                 }
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Extract failed: " + e.message, e)
         }
@@ -507,7 +519,7 @@ class AudioStudioProcessor(private val context: Context) {
         try {
             val pcm = decodeToPcm(sourceUri) { p ->
                 onProgress((p * 0.5f).toInt().coerceIn(0, 50))
-            } ?: return@withContext null
+            } ?: run { if (tempFile.exists()) tempFile.delete(); return@withContext null }
 
             // HIGH compression -> smallest file / lowest bitrate.
             val bitRate = when (preset) {
@@ -522,6 +534,8 @@ class AudioStudioProcessor(private val context: Context) {
                 return@withContext null
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Compress failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
@@ -551,7 +565,7 @@ class AudioStudioProcessor(private val context: Context) {
         try {
             val pcm = decodeToPcm(sourceUri) { p ->
                 onProgress((p * 0.5f).toInt().coerceIn(0, 50))
-            } ?: return@withContext null
+            } ?: run { if (tempFile.exists()) tempFile.delete(); return@withContext null }
 
             val ratio = (speedMultiplier.coerceIn(0.25f, 4.0f)) * (pitchMultiplier.coerceIn(0.25f, 4.0f))
 
@@ -574,6 +588,8 @@ class AudioStudioProcessor(private val context: Context) {
                 return@withContext null
             }
             return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Speed/pitch change failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
@@ -673,6 +689,8 @@ class AudioStudioProcessor(private val context: Context) {
             onProgress(97)
 
             return@withContext copyLocalFileToMediaStoreVideo(finalFile, config.outputName)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AudioStudioProcessor", "Video export failed: ${e.message}", e)
             return@withContext null

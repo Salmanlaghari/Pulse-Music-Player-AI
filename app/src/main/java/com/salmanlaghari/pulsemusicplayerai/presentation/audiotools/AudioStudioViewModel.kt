@@ -95,6 +95,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
@@ -121,6 +123,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
@@ -147,6 +151,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
@@ -173,6 +179,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
@@ -199,6 +207,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
@@ -225,6 +235,8 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
