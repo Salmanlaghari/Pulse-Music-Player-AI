@@ -302,31 +302,37 @@ fun FullPlayerScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.skipToPrevious()
-                            }) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(48.dp))
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.skipToPrevious()
+                                },
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(52.dp))
                             }
                             IconButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.togglePlayPause()
                                 },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(80.dp)
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(88.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(42.dp)
+                                    modifier = Modifier.size(46.dp)
                                 )
                             }
-                            IconButton(onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.skipToNext()
-                            }) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.skipToNext()
+                                },
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(52.dp))
                             }
                         }
                     }
@@ -755,21 +761,24 @@ fun FullPlayerScreen(
                             )
                         }
 
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.skipToPrevious()
-                        }) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.skipToPrevious()
+                            },
+                            modifier = Modifier.size(72.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(60.dp)
                             )
                         }
 
                         Box(
                             modifier = Modifier
-                                .size(96.dp)
+                                .size(104.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
@@ -782,19 +791,22 @@ fun FullPlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(52.dp)
+                                modifier = Modifier.size(56.dp)
                             )
                         }
 
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.skipToNext()
-                        }) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.skipToNext()
+                            },
+                            modifier = Modifier.size(72.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(60.dp)
                             )
                         }
 

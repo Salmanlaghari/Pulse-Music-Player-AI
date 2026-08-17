@@ -16,16 +16,21 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.coroutines.coroutineContext
 
 class AudioStudioProcessor(private val context: Context) {
@@ -198,7 +203,14 @@ class AudioStudioProcessor(private val context: Context) {
     }
 
     /**
-     * Executes MP3 Cut/Trim operation using native MediaExtractor and MediaMuxer pipelines.
+     * Trims an audio file to the requested range.
+     *
+     * If the source audio track is AAC it is remuxed losslessly into an MP4/M4A
+     * container. For any other codec (MP3, FLAC, Vorbis/Opus ...) MediaMuxer
+     * cannot carry the track, so the range is decoded to PCM and re-encoded to
+     * AAC. Either way the produced file is a valid .m4a with a matching MIME
+     * type — the previous implementation wrote an MP4 container but named it
+     * ".mp3" with an "audio/mpeg" MIME type, which is why outputs failed to open.
      */
     suspend fun cutAudio(
         sourceUri: Uri,
@@ -207,76 +219,126 @@ class AudioStudioProcessor(private val context: Context) {
         endMs: Float,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val tempFile = File(context.cacheDir, "temp_cut_${System.currentTimeMillis()}.mp3")
-        val extractor = MediaExtractor()
-        var mimeType = "audio/mpeg"
+        val startUs = (startMs * 1000L).toLong().coerceAtLeast(0L)
+        val endUs = (endMs * 1000L).toLong()
+        if (endUs <= startUs) return@withContext null
+
+        val tempFile = File(context.cacheDir, "temp_cut_${System.currentTimeMillis()}.m4a")
+
+        // Determine the source codec first so we can pick remux vs re-encode.
+        var sourceMime = ""
+        val probe = MediaExtractor()
         try {
-            extractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var format: MediaFormat? = null
-            for (i in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    audioTrackIndex = i
-                    format = fmt
-                    mimeType = mime
-                    break
-                }
+            probe.setDataSource(context, sourceUri, null)
+            for (i in 0 until probe.trackCount) {
+                val m = probe.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: ""
+                if (m.startsWith("audio/")) { sourceMime = m; break }
             }
-
-            if (audioTrackIndex == -1 || format == null) {
-                extractor.release()
-                return@withContext null
-            }
-
-            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val muxerTrackIndex = muxer.addTrack(format)
-            muxer.start()
-
-            val startUs = (startMs * 1000L).toLong()
-            val endUs = (endMs * 1000L).toLong()
-            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-
-            val buffer = ByteBuffer.allocate(256 * 1024)
-            val bufferInfo = MediaCodec.BufferInfo()
-
-            while (coroutineContext.isActive) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                val timeUs = extractor.sampleTime
-                if (timeUs > endUs) break
-
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = timeUs - startUs
-                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
-
-                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
-                extractor.advance()
-
-                val totalDurationUs = endUs - startUs
-                if (totalDurationUs > 0) {
-                    onProgress(((timeUs - startUs).toFloat() / totalDurationUs.toFloat() * 100).toInt().coerceIn(0, 100))
-                }
-            }
-
-            extractor.release()
-            muxer.stop()
-            muxer.release()
-
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", mimeType)
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Cut probe failed: " + e.message, e)
+        } finally {
+            try { probe.release() } catch (_: Exception) { }
+        }
+
+        if (sourceMime.isEmpty()) return@withContext null
+
+        try {
+            if (isMp4MuxableAudio(sourceMime)) {
+                if (!remuxAudioRangeToM4a(sourceUri, tempFile, startUs, endUs, onProgress)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
+                }
+            } else {
+                val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
+                    onProgress((p * 0.5f).toInt().coerceIn(0, 50))
+                } ?: return@withContext null
+                if (!encodePcmToM4a(pcm, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
+                }
+            }
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Cut failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
     }
 
     /**
-     * Merges multiple files together in the specified order.
+     * Lossless remux of an AAC audio range into an MP4/M4A container.
+     */
+    private suspend fun remuxAudioRangeToM4a(
+        sourceUri: Uri,
+        tempFile: File,
+        startUs: Long,
+        endUs: Long,
+        onProgress: (Int) -> Unit
+    ): Boolean {
+        val extractor = MediaExtractor()
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
+        try {
+            extractor.setDataSource(context, sourceUri, null)
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    format = fmt
+                    break
+                }
+            }
+            if (format == null) return false
+
+            muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val track = muxer.addTrack(format)
+            muxer.start()
+            muxerStarted = true
+
+            if (startUs > 0L) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+            val buffer = ByteBuffer.allocate(256 * 1024)
+            val info = MediaCodec.BufferInfo()
+            val rangeUs = (endUs - startUs).coerceAtLeast(1L)
+            var wroteAny = false
+
+            while (coroutineContext.isActive) {
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) break
+                val timeUs = extractor.sampleTime
+                if (endUs != Long.MAX_VALUE && timeUs > endUs) break
+
+                info.offset = 0
+                info.size = sampleSize
+                info.presentationTimeUs = (timeUs - startUs).coerceAtLeast(0L)
+                info.flags = sanitizeFlags(extractor.sampleFlags)
+                muxer.writeSampleData(track, buffer, info)
+                wroteAny = true
+                extractor.advance()
+
+                onProgress((((timeUs - startUs).toFloat() / rangeUs.toFloat()) * 100f).toInt().coerceIn(0, 100))
+            }
+
+            onProgress(100)
+            return wroteAny
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Remux failed: " + e.message, e)
+            return false
+        } finally {
+            try { extractor.release() } catch (_: Exception) { }
+            try { if (muxerStarted) muxer?.stop() } catch (_: Exception) { }
+            try { muxer?.release() } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * Merges multiple audio files into a single valid file.
+     *
+     * This performs a technically correct merge: every input is decoded to raw
+     * PCM, resampled/re-channeled to a common target format, concatenated, and
+     * then re-encoded to a single valid AAC/MP4 (.m4a) output. It does NOT
+     * byte-concatenate compressed streams.
      */
     suspend fun mergeAudio(
         sourceUris: List<Uri>,
@@ -284,31 +346,51 @@ class AudioStudioProcessor(private val context: Context) {
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
         if (sourceUris.isEmpty()) return@withContext null
-        val tempFile = File(context.cacheDir, "temp_merge_${System.currentTimeMillis()}.mp3")
+        val tempFile = File(context.cacheDir, "temp_merge_${System.currentTimeMillis()}.m4a")
         try {
-            val outputStream = FileOutputStream(tempFile)
-            val totalCount = sourceUris.size
-            sourceUris.forEachIndexed { index, uri ->
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val buffer = ByteArray(1024 * 64)
-                    var read: Int
-                    while (inputStream.read(buffer).also { read = it } != -1 && coroutineContext.isActive) {
-                        outputStream.write(buffer, 0, read)
-                    }
-                }
-                onProgress(((index + 1).toFloat() / totalCount.toFloat() * 100).toInt().coerceIn(0, 100))
+            // Decode the first file to establish the common target format.
+            val first = decodeToPcm(sourceUris.first()) ?: return@withContext null
+            val targetRate = first.sampleRate
+            val targetChannels = first.channelCount
+
+            val merged = ByteArrayOutputStream()
+            merged.write(first.data)
+            onProgress((1f / sourceUris.size * 40).toInt())
+
+            for (i in 1 until sourceUris.size) {
+                if (!coroutineContext.isActive) return@withContext null
+                val pcm = decodeToPcm(sourceUris[i]) ?: continue
+                merged.write(resamplePcm(pcm, targetRate, targetChannels))
+                onProgress(((i + 1).toFloat() / sourceUris.size * 40).toInt())
             }
-            outputStream.close()
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "mp3", "audio/mpeg")
+
+            val combined = PcmAudio(merged.toByteArray(), targetRate, targetChannels)
+            merged.close()
+
+            val ok = encodePcmToM4a(combined, tempFile, bitRate = 192_000, progStart = 40, progEnd = 100, onProgress = onProgress)
+            if (!ok) {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext null
+            }
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Merge failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
     }
 
     /**
-     * Converts audio file format natively using container remuxing.
+     * Converts an audio file to another format using a real decode + re-encode
+     * pipeline.
+     *
+     * - WAV: full PCM decode written to a valid RIFF/WAVE (uncompressed) file.
+     * - AAC / M4A: PCM re-encoded to AAC inside an MP4 container (.m4a).
+     * - MP3 / FLAC / OGG: the Android platform does not ship reliable encoders
+     *   for these formats, so we fall back to a genuinely valid AAC/M4A file
+     *   with the correct extension and MIME type instead of writing a file with
+     *   a misleading extension. The returned ExportedFile reports the actual
+     *   produced format.
      */
     suspend fun convertAudio(
         sourceUri: Uri,
@@ -316,69 +398,42 @@ class AudioStudioProcessor(private val context: Context) {
         targetFormat: AudioFormat,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val ext = targetFormat.extension.lowercase()
-        val tempFile = File(context.cacheDir, "temp_convert_${System.currentTimeMillis()}.$ext")
-        val extractor = MediaExtractor()
+        val pcm = decodeToPcm(sourceUri) { p ->
+            onProgress((p * 0.5f).toInt().coerceIn(0, 50))
+        } ?: return@withContext null
+
         try {
-            extractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var format: MediaFormat? = null
-            for (i in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    audioTrackIndex = i
-                    format = fmt
-                    break
+            if (targetFormat == AudioFormat.WAV) {
+                val tempFile = File(context.cacheDir, "temp_convert_${System.currentTimeMillis()}.wav")
+                onProgress(75)
+                if (!writeWav(pcm, tempFile)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
                 }
+                onProgress(100)
+                return@withContext copyLocalFileToMediaStore(tempFile, outputName, "wav", "audio/wav")
             }
 
-            if (audioTrackIndex == -1 || format == null) {
-                extractor.release()
+            // Everything else is produced as a valid AAC/MP4 (.m4a) file.
+            val tempFile = File(context.cacheDir, "temp_convert_${System.currentTimeMillis()}.m4a")
+            val ok = encodePcmToM4a(pcm, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)
+            if (!ok) {
+                if (tempFile.exists()) tempFile.delete()
                 return@withContext null
             }
-
-            val muxerFormat = if (ext == "mp4" || ext == "m4a") MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 else MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
-            val muxer = MediaMuxer(tempFile.absolutePath, muxerFormat)
-            val muxerTrackIndex = muxer.addTrack(format)
-            muxer.start()
-
-            val buffer = ByteBuffer.allocate(256 * 1024)
-            val bufferInfo = MediaCodec.BufferInfo()
-            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
-
-            while (coroutineContext.isActive) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
-
-                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
-                extractor.advance()
-
-                if (durationUs > 0) {
-                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
-                }
-            }
-
-            extractor.release()
-            muxer.stop()
-            muxer.release()
-
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
-            if (tempFile.exists()) tempFile.delete()
+            Log.e("AudioStudioProcessor", "Convert failed: " + e.message, e)
         }
         return@withContext null
     }
 
     /**
-     * Extracts raw audio tracks from a local video file natively using MediaExtractor and MediaMuxer.
+     * Extracts the audio track from a video file.
+     *
+     * Requesting WAV yields a real uncompressed WAV; anything else yields a
+     * valid AAC/M4A file (with correct extension + MIME). AAC tracks are remuxed
+     * losslessly; other codecs are decoded and re-encoded.
      */
     suspend fun extractAudio(
         sourceUri: Uri,
@@ -386,68 +441,61 @@ class AudioStudioProcessor(private val context: Context) {
         outputFormat: String,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val ext = outputFormat.lowercase()
-        val tempFile = File(context.cacheDir, "temp_extract_${System.currentTimeMillis()}.$ext")
-        val extractor = MediaExtractor()
+        val wantWav = outputFormat.equals("wav", ignoreCase = true)
         try {
-            extractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var format: MediaFormat? = null
-            for (i in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    audioTrackIndex = i
-                    format = fmt
-                    break
+            if (wantWav) {
+                val pcm = decodeToPcm(sourceUri) { p -> onProgress((p * 0.7f).toInt().coerceIn(0, 70)) }
+                    ?: return@withContext null
+                val tempFile = File(context.cacheDir, "temp_extract_${System.currentTimeMillis()}.wav")
+                onProgress(85)
+                if (!writeWav(pcm, tempFile)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
+                }
+                onProgress(100)
+                return@withContext copyLocalFileToMediaStore(tempFile, outputName, "wav", "audio/wav")
+            }
+
+            // Probe the source audio codec.
+            var sourceMime = ""
+            val probe = MediaExtractor()
+            try {
+                probe.setDataSource(context, sourceUri, null)
+                for (i in 0 until probe.trackCount) {
+                    val m = probe.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: ""
+                    if (m.startsWith("audio/")) { sourceMime = m; break }
+                }
+            } finally {
+                try { probe.release() } catch (_: Exception) { }
+            }
+            if (sourceMime.isEmpty()) return@withContext null
+
+            val tempFile = File(context.cacheDir, "temp_extract_${System.currentTimeMillis()}.m4a")
+            if (isMp4MuxableAudio(sourceMime)) {
+                if (!remuxAudioRangeToM4a(sourceUri, tempFile, 0L, Long.MAX_VALUE, onProgress)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
+                }
+            } else {
+                val pcm = decodeToPcm(sourceUri) { p -> onProgress((p * 0.5f).toInt().coerceIn(0, 50)) }
+                    ?: return@withContext null
+                if (!encodePcmToM4a(pcm, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext null
                 }
             }
-
-            if (audioTrackIndex == -1 || format == null) {
-                extractor.release()
-                return@withContext null
-            }
-
-            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val muxerTrackIndex = muxer.addTrack(format)
-            muxer.start()
-
-            val buffer = ByteBuffer.allocate(256 * 1024)
-            val bufferInfo = MediaCodec.BufferInfo()
-            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
-
-            while (coroutineContext.isActive) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = extractor.sampleTime
-                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
-
-                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
-                extractor.advance()
-
-                if (durationUs > 0) {
-                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
-                }
-            }
-
-            extractor.release()
-            muxer.stop()
-            muxer.release()
-
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
-            if (tempFile.exists()) tempFile.delete()
+            Log.e("AudioStudioProcessor", "Extract failed: " + e.message, e)
         }
         return@withContext null
     }
 
     /**
-     * Compresses the selected audio track using container audio compression configurations.
+     * Genuinely compresses the audio by decoding it to PCM and re-encoding it to
+     * AAC at a lower target bitrate. (The previous implementation dropped raw
+     * compressed samples, which produced a corrupted/glitching file rather than
+     * a smaller valid one.)
      */
     suspend fun compressAudio(
         sourceUri: Uri,
@@ -455,77 +503,42 @@ class AudioStudioProcessor(private val context: Context) {
         preset: CompressionPreset,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val ext = "mp3"
-        val tempFile = File(context.cacheDir, "temp_compress_${System.currentTimeMillis()}.$ext")
-        val extractor = MediaExtractor()
+        val tempFile = File(context.cacheDir, "temp_compress_${System.currentTimeMillis()}.m4a")
         try {
-            extractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var format: MediaFormat? = null
-            for (i in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    audioTrackIndex = i
-                    format = fmt
-                    break
-                }
+            val pcm = decodeToPcm(sourceUri) { p ->
+                onProgress((p * 0.5f).toInt().coerceIn(0, 50))
+            } ?: return@withContext null
+
+            // HIGH compression -> smallest file / lowest bitrate.
+            val bitRate = when (preset) {
+                CompressionPreset.HIGH -> 64_000
+                CompressionPreset.MEDIUM -> 96_000
+                CompressionPreset.LOW -> 160_000
             }
 
-            if (audioTrackIndex == -1 || format == null) {
-                extractor.release()
+            val ok = encodePcmToM4a(pcm, tempFile, bitRate = bitRate, progStart = 50, progEnd = 100, onProgress = onProgress)
+            if (!ok) {
+                if (tempFile.exists()) tempFile.delete()
                 return@withContext null
             }
-
-            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val muxerTrackIndex = muxer.addTrack(format)
-            muxer.start()
-
-            val buffer = ByteBuffer.allocate(256 * 1024)
-            val bufferInfo = MediaCodec.BufferInfo()
-            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
-
-            val skipEvery = when (preset) {
-                CompressionPreset.HIGH -> 4
-                CompressionPreset.MEDIUM -> 8
-                CompressionPreset.LOW -> 16
-            }
-
-            var index = 0
-            while (coroutineContext.isActive) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                if (index % skipEvery != 0) {
-                    bufferInfo.offset = 0
-                    bufferInfo.size = sampleSize
-                    bufferInfo.presentationTimeUs = extractor.sampleTime
-                    bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
-                    muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
-                }
-                extractor.advance()
-                index++
-
-                if (durationUs > 0) {
-                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
-                }
-            }
-
-            extractor.release()
-            muxer.stop()
-            muxer.release()
-
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Compress failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
     }
 
     /**
-     * Modifies playback speed natively and exports the audio track.
+     * Changes playback speed (and correspondingly pitch) by genuinely resampling
+     * the decoded PCM stream, then re-encoding it.
+     *
+     * NOTE: This is a resampling-based speed change, so pitch moves together
+     * with speed (the classic "tape speed" behaviour). Independent pitch
+     * shifting without a speed change requires a time-stretch/phase-vocoder DSP
+     * stage, which the Android platform does not provide for offline export; the
+     * `pitchMultiplier` is therefore combined into the resample ratio rather
+     * than being faked.
      */
     suspend fun changeSpeedAndPitch(
         sourceUri: Uri,
@@ -534,71 +547,43 @@ class AudioStudioProcessor(private val context: Context) {
         pitchMultiplier: Float,
         onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val ext = "mp3"
-        val tempFile = File(context.cacheDir, "temp_speed_${System.currentTimeMillis()}.$ext")
-        val extractor = MediaExtractor()
+        val tempFile = File(context.cacheDir, "temp_speed_${System.currentTimeMillis()}.m4a")
         try {
-            extractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var format: MediaFormat? = null
-            for (i in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    audioTrackIndex = i
-                    format = fmt
-                    break
-                }
+            val pcm = decodeToPcm(sourceUri) { p ->
+                onProgress((p * 0.5f).toInt().coerceIn(0, 50))
+            } ?: return@withContext null
+
+            val ratio = (speedMultiplier.coerceIn(0.25f, 4.0f)) * (pitchMultiplier.coerceIn(0.25f, 4.0f))
+
+            // Resampling to a lower rate while keeping the declared output rate
+            // constant makes the audio play back faster (and higher pitched).
+            val processed = if (kotlin.math.abs(ratio - 1.0f) < 0.001f) {
+                pcm
+            } else {
+                val srcRateForRatio = (pcm.sampleRate / ratio).toInt().coerceAtLeast(4000)
+                PcmAudio(
+                    resamplePcm(pcm, srcRateForRatio, pcm.channelCount),
+                    pcm.sampleRate,
+                    pcm.channelCount
+                )
             }
 
-            if (audioTrackIndex == -1 || format == null) {
-                extractor.release()
+            val ok = encodePcmToM4a(processed, tempFile, bitRate = 192_000, progStart = 50, progEnd = 100, onProgress = onProgress)
+            if (!ok) {
+                if (tempFile.exists()) tempFile.delete()
                 return@withContext null
             }
-
-            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val muxerTrackIndex = muxer.addTrack(format)
-            muxer.start()
-
-            val buffer = ByteBuffer.allocate(256 * 1024)
-            val bufferInfo = MediaCodec.BufferInfo()
-            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 1L
-
-            val speedFactor = (1.0f / speedMultiplier)
-
-            while (coroutineContext.isActive) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = (extractor.sampleTime * speedFactor).toLong()
-                bufferInfo.flags = sanitizeFlags(extractor.sampleFlags)
-
-                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
-                extractor.advance()
-
-                if (durationUs > 0) {
-                    onProgress((extractor.sampleTime.toFloat() / durationUs.toFloat() * 100).toInt().coerceIn(0, 100))
-                }
-            }
-
-            extractor.release()
-            muxer.stop()
-            muxer.release()
-
-            return@withContext copyLocalFileToMediaStore(tempFile, outputName, ext, getMimeTypeFromExtension(ext))
+            return@withContext copyLocalFileToMediaStore(tempFile, outputName, "m4a", "audio/mp4")
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Speed/pitch change failed: " + e.message, e)
             if (tempFile.exists()) tempFile.delete()
         }
         return@withContext null
     }
 
     /**
-     * Genuine hardware-accelerated H.264 video encoder + audio muxer pipeline.
-     * Generates standard playable visualizer spectrum video from MP3.
+     * Legacy entry point kept for source compatibility. Delegates to the real
+     * config-driven exporter.
      */
     suspend fun exportVisualizerVideo(
         sourceUri: Uri,
@@ -606,242 +591,355 @@ class AudioStudioProcessor(private val context: Context) {
         resolution: String = "720p",
         overlayText: String = "",
         onProgress: (Int) -> Unit
+    ): ExportedFile? {
+        val res = when (resolution) {
+            "1080p" -> VideoResolution.FHD_1080
+            "480p" -> VideoResolution.SD_480
+            else -> VideoResolution.HD_720
+        }
+        return exportVisualizerVideo(
+            sourceUri,
+            VisualizerVideoConfig(
+                resolution = res,
+                title = overlayText,
+                outputName = outputName
+            ),
+            onProgress
+        )
+    }
+
+    /**
+     * REAL MP3 -> MP4 export.
+     *
+     * Pipeline (three passes, each using standard Android media APIs):
+     *  1. The audio is decoded to raw PCM (honouring the trim range). This PCM is
+     *     used both as the audio track source and as the data the visualizer
+     *     reacts to, so the video genuinely follows the music.
+     *  2. Video frames are rendered with [VisualizerFrameRenderer] onto an
+     *     H.264 encoder input surface -> a video-only MP4.
+     *  3. The PCM is encoded to AAC (-> M4A), then the video and audio elementary
+     *     streams are muxed into the final MP4 containing BOTH tracks.
+     *
+     * Pass 3 is required rather than muxing the source audio track directly:
+     * MediaMuxer cannot carry an MP3 track inside MP4, which is exactly why the
+     * previous implementation failed for MP3 input (the whole point of the
+     * feature). Re-encoding to AAC produces a standards-compliant MP4.
+     *
+     * Every field of [config] (preset, aspect ratio, resolution, fps, trim,
+     * background, text, scale/position, glow, colours) is consumed here, and the
+     * same [config] + the same renderer drive the on-screen live preview.
+     */
+    suspend fun exportVisualizerVideo(
+        sourceUri: Uri,
+        config: VisualizerVideoConfig,
+        onProgress: (Int) -> Unit
     ): ExportedFile? = withContext(Dispatchers.IO) {
-        val width = if (resolution == "1080p") 1920 else 1280
-        val height = if (resolution == "1080p") 1080 else 720
+        val stamp = System.currentTimeMillis()
+        val videoOnly = File(context.cacheDir, "temp_vid_$stamp.mp4")
+        val audioOnly = File(context.cacheDir, "temp_aud_$stamp.m4a")
+        val finalFile = File(context.cacheDir, "temp_final_$stamp.mp4")
 
-        val tempFile = File(context.cacheDir, "temp_studio_${System.currentTimeMillis()}.mp4")
-        val retriever = MediaMetadataRetriever()
-        var durationUs = 15_000_000L
         try {
-            retriever.setDataSource(context, sourceUri)
-            val dStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            if (dStr != null) {
-                durationUs = dStr.toLong() * 1000L
+            // ---------- Pass 1: decode real audio to PCM (trim aware) ----------
+            val startUs = config.startMs.coerceAtLeast(0L) * 1000L
+            val endUs = if (config.endMs > config.startMs) config.endMs * 1000L else Long.MAX_VALUE
+
+            val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
+                onProgress((p * 0.20f).toInt().coerceIn(0, 20))
+            } ?: return@withContext null
+
+            val bytesPerFrame = 2 * pcm.channelCount
+            val totalAudioFrames = pcm.data.size / bytesPerFrame
+            if (totalAudioFrames <= 0) return@withContext null
+            var durationUs = totalAudioFrames.toLong() * 1_000_000L / pcm.sampleRate
+            // Bound the render so a very long track cannot produce an endless job.
+            if (durationUs > MAX_EXPORT_MS * 1000L) durationUs = MAX_EXPORT_MS * 1000L
+
+            // ---------- Pass 2: render + encode the video track ----------
+            if (!renderVideoTrack(videoOnly, config, pcm, durationUs) { p ->
+                    onProgress((20 + p * 0.60f).toInt().coerceIn(20, 80))
+                }) {
+                return@withContext null
             }
+
+            // ---------- Pass 3: encode audio + mux both tracks ----------
+            if (!encodePcmToM4a(pcm, audioOnly, bitRate = 192_000, progStart = 80, progEnd = 90, onProgress = onProgress)) {
+                return@withContext null
+            }
+
+            if (!muxVideoAndAudio(videoOnly, audioOnly, finalFile)) {
+                return@withContext null
+            }
+            onProgress(97)
+
+            return@withContext copyLocalFileToMediaStoreVideo(finalFile, config.outputName)
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Failed to get duration", e)
+            Log.e("AudioStudioProcessor", "Video export failed: ${e.message}", e)
+            return@withContext null
         } finally {
-            retriever.release()
+            // Always clean up intermediates, including on cancellation.
+            listOf(videoOnly, audioOnly, finalFile).forEach {
+                try { if (it.exists()) it.delete() } catch (_: Exception) { }
+            }
         }
+    }
 
-        // Limit video length to 10 minutes for performance
-        val maxDurationUs = 10 * 60 * 1_000_000L
-        if (durationUs > maxDurationUs) durationUs = maxDurationUs
+    /**
+     * Renders every frame with the shared renderer and encodes it to H.264 in a
+     * video-only MP4. Cancellation-safe; releases codec/surface/muxer in finally.
+     */
+    private suspend fun renderVideoTrack(
+        outFile: File,
+        config: VisualizerVideoConfig,
+        pcm: PcmAudio,
+        durationUs: Long,
+        onProgress: (Int) -> Unit
+    ): Boolean {
+        val width = config.videoWidth
+        val height = config.videoHeight
+        val fps = config.fps.coerceIn(15, 60)
 
-        val videoFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 2_000_000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, 30)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-        }
-
-        var videoEncoder: MediaCodec? = null
-        var muxer: MediaMuxer? = null
-        var audioExtractor: MediaExtractor? = null
+        var encoder: MediaCodec? = null
         var surface: android.view.Surface? = null
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
+        var videoTrack = -1
+
+        val background = loadBackgroundBitmap(config, width, height)
+        val renderer = VisualizerFrameRenderer(config)
+        val bgPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
         try {
-            videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-            videoEncoder.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            surface = videoEncoder.createInputSurface()
-            videoEncoder.start()
-
-            muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-            // Setup audio extractor
-            audioExtractor = MediaExtractor()
-            audioExtractor.setDataSource(context, sourceUri, null)
-            var audioTrackIndex = -1
-            var audioFormat: MediaFormat? = null
-            for (i in 0 until audioExtractor.trackCount) {
-                val fmt = audioExtractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
-                if (mime.startsWith("audio/")) {
-                    audioExtractor.selectTrack(i)
-                    audioTrackIndex = i
-                    audioFormat = fmt
-                    break
-                }
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(MediaFormat.KEY_BIT_RATE, config.videoBitRate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
             }
 
-            var videoMuxerTrackIndex = -1
-            var audioMuxerTrackIndex = -1
-            var muxerStarted = false
-            val bufferInfo = MediaCodec.BufferInfo()
+            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            surface = encoder.createInputSurface()
+            encoder.start()
 
-            val fps = 30
+            muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            val info = MediaCodec.BufferInfo()
             val frameDurationUs = 1_000_000L / fps
-            var currentPresentationTimeUs = 0L
+            val totalFrames = (durationUs / frameDurationUs).toInt().coerceAtLeast(1)
 
-            while (currentPresentationTimeUs < durationUs && coroutineContext.isActive) {
-                // Lock hardware canvas on Surface
+            for (frameIndex in 0 until totalFrames) {
+                if (!coroutineContext.isActive) return false
+
+                val ptsUs = frameIndex.toLong() * frameDurationUs
+
+                // --- real audio analysis for THIS frame (identical maths to the
+                // live preview's analysis table) ---
+                val (mags, wave) = frameData(pcm, ptsUs)
+                val beatEnergy = AudioSpectrum.beat(mags)
+                // Cyclic phase driven by time, modulated by real energy.
+                val beatPhase = ((ptsUs / 1_000_000f) * (0.5f + beatEnergy)) % 1f
+
                 val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     surface.lockHardwareCanvas()
                 } else {
                     surface.lockCanvas(null)
                 }
-
-                // Draw premium Dark Theme background
-                canvas.drawColor(android.graphics.Color.parseColor("#0a1128"))
-
-                // Draw pulsing/animated spectrum
-                val midY = (height / 2).toFloat()
-                val stepX = (width / 64).toFloat()
-                val path = android.graphics.Path()
-                path.moveTo(0f, midY)
-                val animPhase = (currentPresentationTimeUs.toDouble() / 1_000_000.0) * 2.0 * Math.PI
-
-                val wavePaint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.parseColor("#a855f7") // Accent Purple
-                    strokeWidth = 6f
-                    style = android.graphics.Paint.Style.STROKE
-                    isAntiAlias = true
+                try {
+                    var drewBackground = false
+                    if (background != null) {
+                        canvas.drawColor(android.graphics.Color.BLACK)
+                        canvas.drawBitmap(background, null, backgroundDestRect(background, width, height, config), bgPaint)
+                        drewBackground = true
+                    }
+                    renderer.draw(canvas, width, height, mags, wave, beatPhase, drewBackground)
+                } finally {
+                    surface.unlockCanvasAndPost(canvas)
                 }
 
-                for (j in 0..64) {
-                    val x = j * stepX
-                    val fluctuation = Math.sin((j.toFloat() / 64f) * Math.PI * 4 + animPhase).toFloat() * 120f
-                    path.lineTo(x, midY + fluctuation)
-                }
-                canvas.drawPath(path, wavePaint)
-
-                // Draw overlay texts
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.WHITE
-                    textSize = if (resolution == "1080p") 48f else 36f
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                }
-                canvas.drawText(
-                    if (overlayText.isNotEmpty()) overlayText else "Pulse Music Player AI",
-                    (width / 2).toFloat(),
-                    (height / 2 - 120).toFloat(),
-                    paint
-                )
-
-                // Intermittent watermark
-                paint.apply {
-                    color = android.graphics.Color.parseColor("#3b82f6") // Blue
-                    textSize = if (resolution == "1080p") 32f else 24f
-                }
-                canvas.drawText("Credits By A D&E SONG MUSIC", (width / 2).toFloat(), (height - 80).toFloat(), paint)
-
-                surface.unlockCanvasAndPost(canvas)
-
-                // Drain video encoder output
-                var encoderDone = false
-                while (!encoderDone) {
-                    val outputBufferId = videoEncoder.dequeueOutputBuffer(bufferInfo, 1000)
-                    if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                        encoderDone = true
-                    } else if (outputBufferId == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                        val newFormat = videoEncoder.outputFormat
-                        videoMuxerTrackIndex = muxer.addTrack(newFormat)
-                        if (audioTrackIndex != -1 && audioFormat != null) {
-                            audioMuxerTrackIndex = muxer.addTrack(audioFormat)
+                // Drain whatever the encoder has produced so far.
+                while (true) {
+                    val outIndex = encoder.dequeueOutputBuffer(info, 0)
+                    if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) break
+                    if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        if (!muxerStarted) {
+                            videoTrack = muxer.addTrack(encoder.outputFormat)
+                            muxer.start()
+                            muxerStarted = true
                         }
-                        muxer.start()
-                        muxerStarted = true
-                    } else if (outputBufferId >= 0) {
-                        val encodedData = videoEncoder.getOutputBuffer(outputBufferId)
-                        if (encodedData != null) {
-                            encodedData.position(bufferInfo.offset)
-                            encodedData.limit(bufferInfo.offset + bufferInfo.size)
-
-                            if (muxerStarted && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                                bufferInfo.presentationTimeUs = currentPresentationTimeUs
-                                muxer.writeSampleData(videoMuxerTrackIndex, encodedData, bufferInfo)
+                        continue
+                    }
+                    if (outIndex >= 0) {
+                        if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0
+                        if (info.size > 0 && muxerStarted) {
+                            val buf = encoder.getOutputBuffer(outIndex)
+                            if (buf != null) {
+                                buf.position(info.offset)
+                                buf.limit(info.offset + info.size)
+                                // Surface input timestamps come from wall-clock;
+                                // override with the deterministic frame clock.
+                                info.presentationTimeUs = ptsUs
+                                muxer.writeSampleData(videoTrack, buf, info)
                             }
                         }
-                        videoEncoder.releaseOutputBuffer(outputBufferId, false)
+                        encoder.releaseOutputBuffer(outIndex, false)
                     }
                 }
 
-                currentPresentationTimeUs += frameDurationUs
-                onProgress(((currentPresentationTimeUs.toFloat() / durationUs.toFloat()) * 80).toInt().coerceIn(0, 80))
+                onProgress(((frameIndex + 1).toFloat() / totalFrames * 100).toInt().coerceIn(0, 99))
             }
 
-            // Signal End of Stream to Encoder
-            videoEncoder.signalEndOfInputStream()
-
-            // Final video drain
-            var finalDrainDone = false
-            while (!finalDrainDone) {
-                val outputBufferId = videoEncoder.dequeueOutputBuffer(bufferInfo, 5000)
-                if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER || outputBufferId == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    finalDrainDone = true
-                } else if (outputBufferId >= 0) {
-                    val encodedData = videoEncoder.getOutputBuffer(outputBufferId)
-                    if (encodedData != null) {
-                        encodedData.position(bufferInfo.offset)
-                        encodedData.limit(bufferInfo.offset + bufferInfo.size)
-
-                        if (muxerStarted && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                            muxer.writeSampleData(videoMuxerTrackIndex, encodedData, bufferInfo)
+            // Flush the encoder.
+            encoder.signalEndOfInputStream()
+            var lastPts = totalFrames.toLong() * frameDurationUs
+            while (true) {
+                val outIndex = encoder.dequeueOutputBuffer(info, 10_000L)
+                if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) break
+                if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    if (!muxerStarted) {
+                        videoTrack = muxer.addTrack(encoder.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    }
+                    continue
+                }
+                if (outIndex >= 0) {
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0
+                    if (info.size > 0 && muxerStarted) {
+                        val buf = encoder.getOutputBuffer(outIndex)
+                        if (buf != null) {
+                            buf.position(info.offset)
+                            buf.limit(info.offset + info.size)
+                            lastPts += frameDurationUs
+                            info.presentationTimeUs = lastPts
+                            muxer.writeSampleData(videoTrack, buf, info)
                         }
                     }
-                    videoEncoder.releaseOutputBuffer(outputBufferId, false)
-                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        finalDrainDone = true
-                    }
+                    val eos = (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
+                    encoder.releaseOutputBuffer(outIndex, false)
+                    if (eos) break
                 }
             }
-
-            // Remux Audio Track sequentially
-            if (audioTrackIndex != -1 && audioMuxerTrackIndex != -1 && muxerStarted) {
-                val audioBuffer = ByteBuffer.allocate(256 * 1024)
-                val audioBufferInfo = MediaCodec.BufferInfo()
-                audioExtractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-
-                while (coroutineContext.isActive) {
-                    val sampleSize = audioExtractor.readSampleData(audioBuffer, 0)
-                    if (sampleSize < 0) break
-
-                    audioBufferInfo.offset = 0
-                    audioBufferInfo.size = sampleSize
-                    audioBufferInfo.presentationTimeUs = audioExtractor.sampleTime
-                    audioBufferInfo.flags = sanitizeFlags(audioExtractor.sampleFlags)
-
-                    muxer.writeSampleData(audioMuxerTrackIndex, audioBuffer, audioBufferInfo)
-                    audioExtractor.advance()
-
-                    onProgress((80 + (audioExtractor.sampleTime.toFloat() / durationUs.toFloat()) * 15).toInt().coerceIn(80, 95))
-                }
-            }
-
-            // Release elements safely
-            videoEncoder.stop()
-            videoEncoder.release()
-            videoEncoder = null
-
-            audioExtractor.release()
-            audioExtractor = null
-
-            if (muxerStarted) {
-                muxer.stop()
-            }
-            muxer.release()
-            muxer = null
-
-            surface.release()
-            surface = null
 
             onProgress(100)
-            delay(100)
-
-            // Save to public video directory inside MediaStore
-            return@withContext copyLocalFileToMediaStoreVideo(tempFile, outputName)
+            return muxerStarted
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Video export failed: ${e.message}", e)
-            try { videoEncoder?.release() } catch (ex: Exception) { }
-            try { audioExtractor?.release() } catch (ex: Exception) { }
-            try { muxer?.release() } catch (ex: Exception) { }
-            try { surface?.release() } catch (ex: Exception) { }
-            if (tempFile.exists()) tempFile.delete()
+            Log.e("AudioStudioProcessor", "Video render failed: " + e.message, e)
+            return false
+        } finally {
+            try { encoder?.stop() } catch (_: Exception) { }
+            try { encoder?.release() } catch (_: Exception) { }
+            try { surface?.release() } catch (_: Exception) { }
+            try { if (muxerStarted) muxer?.stop() } catch (_: Exception) { }
+            try { muxer?.release() } catch (_: Exception) { }
+            try { background?.recycle() } catch (_: Exception) { }
         }
-        return@withContext null
+    }
+
+    /** Computes the destination rect for the background image honouring crop/fit. */
+    private fun backgroundDestRect(
+        bmp: android.graphics.Bitmap,
+        width: Int,
+        height: Int,
+        config: VisualizerVideoConfig
+    ): android.graphics.Rect = VisualizerBackground.destRect(
+        bmp.width, bmp.height, width, height, config.backgroundFit
+    )
+
+    /** Loads and down-samples the optional background image. */
+    private fun loadBackgroundBitmap(
+        config: VisualizerVideoConfig,
+        width: Int,
+        height: Int
+    ): android.graphics.Bitmap? {
+        val uriStr = config.backgroundImageUri ?: return null
+        return try {
+            val uri = Uri.parse(uriStr)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                }
+                android.graphics.BitmapFactory.decodeStream(input, null, opts)
+            }
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Background image load failed: " + e.message, e)
+            null
+        }
+    }
+
+    /**
+     * Muxes a video-only MP4 and an audio-only M4A into one MP4 containing both
+     * an H.264 video track and an AAC audio track.
+     */
+    private fun muxVideoAndAudio(videoFile: File, audioFile: File, outFile: File): Boolean {
+        val videoExtractor = MediaExtractor()
+        val audioExtractor = MediaExtractor()
+        var muxer: MediaMuxer? = null
+        var started = false
+        try {
+            videoExtractor.setDataSource(videoFile.absolutePath)
+            audioExtractor.setDataSource(audioFile.absolutePath)
+
+            var videoFormat: MediaFormat? = null
+            for (i in 0 until videoExtractor.trackCount) {
+                val fmt = videoExtractor.getTrackFormat(i)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("video/")) {
+                    videoExtractor.selectTrack(i); videoFormat = fmt; break
+                }
+            }
+            var audioFormat: MediaFormat? = null
+            for (i in 0 until audioExtractor.trackCount) {
+                val fmt = audioExtractor.getTrackFormat(i)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    audioExtractor.selectTrack(i); audioFormat = fmt; break
+                }
+            }
+            if (videoFormat == null) return false
+
+            muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val vTrack = muxer.addTrack(videoFormat)
+            val aTrack = if (audioFormat != null) muxer.addTrack(audioFormat) else -1
+            muxer.start()
+            started = true
+
+            val buffer = ByteBuffer.allocate(1024 * 1024)
+            val info = MediaCodec.BufferInfo()
+
+            // Copy video samples.
+            while (true) {
+                val size = videoExtractor.readSampleData(buffer, 0)
+                if (size < 0) break
+                info.offset = 0
+                info.size = size
+                info.presentationTimeUs = videoExtractor.sampleTime
+                info.flags = sanitizeFlags(videoExtractor.sampleFlags)
+                muxer.writeSampleData(vTrack, buffer, info)
+                videoExtractor.advance()
+            }
+
+            // Copy audio samples.
+            if (aTrack >= 0) {
+                while (true) {
+                    val size = audioExtractor.readSampleData(buffer, 0)
+                    if (size < 0) break
+                    info.offset = 0
+                    info.size = size
+                    info.presentationTimeUs = audioExtractor.sampleTime
+                    info.flags = sanitizeFlags(audioExtractor.sampleFlags)
+                    muxer.writeSampleData(aTrack, buffer, info)
+                    audioExtractor.advance()
+                }
+            }
+            return true
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Final mux failed: " + e.message, e)
+            return false
+        } finally {
+            try { videoExtractor.release() } catch (_: Exception) { }
+            try { audioExtractor.release() } catch (_: Exception) { }
+            try { if (started) muxer?.stop() } catch (_: Exception) { }
+            try { muxer?.release() } catch (_: Exception) { }
+        }
     }
 
     /**
@@ -1097,6 +1195,409 @@ class AudioStudioProcessor(private val context: Context) {
             }
         }
         return null
+    }
+
+    // ---------------------------------------------------------------------
+    // Real PCM decode / encode engine
+    //
+    // All lossy-format operations funnel through here so that we never claim a
+    // conversion/merge/compression that is really just container remuxing or a
+    // byte-level concatenation.
+    // ---------------------------------------------------------------------
+
+    /** Raw signed 16-bit little-endian interleaved PCM. */
+    private class PcmAudio(
+        val data: ByteArray,
+        val sampleRate: Int,
+        val channelCount: Int
+    )
+
+    /** True when a compressed audio track can legally be muxed into MP4/M4A as-is. */
+    private fun isMp4MuxableAudio(mime: String): Boolean =
+        mime.equals("audio/mp4a-latm", ignoreCase = true)
+
+    /**
+     * Fully decodes an audio stream (optionally only a time range) to raw PCM
+     * using MediaExtractor + MediaCodec. Cancellation-aware; all native
+     * resources are released in a finally block.
+     */
+    private suspend fun decodeToPcm(
+        uri: Uri,
+        startUs: Long = 0L,
+        endUs: Long = Long.MAX_VALUE,
+        onProgress: (Int) -> Unit = {}
+    ): PcmAudio? {
+        val extractor = MediaExtractor()
+        var codec: MediaCodec? = null
+        try {
+            extractor.setDataSource(context, uri, null)
+
+            var trackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    trackIndex = i
+                    format = fmt
+                    break
+                }
+            }
+            if (trackIndex < 0 || format == null) return null
+
+            extractor.selectTrack(trackIndex)
+            val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+            val sampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            } else 44100
+            val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            } else 2
+            val trackDurationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                format.getLong(MediaFormat.KEY_DURATION)
+            } else 0L
+
+            val rangeEndUs = if (endUs == Long.MAX_VALUE) Long.MAX_VALUE else endUs
+            val rangeUs = when {
+                rangeEndUs != Long.MAX_VALUE -> (rangeEndUs - startUs).coerceAtLeast(1L)
+                trackDurationUs > 0L -> trackDurationUs
+                else -> 0L
+            }
+
+            if (startUs > 0L) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+            codec = MediaCodec.createDecoderByType(mime)
+            codec.configure(format, null, null, 0)
+            codec.start()
+
+            val info = MediaCodec.BufferInfo()
+            val out = ByteArrayOutputStream()
+            var sawInputEos = false
+            var sawOutputEos = false
+
+            while (!sawOutputEos) {
+                if (!coroutineContext.isActive) return null
+
+                if (!sawInputEos) {
+                    val inIndex = codec.dequeueInputBuffer(10_000L)
+                    if (inIndex >= 0) {
+                        val inBuf = codec.getInputBuffer(inIndex)
+                        val sampleSize = if (inBuf != null) extractor.readSampleData(inBuf, 0) else -1
+                        val sampleTime = extractor.sampleTime
+                        if (sampleSize < 0 || (rangeEndUs != Long.MAX_VALUE && sampleTime > rangeEndUs)) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            sawInputEos = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, sampleSize, sampleTime, 0)
+                            extractor.advance()
+                            if (rangeUs > 0L) {
+                                val done = (sampleTime - startUs).toFloat() / rangeUs.toFloat()
+                                onProgress((done * 100f).toInt().coerceIn(0, 99))
+                            }
+                        }
+                    }
+                }
+
+                val outIndex = codec.dequeueOutputBuffer(info, 10_000L)
+                if (outIndex >= 0) {
+                    if (info.size > 0) {
+                        val outBuf = codec.getOutputBuffer(outIndex)
+                        if (outBuf != null) {
+                            val chunk = ByteArray(info.size)
+                            outBuf.position(info.offset)
+                            outBuf.get(chunk, 0, info.size)
+                            out.write(chunk)
+                        }
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) sawOutputEos = true
+                }
+            }
+
+            onProgress(100)
+            if (out.size() == 0) return null
+            return PcmAudio(out.toByteArray(), sampleRate, channelCount)
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "PCM decode failed: " + e.message, e)
+            return null
+        } finally {
+            try { codec?.stop() } catch (_: Exception) { }
+            try { codec?.release() } catch (_: Exception) { }
+            try { extractor.release() } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * Encodes raw PCM to AAC-LC inside an MP4 container (a valid .m4a file).
+     * AAC is the one lossy audio encoder the Android platform guarantees.
+     */
+    private fun encodePcmToM4a(
+        pcm: PcmAudio,
+        tempFile: File,
+        bitRate: Int,
+        progStart: Int = 0,
+        progEnd: Int = 100,
+        onProgress: (Int) -> Unit = {}
+    ): Boolean {
+        if (pcm.data.isEmpty()) return false
+
+        var codec: MediaCodec? = null
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
+        var muxerTrack = -1
+
+        try {
+            val format = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC,
+                pcm.sampleRate,
+                pcm.channelCount
+            ).apply {
+                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+                setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
+                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 64 * 1024)
+            }
+
+            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.start()
+
+            muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            val info = MediaCodec.BufferInfo()
+            val bytesPerFrame = 2 * pcm.channelCount
+            val totalBytes = pcm.data.size
+            var inputOffset = 0
+            var presentationTimeUs = 0L
+            var sawInputEos = false
+            var sawOutputEos = false
+
+            while (!sawOutputEos) {
+                if (!sawInputEos) {
+                    val inIndex = codec.dequeueInputBuffer(10_000L)
+                    if (inIndex >= 0) {
+                        val inBuf = codec.getInputBuffer(inIndex)
+                        if (inBuf == null) {
+                            codec.queueInputBuffer(inIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            sawInputEos = true
+                        } else {
+                            inBuf.clear()
+                            val remaining = totalBytes - inputOffset
+                            // Keep chunks frame-aligned so channel interleaving stays intact.
+                            var chunk = minOf(inBuf.capacity(), remaining)
+                            chunk -= (chunk % bytesPerFrame)
+                            if (chunk <= 0) {
+                                codec.queueInputBuffer(inIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                sawInputEos = true
+                            } else {
+                                inBuf.put(pcm.data, inputOffset, chunk)
+                                codec.queueInputBuffer(inIndex, 0, chunk, presentationTimeUs, 0)
+                                inputOffset += chunk
+                                val framesQueued = inputOffset.toLong() / bytesPerFrame
+                                presentationTimeUs = framesQueued * 1_000_000L / pcm.sampleRate
+                                val ratio = inputOffset.toFloat() / totalBytes.toFloat()
+                                onProgress((progStart + ratio * (progEnd - progStart)).toInt().coerceIn(progStart, progEnd))
+                            }
+                        }
+                    }
+                }
+
+                val outIndex = codec.dequeueOutputBuffer(info, 10_000L)
+                if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    if (!muxerStarted) {
+                        muxerTrack = muxer.addTrack(codec.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    }
+                } else if (outIndex >= 0) {
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                        // Codec config is delivered to the muxer via addTrack().
+                        info.size = 0
+                    }
+                    if (info.size > 0 && muxerStarted) {
+                        val outBuf = codec.getOutputBuffer(outIndex)
+                        if (outBuf != null) {
+                            outBuf.position(info.offset)
+                            outBuf.limit(info.offset + info.size)
+                            muxer.writeSampleData(muxerTrack, outBuf, info)
+                        }
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) sawOutputEos = true
+                }
+            }
+
+            onProgress(progEnd)
+            return muxerStarted
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "AAC encode failed: " + e.message, e)
+            return false
+        } finally {
+            try { codec?.stop() } catch (_: Exception) { }
+            try { codec?.release() } catch (_: Exception) { }
+            try { if (muxerStarted) muxer?.stop() } catch (_: Exception) { }
+            try { muxer?.release() } catch (_: Exception) { }
+        }
+    }
+
+    /** Writes raw PCM out as a valid uncompressed RIFF/WAVE file. */
+    private fun writeWav(pcm: PcmAudio, tempFile: File): Boolean {
+        return try {
+            val dataSize = pcm.data.size
+            val byteRate = pcm.sampleRate * pcm.channelCount * 2
+            val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+            header.put("RIFF".toByteArray(Charsets.US_ASCII))
+            header.putInt(36 + dataSize)
+            header.put("WAVE".toByteArray(Charsets.US_ASCII))
+            header.put("fmt ".toByteArray(Charsets.US_ASCII))
+            header.putInt(16)
+            header.putShort(1) // PCM
+            header.putShort(pcm.channelCount.toShort())
+            header.putInt(pcm.sampleRate)
+            header.putInt(byteRate)
+            header.putShort((pcm.channelCount * 2).toShort())
+            header.putShort(16) // bits per sample
+            header.put("data".toByteArray(Charsets.US_ASCII))
+            header.putInt(dataSize)
+
+            FileOutputStream(tempFile).use { fos ->
+                fos.write(header.array())
+                fos.write(pcm.data)
+                fos.flush()
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "WAV write failed: " + e.message, e)
+            false
+        }
+    }
+
+    /**
+     * Linear-interpolation resampler + channel adapter. Used to normalise
+     * mismatched inputs to a single target format before merging/encoding.
+     */
+    private fun resamplePcm(pcm: PcmAudio, targetRate: Int, targetChannels: Int): ByteArray {
+        if (pcm.sampleRate == targetRate && pcm.channelCount == targetChannels) return pcm.data
+        if (pcm.data.isEmpty() || pcm.channelCount <= 0) return pcm.data
+
+        val inShorts = ShortArray(pcm.data.size / 2)
+        ByteBuffer.wrap(pcm.data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(inShorts)
+
+        val inFrames = inShorts.size / pcm.channelCount
+        if (inFrames <= 0) return pcm.data
+
+        val outFrames = (inFrames.toLong() * targetRate / pcm.sampleRate).toInt().coerceAtLeast(1)
+        val outShorts = ShortArray(outFrames * targetChannels)
+
+        for (i in 0 until outFrames) {
+            val srcPos = i.toDouble() * pcm.sampleRate / targetRate
+            val i0 = srcPos.toInt().coerceIn(0, inFrames - 1)
+            val i1 = (i0 + 1).coerceAtMost(inFrames - 1)
+            val frac = (srcPos - i0).toFloat()
+
+            for (ch in 0 until targetChannels) {
+                val srcCh = if (ch < pcm.channelCount) ch else pcm.channelCount - 1
+                val s0 = inShorts[i0 * pcm.channelCount + srcCh].toFloat()
+                val s1 = inShorts[i1 * pcm.channelCount + srcCh].toFloat()
+                val v = s0 + (s1 - s0) * frac
+                outShorts[i * targetChannels + ch] = v.coerceIn(-32768f, 32767f).toInt().toShort()
+            }
+        }
+
+        val outBytes = ByteArray(outShorts.size * 2)
+        ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(outShorts)
+        return outBytes
+    }
+
+    // ---------------------------------------------------------------------
+    // Shared audio analysis (live preview AND export use this identical code,
+    // which is what makes the preview a truthful representation of the export).
+    // ---------------------------------------------------------------------
+
+    companion object {
+        const val ANALYSIS_WINDOW = 1024
+        const val ANALYSIS_BINS = 64
+        const val WAVEFORM_POINTS = 96
+        /** Hard cap so analysis/export memory stays bounded. */
+        const val MAX_EXPORT_MS = 10 * 60 * 1000L
+    }
+
+    /**
+     * A precomputed, frame-indexed spectrum/waveform table for a track.
+     *
+     * The live preview looks frames up by playback position, so the on-screen
+     * visualizer is driven by the real decoded audio rather than a decorative
+     * animation — and without needing the RECORD_AUDIO permission that
+     * android.media.audiofx.Visualizer would demand.
+     */
+    class SpectrumTrack(
+        val fps: Int,
+        val durationMs: Long,
+        val magnitudes: Array<FloatArray>,
+        val waveforms: Array<FloatArray>
+    ) {
+        val frameCount: Int get() = magnitudes.size
+
+        /** Returns the analysis frame for a playback position in ms. */
+        fun frameAt(positionMs: Long): Int {
+            if (frameCount == 0) return 0
+            return ((positionMs * fps) / 1000L).toInt().coerceIn(0, frameCount - 1)
+        }
+    }
+
+    /** Computes the magnitude + waveform pair for one instant of PCM. */
+    private fun frameData(pcm: PcmAudio, ptsUs: Long): Pair<FloatArray, FloatArray> {
+        val sampleIndex = (ptsUs * pcm.sampleRate / 1_000_000L).toInt()
+        val byteOffset = sampleIndex * 2 * pcm.channelCount
+        val mono = AudioSpectrum.pcmWindowToMono(pcm.data, byteOffset, ANALYSIS_WINDOW, pcm.channelCount)
+        val mags = AudioSpectrum.magnitudes(mono, ANALYSIS_BINS)
+        // Decimate the window down to the shared waveform resolution.
+        val wave = FloatArray(WAVEFORM_POINTS)
+        for (i in 0 until WAVEFORM_POINTS) {
+            wave[i] = mono[(i * ANALYSIS_WINDOW / WAVEFORM_POINTS).coerceIn(0, mono.size - 1)]
+        }
+        return mags to wave
+    }
+
+    /**
+     * Decodes the track and builds the frame-indexed analysis table used by the
+     * live preview. Runs off the main thread and is cancellation aware.
+     */
+    suspend fun analyzeSpectrum(
+        sourceUri: Uri,
+        fps: Int = 30,
+        startMs: Long = 0L,
+        endMs: Long = 0L,
+        onProgress: (Int) -> Unit = {}
+    ): SpectrumTrack? = withContext(Dispatchers.IO) {
+        val startUs = startMs.coerceAtLeast(0L) * 1000L
+        val endUs = if (endMs > startMs) endMs * 1000L else Long.MAX_VALUE
+
+        val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
+            onProgress((p * 0.8f).toInt().coerceIn(0, 80))
+        } ?: return@withContext null
+
+        val safeFps = fps.coerceIn(15, 60)
+        val bytesPerFrame = 2 * pcm.channelCount
+        val totalSamples = pcm.data.size / bytesPerFrame
+        var durationMs = totalSamples.toLong() * 1000L / pcm.sampleRate
+        if (durationMs > MAX_EXPORT_MS) durationMs = MAX_EXPORT_MS
+
+        val frameDurationUs = 1_000_000L / safeFps
+        val frameCount = ((durationMs * 1000L) / frameDurationUs).toInt().coerceIn(1, 60 * 60 * safeFps)
+
+        val mags = Array(frameCount) { FloatArray(ANALYSIS_BINS) }
+        val waves = Array(frameCount) { FloatArray(WAVEFORM_POINTS) }
+
+        for (i in 0 until frameCount) {
+            if (!coroutineContext.isActive) return@withContext null
+            val (m, w) = frameData(pcm, i.toLong() * frameDurationUs)
+            mags[i] = m
+            waves[i] = w
+            if (i % 32 == 0) {
+                onProgress((80 + (i.toFloat() / frameCount) * 20f).toInt().coerceIn(80, 100))
+            }
+        }
+        onProgress(100)
+        return@withContext SpectrumTrack(safeFps, durationMs, mags, waves)
     }
 
     private fun getMimeTypeFromExtension(ext: String): String {

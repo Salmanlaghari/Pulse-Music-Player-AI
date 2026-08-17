@@ -10,6 +10,8 @@ import com.salmanlaghari.pulsemusicplayerai.core.service.AudioStudioProcessor
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -231,16 +233,29 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
     }
 
     fun exportVisualizerVideo(sourceUri: Uri, outputName: String) {
+        exportVisualizerVideo(sourceUri, VisualizerVideoConfig(outputName = outputName))
+    }
+
+    /**
+     * Real MP3 -> MP4 export driven by the same config object the live preview
+     * uses, so every selected option is reflected in the output file.
+     */
+    fun exportVisualizerVideo(sourceUri: Uri, config: VisualizerVideoConfig) {
         if (_isProcessing.value) return
         _isProcessing.value = true
         _progress.value = 0
-        _statusMessage.value = "Starting visualizer background exporter..."
+        _statusMessage.value = "Decoding audio for visualizer analysis..."
 
         activeJob = viewModelScope.launch {
             try {
-                val result = processor.exportVisualizerVideo(sourceUri, outputName) { prog ->
+                val result = processor.exportVisualizerVideo(sourceUri, config) { prog ->
                     _progress.value = prog
-                    _statusMessage.value = "Exporting MP4 Spectrum Video: $prog%"
+                    _statusMessage.value = when {
+                        prog < 20 -> "Decoding audio track: $prog%"
+                        prog < 80 -> "Rendering ${config.preset.displayName} frames (${config.videoWidth}x${config.videoHeight} @ ${config.fps}fps): $prog%"
+                        prog < 92 -> "Encoding AAC audio track: $prog%"
+                        else -> "Muxing final MP4: $prog%"
+                    }
                 }
                 _isProcessing.value = false
                 if (result != null) {
@@ -249,11 +264,60 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _showResultDialog.value = Pair(false, null)
                 }
+            } catch (e: CancellationException) {
+                _isProcessing.value = false
+                throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
                 _showResultDialog.value = Pair(false, null)
             }
         }
+    }
+
+    // --- Live preview analysis ---
+
+    private val _spectrumTrack = MutableStateFlow<AudioStudioProcessor.SpectrumTrack?>(null)
+    val spectrumTrack: StateFlow<AudioStudioProcessor.SpectrumTrack?> = _spectrumTrack.asStateFlow()
+
+    private val _isAnalyzing = MutableStateFlow(false)
+    val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
+
+    private val _analysisProgress = MutableStateFlow(0)
+    val analysisProgress: StateFlow<Int> = _analysisProgress.asStateFlow()
+
+    private var analysisJob: Job? = null
+
+    /**
+     * Precomputes the real spectrum data for the selected track so the live
+     * preview reacts to the actual audio content.
+     */
+    fun analyzeForPreview(sourceUri: Uri, fps: Int = 30) {
+        analysisJob?.cancel()
+        _spectrumTrack.value = null
+        _isAnalyzing.value = true
+        _analysisProgress.value = 0
+        analysisJob = viewModelScope.launch {
+            try {
+                val track = processor.analyzeSpectrum(sourceUri, fps) { p ->
+                    _analysisProgress.value = p
+                }
+                _spectrumTrack.value = track
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _spectrumTrack.value = null
+            } finally {
+                _isAnalyzing.value = false
+            }
+        }
+    }
+
+    fun clearPreviewAnalysis() {
+        analysisJob?.cancel()
+        analysisJob = null
+        _spectrumTrack.value = null
+        _isAnalyzing.value = false
+        _analysisProgress.value = 0
     }
 
     fun renameExport(file: ExportedFile, newName: String) {

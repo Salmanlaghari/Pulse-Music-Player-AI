@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.foundation.lazy.LazyRow
@@ -60,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +77,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.BorderStroke
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 
 // --- 1. AUDIO CONVERTER SCREEN ---
 
@@ -83,7 +92,7 @@ fun ConverterToolScreen(
     onNavigateBack: () -> Unit
 ) {
     val selectedFiles by viewModel.selectedFiles.collectAsState()
-    var targetFormat by remember { mutableStateOf(AudioFormat.MP3) }
+    var targetFormat by remember { mutableStateOf(AudioFormat.M4A) }
     var outputFileName by remember { mutableStateOf("Converted_Audio_Track") }
     var showSaveDialog by remember { mutableStateOf(false) }
 
@@ -143,10 +152,11 @@ fun ConverterToolScreen(
                 Text("Target Audio Format", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Format Selector Buttons Row Grid
-                val formats = AudioFormat.values()
+                // Only formats the Android platform can genuinely encode are
+                // offered, so no export is ever mislabelled.
+                val formats = AudioFormat.values().filter { it.encodable }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    formats.take(3).forEach { format ->
+                    formats.forEach { format ->
                         val isSelected = targetFormat == format
                         Card(
                             modifier = Modifier.weight(1f).height(50.dp).clickable { targetFormat = format },
@@ -161,22 +171,23 @@ fun ConverterToolScreen(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    formats.takeLast(3).forEach { format ->
-                        val isSelected = targetFormat == format
-                        Card(
-                            modifier = Modifier.weight(1f).height(50.dp).clickable { targetFormat = format },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(format.name, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                ) {
+                    Text(
+                        "Conversion re-encodes the audio for real (decode to PCM, then " +
+                            "encode). WAV is written as uncompressed PCM; AAC/M4A is encoded " +
+                            "with MediaCodec into an MP4 container.\n\n" +
+                            "MP3, FLAC and OGG are not listed because Android has no built-in " +
+                            "encoder for them — only decoders. Offering them would mean writing " +
+                            "an AAC stream under a false extension.",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(40.dp))
@@ -407,25 +418,126 @@ fun VideoStudioScreen(
     viewModel: AudioStudioViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val selectedFiles by viewModel.selectedFiles.collectAsState()
+    val spectrum by viewModel.spectrumTrack.collectAsState()
+    val isAnalyzing by viewModel.isAnalyzing.collectAsState()
+    val analysisProgress by viewModel.analysisProgress.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
 
-    var outputFileName by remember { mutableStateOf("${type.name}_Visual_Studio_Export") }
-    var selectedPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_BARS) }
-    var selectedBgStyle by remember { mutableStateOf("Album Art") }
-    var selectedResolution by remember { mutableStateOf("1080p") }
-    var rotateAlbumArt by remember { mutableStateOf(true) }
-    var lyricText by remember { mutableStateOf("Enjoy the premium acoustic sound...") }
-    var waveThickness by remember { mutableStateOf(4.0f) }
-    var barCount by remember { mutableStateOf(64f) }
-    var neonGlowRadius by remember { mutableStateOf(10f) }
-    var circularRadius by remember { mutableStateOf(150f) }
-    var statusCardStyle by remember { mutableStateOf("Retro Vinyl") }
+    // ---- Config state. Every one of these fields is consumed by the exporter. ----
+    var preset by remember {
+        mutableStateOf(
+            when (type) {
+                VideoStudioType.WAVEFORM -> VideoVisualizerPreset.WAVEFORM
+                VideoStudioType.SPECTRUM -> VideoVisualizerPreset.SPECTRUM_BARS
+                VideoStudioType.CIRCULAR -> VideoVisualizerPreset.CIRCULAR_SPECTRUM
+                VideoStudioType.NEON -> VideoVisualizerPreset.MIRROR_BARS
+                VideoStudioType.ALBUM_ART -> VideoVisualizerPreset.RADIAL_PULSE
+                else -> VideoVisualizerPreset.SPECTRUM_BARS
+            }
+        )
+    }
+    var aspectRatio by remember {
+        mutableStateOf(
+            when (type) {
+                VideoStudioType.STORY_9_16 -> VideoAspectRatio.RATIO_9_16
+                VideoStudioType.AUDIO_STATUS -> VideoAspectRatio.RATIO_1_1
+                else -> VideoAspectRatio.RATIO_16_9
+            }
+        )
+    }
+    var resolution by remember { mutableStateOf(VideoResolution.HD_720) }
+    var fps by remember { mutableStateOf(30) }
+    var bgStyle by remember { mutableStateOf(VideoBackgroundStyle.DARK_GRADIENT) }
+    var bgFit by remember { mutableStateOf(BackgroundFit.CROP) }
+    var bgImageUri by remember { mutableStateOf<String?>(null) }
+    var bgDim by remember { mutableStateOf(0.35f) }
+    var titleText by remember { mutableStateOf("") }
+    var artistText by remember { mutableStateOf("") }
+    var showText by remember { mutableStateOf(true) }
+    var vizScale by remember { mutableStateOf(1.0f) }
+    var vizPosY by remember { mutableStateOf(0.6f) }
+    var glow by remember { mutableStateOf(true) }
+    var trimStartMs by remember { mutableStateOf(0L) }
+    var trimEndMs by remember { mutableStateOf(0L) }
+    var outputFileName by remember { mutableStateOf("Pulse_${type.name}_Video") }
     var showSaveDialog by remember { mutableStateOf(false) }
+
+    val config = VisualizerVideoConfig(
+        preset = preset,
+        aspectRatio = aspectRatio,
+        resolution = resolution,
+        fps = fps,
+        startMs = trimStartMs,
+        endMs = trimEndMs,
+        title = titleText,
+        artist = artistText,
+        showText = showText,
+        backgroundImageUri = bgImageUri,
+        backgroundFit = bgFit,
+        backgroundStyle = bgStyle,
+        backgroundDim = bgDim,
+        visualizerScale = vizScale,
+        visualizerPositionY = vizPosY,
+        glow = glow,
+        outputName = outputFileName
+    )
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) viewModel.selectFiles(listOf(uri))
+    }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            bgImageUri = uri.toString()
+            bgStyle = VideoBackgroundStyle.DARK_GRADIENT
+        }
+    }
+
+    val sourceUri = selectedFiles.firstOrNull()
+
+    // ---- Real preview playback of the selected audio ----
+    val exoPlayer = remember {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build()
+    }
+    var isPreviewPlaying by remember { mutableStateOf(false) }
+    var positionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+
+    // Load the picked file into the preview player and kick off the real
+    // spectrum analysis that drives the visualizer.
+    LaunchedEffect(sourceUri) {
+        positionMs = 0L
+        isPreviewPlaying = false
+        if (sourceUri != null) {
+            exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(sourceUri))
+            exoPlayer.prepare()
+            viewModel.analyzeForPreview(sourceUri, fps)
+        } else {
+            exoPlayer.clearMediaItems()
+            viewModel.clearPreviewAnalysis()
+        }
+    }
+
+    // Drive the live preview clock from the real player position.
+    LaunchedEffect(isPreviewPlaying, sourceUri) {
+        while (isPreviewPlaying) {
+            positionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+            val d = exoPlayer.duration
+            if (d > 0) durationMs = d
+            kotlinx.coroutines.delay(33L)
+        }
     }
 
     Column(
@@ -442,9 +554,9 @@ fun VideoStudioScreen(
             Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        if (selectedFiles.isEmpty()) {
+        if (sourceUri == null) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Card(
                     modifier = Modifier.fillMaxWidth().height(220.dp).clickable { filePickerLauncher.launch("audio/*") },
@@ -453,205 +565,343 @@ fun VideoStudioScreen(
                     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("Select Audio Track (MP3, WAV)", fontWeight = FontWeight.Black, fontSize = 16.sp)
+                        Text("Select Audio Track (MP3, WAV, M4A)", fontWeight = FontWeight.Black, fontSize = 16.sp)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(type.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
                     }
                 }
             }
         } else {
-            val sourceUri = selectedFiles.first()
-            val name = sourceUri.lastPathSegment ?: "Selected Audio"
-
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+
+                // ---------------- LIVE PREVIEW ----------------
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                 ) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AudioFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Column {
+                        LiveVisualizerPreview(
+                            config = config,
+                            spectrum = spectrum,
+                            positionMs = positionMs + trimStartMs,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text("Studio Configurations", fontSize = 15.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                when (type) {
-                    VideoStudioType.MP3_TO_MP4, VideoStudioType.MP3_HD -> {
-                        Text("Visualizer Preset", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(VisualizerPreset.values()) { pr ->
-                                val isSelected = selectedPreset == pr
-                                Card(
-                                    modifier = Modifier.height(38.dp).clickable { selectedPreset = pr },
-                                    shape = RoundedCornerShape(19.dp),
-                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                        Text(pr.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    VideoStudioType.ALBUM_ART -> {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Rotate Album Artwork", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            IconButton(onClick = { rotateAlbumArt = !rotateAlbumArt }) {
-                                Icon(
-                                    imageVector = if (rotateAlbumArt) Icons.Default.ScreenRotation else Icons.Default.ScreenLockPortrait,
-                                    contentDescription = null, tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                    VideoStudioType.LYRICS -> {
-                        Text("Overlay Lyrics Text", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = lyricText,
-                            onValueChange = { lyricText = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3,
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                    VideoStudioType.WAVEFORM -> {
-                        Text("Wave Line Thickness (${waveThickness.toInt()}px)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Slider(
-                            value = waveThickness,
-                            onValueChange = { waveThickness = it },
-                            valueRange = 1f..12f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                    VideoStudioType.SPECTRUM -> {
-                        Text("Spectrum Columns Count (${barCount.toInt()} channels)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Slider(
-                            value = barCount,
-                            onValueChange = { barCount = it },
-                            valueRange = 16f..128f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                    VideoStudioType.NEON -> {
-                        Text("Neon Aura Blur Glow Radius (${neonGlowRadius.toInt()}dp)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Slider(
-                            value = neonGlowRadius,
-                            onValueChange = { neonGlowRadius = it },
-                            valueRange = 4f..30f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                    VideoStudioType.CIRCULAR -> {
-                        Text("Circle Baseline Radius (${circularRadius.toInt()}dp)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Slider(
-                            value = circularRadius,
-                            onValueChange = { circularRadius = it },
-                            valueRange = 50f..250f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                    VideoStudioType.AUDIO_STATUS -> {
-                        Text("Visual Theme Template", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("Retro Vinyl", "Future Glass", "Cyber Minimal").forEach { template ->
-                                val isSelected = statusCardStyle == template
-                                Card(
-                                    modifier = Modifier.weight(1f).height(44.dp).clickable { statusCardStyle = template },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Text(template, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    VideoStudioType.STORY_9_16 -> {
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))) {
-                            Text("Portrait Aspect Ratio (9:16) enabled. Perfect for Instagram Stories, TikTok, and YouTube Shorts.", fontSize = 11.sp, lineHeight = 16.sp, modifier = Modifier.padding(12.dp))
-                        }
-                    }
-                    VideoStudioType.YOUTUBE_16_9 -> {
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))) {
-                            Text("Landscape Aspect Ratio (16:9) enabled. Tailored for cinematic displays and YouTube widescreen videos.", fontSize = 11.sp, lineHeight = 16.sp, modifier = Modifier.padding(12.dp))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text("Select Video Backdrop", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Album Art", "Solid Color", "Gradient", "Image").forEach { style ->
-                        val isSelected = selectedBgStyle == style
+
+                if (isAnalyzing) {
+                    Text(
+                        "Analysing real audio spectrum… $analysisProgress%",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = analysisProgress / 100f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else if (spectrum == null) {
+                    Text(
+                        "Audio analysis unavailable for this file — preview cannot react to it.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Transport controls: these drive the real player, and the preview
+                // follows the real playback position.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (isPreviewPlaying) {
+                                exoPlayer.pause()
+                                isPreviewPlaying = false
+                            } else {
+                                exoPlayer.play()
+                                isPreviewPlaying = true
+                            }
+                        },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPreviewPlaying) "Pause preview" else "Play preview",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                    Text(formatTime(positionMs), fontSize = 11.sp)
+                    Slider(
+                        value = positionMs.toFloat(),
+                        onValueChange = {
+                            positionMs = it.toLong()
+                            exoPlayer.seekTo(it.toLong())
+                        },
+                        valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                    Text(formatTime(durationMs), fontSize = 11.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Visualizer Preset (live)", fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(VideoVisualizerPreset.values()) { pr ->
+                        val isSelected = preset == pr
                         Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clickable { selectedBgStyle = style },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            )
+                            modifier = Modifier.height(38.dp).clickable { preset = pr },
+                            shape = RoundedCornerShape(19.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(style, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                Text(pr.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                Text("Select Resolution", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Aspect Ratio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("720p (HD)", "1080p (Full HD)").forEach { res ->
-                        val isSelected = (res.startsWith("720p") && selectedResolution == "720p") || (res.startsWith("1080p") && selectedResolution == "1080p")
+                    VideoAspectRatio.values().forEach { ar ->
+                        val isSelected = aspectRatio == ar
                         Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clickable { selectedResolution = if (res.startsWith("720p")) "720p" else "1080p" },
+                            modifier = Modifier.weight(1f).height(44.dp).clickable { aspectRatio = ar },
                             shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            )
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(res, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                Text(ar.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Resolution  •  ${config.videoWidth}x${config.videoHeight}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VideoResolution.values().forEach { res ->
+                        val isSelected = resolution == res
+                        Card(
+                            modifier = Modifier.weight(1f).height(44.dp).clickable { resolution = res },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(res.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
 
-                Button(
-                    onClick = { showSaveDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Render and Export Video", fontWeight = FontWeight.Bold, color = Color.White)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(24, 30, 60).forEach { f ->
+                        val isSelected = fps == f
+                        Card(
+                            modifier = Modifier.weight(1f).height(44.dp).clickable {
+                                fps = f
+                                viewModel.analyzeForPreview(sourceUri, f)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("$f fps", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Background", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VideoBackgroundStyle.values().forEach { st ->
+                        val isSelected = bgStyle == st && bgImageUri == null
+                        Card(
+                            modifier = Modifier.weight(1f).height(44.dp).clickable {
+                                bgStyle = st
+                                bgImageUri = null
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(st.displayName, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { imagePickerLauncher.launch("image/*") },
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text(if (bgImageUri == null) "Pick Background Image" else "Change Image", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    if (bgImageUri != null) {
+                        Button(
+                            onClick = { bgImageUri = null },
+                            modifier = Modifier.height(44.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                        ) {
+                            Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                if (bgImageUri != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BackgroundFit.values().forEach { f ->
+                            val isSelected = bgFit == f
+                            Card(
+                                modifier = Modifier.weight(1f).height(40.dp).clickable { bgFit = f },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(f.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+                    Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = bgDim,
+                        onValueChange = { bgDim = it },
+                        valueRange = 0f..0.9f,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show Title / Artist Overlay", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    androidx.compose.material3.Switch(checked = showText, onCheckedChange = { showText = it })
+                }
+                if (showText) {
+                    OutlinedTextField(
+                        value = titleText,
+                        onValueChange = { titleText = it },
+                        label = { Text("Title text") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = artistText,
+                        onValueChange = { artistText = it },
+                        label = { Text("Artist text") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
+                }
+
+                Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Slider(
+                    value = vizScale,
+                    onValueChange = { vizScale = it },
+                    valueRange = 0.4f..1.6f,
+                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                )
+
+                Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Slider(
+                    value = vizPosY,
+                    onValueChange = { vizPosY = it },
+                    valueRange = 0.15f..0.9f,
+                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                )
+
+                if (durationMs > 0) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = trimStartMs.toFloat(),
+                        onValueChange = { trimStartMs = it.toLong() },
+                        valueRange = 0f..durationMs.toFloat(),
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                    Text(
+                        if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Slider(
+                        value = trimEndMs.toFloat(),
+                        onValueChange = { trimEndMs = it.toLong() },
+                        valueRange = 0f..durationMs.toFloat(),
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (isProcessing) {
+                    Text(statusMessage, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = progress / 100f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { viewModel.cancelActiveOperation() },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
+                    ) {
+                        Text("Cancel Export", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    Button(
+                        onClick = { showSaveDialog = true },
+                        enabled = spectrum != null && !isAnalyzing,
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Render and Export MP4", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(onClick = { viewModel.clearSelection() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Text("Import another audio file", color = MaterialTheme.colorScheme.primary)
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -673,9 +923,12 @@ fun VideoStudioScreen(
                 TextButton(
                     onClick = {
                         showSaveDialog = false
-                        val uri = selectedFiles.firstOrNull()
-                        if (uri != null) {
-                            viewModel.exportVisualizerVideo(uri, outputFileName)
+                        exoPlayer.pause()
+                        isPreviewPlaying = false
+                        if (sourceUri != null) {
+                            // The exact same config object that produced the
+                            // preview is handed to the exporter.
+                            viewModel.exportVisualizerVideo(sourceUri, config.copy(outputName = outputFileName))
                         }
                     }
                 ) {
