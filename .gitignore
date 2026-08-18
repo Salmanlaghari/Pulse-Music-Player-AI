@@ -65,3 +65,14 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
+# Release signing keystore (restored at CI build time from a GitHub secret;
+# never commit the raw .jks/.keystore or its passwords to the repo).
+app/keystore/
+*.keystore
+*.jks
+
+# Local CA bundle used only for sandbox TLS; never commit.
+ca-bundle.crt
+ca-system.crt
+ca-cloudflare.crt

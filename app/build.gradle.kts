@@ -20,10 +20,16 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("keystore/pulse-release.keystore")
-            storePassword = "pulseMusic2025"
-            keyAlias = "pulse-release"
-            keyPassword = "pulseMusic2025"
+            // Release signing is driven entirely by CI secrets (RELEASE_KEYSTORE_*)
+            // so a single, permanent keystore signs every release build — keeping
+            // the SHA-1/SHA-256 fingerprints stable for Play Store / Firebase / OAuth.
+            // The raw keystore file and passwords are never committed to the repo.
+            val keystoreFile = System.getenv("RELEASE_KEYSTORE_FILE")
+                ?: "keystore/pulse-release.keystore"
+            storeFile = file(keystoreFile)
+            storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "pulse-release"
+            keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
         }
     }
 
