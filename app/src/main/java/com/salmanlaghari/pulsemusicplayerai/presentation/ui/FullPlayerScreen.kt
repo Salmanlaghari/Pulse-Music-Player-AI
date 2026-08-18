@@ -307,22 +307,22 @@ fun FullPlayerScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToPrevious()
                                 },
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(72.dp)
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(52.dp))
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(62.dp))
                             }
                             IconButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.togglePlayPause()
                                 },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(88.dp)
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(100.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(46.dp)
+                                    modifier = Modifier.size(56.dp)
                                 )
                             }
                             IconButton(
@@ -330,9 +330,9 @@ fun FullPlayerScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToNext()
                                 },
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(72.dp)
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(52.dp))
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(62.dp))
                             }
                         }
                     }
@@ -772,7 +772,7 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(60.dp)
+                                modifier = Modifier.size(66.dp)
                             )
                         }
 
@@ -791,7 +791,7 @@ fun FullPlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(64.dp)
                             )
                         }
 
@@ -806,7 +806,7 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(60.dp)
+                                modifier = Modifier.size(66.dp)
                             )
                         }
 

@@ -139,7 +139,11 @@ fun AppNavigation(
                                 label = {
                                     Text(
                                         text = item.title,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.5.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
                                     )
                                 },

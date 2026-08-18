@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -37,6 +38,13 @@ import kotlin.coroutines.coroutineContext
 class AudioStudioProcessor(private val context: Context) {
 
     private val musicFolder = "PulseAudioStudio"
+
+    /**
+     * Captures the most recent, human-readable failure reason from an export so the
+     * UI can surface real diagnostics instead of a generic "Process Failed" message.
+     */
+    var lastExportError: String? = null
+        private set
 
     @IntDef(
         MediaCodec.BUFFER_FLAG_SYNC_FRAME,
@@ -654,6 +662,7 @@ class AudioStudioProcessor(private val context: Context) {
         val videoOnly = File(context.cacheDir, "temp_vid_$stamp.mp4")
         val audioOnly = File(context.cacheDir, "temp_aud_$stamp.m4a")
         val finalFile = File(context.cacheDir, "temp_final_$stamp.mp4")
+        lastExportError = null
 
         try {
             // ---------- Pass 1: decode real audio to PCM (trim aware) ----------
@@ -662,11 +671,17 @@ class AudioStudioProcessor(private val context: Context) {
 
             val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
                 onProgress((p * 0.20f).toInt().coerceIn(0, 20))
-            } ?: return@withContext null
+            } ?: run {
+                lastExportError = "Audio decode failed: the selected file could not be decoded to PCM (unsupported/empty audio track)."
+                return@withContext null
+            }
 
             val bytesPerFrame = 2 * pcm.channelCount
             val totalAudioFrames = pcm.data.size / bytesPerFrame
-            if (totalAudioFrames <= 0) return@withContext null
+            if (totalAudioFrames <= 0) {
+                lastExportError = "Decoded audio is empty (0 frames)."
+                return@withContext null
+            }
             var durationUs = totalAudioFrames.toLong() * 1_000_000L / pcm.sampleRate
             // Bound the render so a very long track cannot produce an endless job.
             if (durationUs > MAX_EXPORT_MS * 1000L) durationUs = MAX_EXPORT_MS * 1000L
@@ -675,15 +690,28 @@ class AudioStudioProcessor(private val context: Context) {
             if (!renderVideoTrack(videoOnly, config, pcm, durationUs) { p ->
                     onProgress((20 + p * 0.60f).toInt().coerceIn(20, 80))
                 }) {
+                lastExportError = lastExportError ?: "Video rendering/encoding failed (H.264 encoder or surface error — see logcat)."
                 return@withContext null
             }
 
             // ---------- Pass 3: encode audio + mux both tracks ----------
             if (!encodePcmToM4a(pcm, audioOnly, bitRate = 192_000, progStart = 80, progEnd = 90, onProgress = onProgress)) {
+                lastExportError = "AAC audio encoding failed."
                 return@withContext null
             }
 
             if (!muxVideoAndAudio(videoOnly, audioOnly, finalFile)) {
+                Log.e("AudioStudioProcessor", "MP4 mux step failed")
+                lastExportError = "Final MP4 muxing failed (could not combine video + audio tracks)."
+                return@withContext null
+            }
+            onProgress(95)
+
+            // Validate the container before reporting success. A broken MP4 must
+            // never be presented to the user as a successful export.
+            if (!validateMp4(finalFile)) {
+                Log.e("AudioStudioProcessor", "MP4 final validation failed — not reporting success")
+                lastExportError = "Exported MP4 failed validation (missing video/audio track or invalid duration)."
                 return@withContext null
             }
             onProgress(97)
@@ -713,31 +741,40 @@ class AudioStudioProcessor(private val context: Context) {
         durationUs: Long,
         onProgress: (Int) -> Unit
     ): Boolean {
-        val width = config.videoWidth
-        val height = config.videoHeight
-        val fps = config.fps.coerceIn(15, 60)
+        // Pick an encoder configuration that the device actually supports,
+        // preserving aspect ratio and falling back to safe values.
+        val plan = buildVideoEncoderFormat(config.videoWidth, config.videoHeight, config.fps, config.videoBitRate)
+        val width = plan.width
+        val height = plan.height
+        val fps = plan.fps
 
         var encoder: MediaCodec? = null
         var surface: android.view.Surface? = null
         var muxer: MediaMuxer? = null
         var muxerStarted = false
         var videoTrack = -1
+        var lastVideoPts = -1L
 
         val background = loadBackgroundBitmap(config, width, height)
         val renderer = VisualizerFrameRenderer(config)
         val bgPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
         try {
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, config.videoBitRate)
-                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            }
+            Log.d("AudioStudioProcessor", "Video encoder plan: ${width}x${height} @ ${fps}fps, bitrate=${plan.bitrate}, encoder=${plan.encoderName}")
 
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder = if (plan.encoderName != null) {
+                try {
+                    MediaCodec.createByCodecName(plan.encoderName)
+                } catch (e: Exception) {
+                    Log.w("AudioStudioProcessor", "createByCodecName failed, falling back to createEncoderByType: " + e.message)
+                    MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+                }
+            } else {
+                MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            }
+            encoder.configure(plan.format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             surface = encoder.createInputSurface()
+            Log.d("AudioStudioProcessor", "Encoder input surface created=${surface != null}")
             encoder.start()
 
             muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
@@ -758,10 +795,13 @@ class AudioStudioProcessor(private val context: Context) {
                 // Cyclic phase driven by time, modulated by real energy.
                 val beatPhase = ((ptsUs / 1_000_000f) * (0.5f + beatEnergy)) % 1f
 
-                val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    surface.lockHardwareCanvas()
-                } else {
-                    surface.lockCanvas(null)
+                // IMPORTANT: encoder input surfaces do NOT support lockHardwareCanvas
+                // (it throws UnsupportedOperationException on real devices) — the standard
+                // approach is lockCanvas(null), which is what makes the export work.
+                val canvas = lockEncoderCanvas(surface)
+                if (canvas == null) {
+                    Log.e("AudioStudioProcessor", "Failed to lock encoder surface canvas")
+                    return false
                 }
                 try {
                     var drewBackground = false
@@ -788,18 +828,21 @@ class AudioStudioProcessor(private val context: Context) {
                         continue
                     }
                     if (outIndex >= 0) {
-                        if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0
-                        if (info.size > 0 && muxerStarted) {
-                            val buf = encoder.getOutputBuffer(outIndex)
-                            if (buf != null) {
-                                buf.position(info.offset)
-                                buf.limit(info.offset + info.size)
-                                // Surface input timestamps come from wall-clock;
-                                // override with the deterministic frame clock.
-                                info.presentationTimeUs = ptsUs
-                                muxer.writeSampleData(videoTrack, buf, info)
-                            }
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0
+                    if (info.size > 0 && muxerStarted) {
+                        val buf = encoder.getOutputBuffer(outIndex)
+                        if (buf != null) {
+                            buf.position(info.offset)
+                            buf.limit(info.offset + info.size)
+                            // Surface input timestamps come from the wall clock but the
+                            // producer; override with a deterministic, strictly increasing
+                            // clock so MediaMuxer never rejects duplicate/!monotonic pts.
+                            val pts = maxOf(ptsUs, lastVideoPts + 1)
+                            lastVideoPts = pts
+                            info.presentationTimeUs = pts
+                            muxer.writeSampleData(videoTrack, buf, info)
                         }
+                    }
                         encoder.releaseOutputBuffer(outIndex, false)
                     }
                 }
@@ -809,7 +852,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             // Flush the encoder.
             encoder.signalEndOfInputStream()
-            var lastPts = totalFrames.toLong() * frameDurationUs
+            val finalFrameStep = frameDurationUs.coerceAtLeast(1L)
             while (true) {
                 if (!coroutineContext.isActive) return false
                 val outIndex = encoder.dequeueOutputBuffer(info, 10_000L)
@@ -829,8 +872,8 @@ class AudioStudioProcessor(private val context: Context) {
                         if (buf != null) {
                             buf.position(info.offset)
                             buf.limit(info.offset + info.size)
-                            lastPts += frameDurationUs
-                            info.presentationTimeUs = lastPts
+                            lastVideoPts += finalFrameStep
+                            info.presentationTimeUs = lastVideoPts
                             muxer.writeSampleData(videoTrack, buf, info)
                         }
                     }
@@ -855,13 +898,174 @@ class AudioStudioProcessor(private val context: Context) {
         }
     }
 
+    /**
+     * Inspects the device's H.264 encoders and returns a [MediaFormat] whose
+     * width/height/frame-rate/bitrate/profile/level are guaranteed to be within
+     * the hardware's capabilities, falling back to safe values when the requested
+     * resolution or FPS is unsupported. The aspect ratio of the requested frame
+     * is preserved by scaling both dimensions by the same factor.
+     */
+    private fun buildVideoEncoderFormat(
+        requestedW: Int,
+        requestedH: Int,
+        requestedFps: Int,
+        requestedBitrate: Int
+    ): EncoderPlan {
+        var w = requestedW.coerceAtLeast(2)
+        var h = requestedH.coerceAtLeast(2)
+        var fps = requestedFps.coerceIn(15, 60)
+        var bitrate = requestedBitrate.coerceAtLeast(500_000)
+        var encoderName: String? = null
+        var prof: Int? = null
+        var lvl: Int? = null
+
+        try {
+            val list = MediaCodecList(MediaCodecList.ALL_CODECS)
+            for (info in list.codecInfos) {
+                if (!info.isEncoder) continue
+                if (!info.supportedTypes.contains(MediaFormat.MIMETYPE_VIDEO_AVC)) continue
+                val caps = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
+                encoderName = info.name
+
+                val vc = caps.videoCapabilities
+                val maxW = vc.supportedWidths.upper
+                val maxH = vc.supportedHeights.upper
+                val minW = vc.supportedWidths.lower.coerceAtLeast(2)
+                val minH = vc.supportedHeights.lower.coerceAtLeast(2)
+                val alignW = vc.widthAlignment.coerceAtLeast(1)
+                val alignH = vc.heightAlignment.coerceAtLeast(1)
+
+                // Preserve aspect ratio by scaling both dimensions equally.
+                val scale = minOf(1f, maxW.toFloat() / requestedW, maxH.toFloat() / requestedH)
+                w = ((requestedW * scale) / alignW).toInt() * alignW
+                h = ((requestedH * scale) / alignH).toInt() * alignH
+                w = w.coerceIn(minW, maxW)
+                h = h.coerceIn(minH, maxH)
+
+                val fpsRange = vc.supportedFrameRates
+                if (fpsRange.upper < fps) fps = fpsRange.upper.toInt().coerceAtLeast(15)
+                val brRange = vc.bitrateRange
+                bitrate = bitrate.coerceIn(brRange.lower, brRange.upper)
+
+                // Select a widely supported profile/level only if this exact encoder
+                // advertises it, so configure() can never reject our request.
+                val candidates = listOf(
+                    android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileHigh to android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31,
+                    android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileMain to android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31,
+                    android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline to android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31
+                )
+                for ((p, l) in candidates) {
+                    if (caps.profileLevels.any { it.profile == p && it.level >= l }) {
+                        prof = p
+                        lvl = l
+                        break
+                    }
+                }
+                break
+            }
+        } catch (e: Exception) {
+            Log.w("AudioStudioProcessor", "Encoder capability probe failed, using requested values: " + e.message)
+        }
+
+        if (w <= 0 || h <= 0) { w = 320; h = 240 }
+        w = (w / 2) * 2
+        h = (h / 2) * 2
+
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            if (prof != null && lvl != null) {
+                setInteger(MediaFormat.KEY_PROFILE, prof)
+                setInteger(MediaFormat.KEY_LEVEL, lvl)
+            }
+        }
+
+        return EncoderPlan(format, w, h, fps, bitrate, encoderName)
+    }
+
+    private data class EncoderPlan(
+        val format: MediaFormat,
+        val width: Int,
+        val height: Int,
+        val fps: Int,
+        val bitrate: Int,
+        val encoderName: String?
+    )
+
+    /**
+     * Locks the encoder input surface for drawing.
+     *
+     * We deliberately use [android.view.Surface.lockCanvas] and NEVER
+     * [android.view.Surface.lockHardwareCanvas]: the latter throws
+     * UnsupportedOperationException on real MediaCodec encoder surfaces and was the
+     * root cause of the "Process Failed" MP4 export crash.
+     */
+    private fun lockEncoderCanvas(surface: android.view.Surface): android.graphics.Canvas? {
+        return try {
+            surface.lockCanvas(null)
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "lockCanvas on encoder surface failed: " + e.message, e)
+            null
+        }
+    }
+
+    /**
+     * Validates the finished MP4: the file must exist, be non-empty, and contain
+     * both a video track and an audio track with a positive duration. Returns
+     * false (with diagnostics) if the export produced an invalid container so we
+     * never report success for a broken file.
+     */
+    private fun validateMp4(file: File): Boolean {
+        if (!file.exists()) {
+            Log.e("AudioStudioProcessor", "MP4 validation FAILED: file does not exist at ${file.absolutePath}")
+            return false
+        }
+        if (file.length() == 0L) {
+            Log.e("AudioStudioProcessor", "MP4 validation FAILED: file is empty (0 bytes)")
+            return false
+        }
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(file.absolutePath)
+            var hasVideo = false
+            var hasAudio = false
+            var durationUs = 0L
+            for (i in 0 until extractor.trackCount) {
+                val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("video/")) hasVideo = true
+                else if (mime.startsWith("audio/")) hasAudio = true
+            }
+            if (extractor.trackCount > 0) {
+                val f = extractor.getTrackFormat(0)
+                if (f.containsKey(MediaFormat.KEY_DURATION)) durationUs = f.getLong(MediaFormat.KEY_DURATION)
+            }
+            Log.d("AudioStudioProcessor", "MP4 validation: size=${file.length()}, tracks=${extractor.trackCount}, video=$hasVideo, audio=$hasAudio, durationUs=$durationUs")
+            if (!hasVideo || !hasAudio) {
+                Log.e("AudioStudioProcessor", "MP4 validation FAILED: missing track (video=$hasVideo, audio=$hasAudio)")
+                false
+            } else if (durationUs <= 0L) {
+                Log.e("AudioStudioProcessor", "MP4 validation FAILED: non-positive duration ($durationUs)")
+                false
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "MP4 validation FAILED with exception: " + e.message, e)
+            false
+        } finally {
+            try { extractor.release() } catch (_: Exception) { }
+        }
+    }
+
     /** Computes the destination rect for the background image honouring crop/fit. */
     private fun backgroundDestRect(
         bmp: android.graphics.Bitmap,
         width: Int,
         height: Int,
         config: VisualizerVideoConfig
-    ): android.graphics.Rect = VisualizerBackground.destRect(
+    ): android.graphics.RectF = VisualizerBackground.destRect(
         bmp.width, bmp.height, width, height, config.backgroundFit
     )
 
