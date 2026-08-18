@@ -18,6 +18,7 @@ import com.salmanlaghari.pulsemusicplayerai.core.service.AudioSpectrum
 import com.salmanlaghari.pulsemusicplayerai.core.service.AudioStudioProcessor
 import com.salmanlaghari.pulsemusicplayerai.core.service.VisualizerBackground
 import com.salmanlaghari.pulsemusicplayerai.core.service.VisualizerFrameRenderer
+import com.salmanlaghari.pulsemusicplayerai.core.service.WatermarkAssets
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 
 /**
@@ -45,7 +46,10 @@ fun LiveVisualizerPreview(
 
     // Renderer instance is recreated whenever the config changes so preview
     // output always reflects the current selections.
-    val renderer = remember(config) { VisualizerFrameRenderer(config) }
+    val watermark: Bitmap? = remember(config.watermarkEnabled) {
+        if (config.watermarkEnabled) WatermarkAssets.loadPulseWatermark(context) else null
+    }
+    val renderer = remember(config, watermark != null) { VisualizerFrameRenderer(config, watermark) }
 
     val background: Bitmap? = remember(config.backgroundImageUri) {
         val uriStr = config.backgroundImageUri

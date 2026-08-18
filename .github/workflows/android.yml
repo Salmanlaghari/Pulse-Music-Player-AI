@@ -1,4 +1,4 @@
-name: Android Automated Build
+name: Build & Export Pipeline
 
 on:
   push:
@@ -9,9 +9,14 @@ on:
     branches:
       - main
 
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: build-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build & Verify Android App
+    name: Build 4 artifacts (Debug/Release × APK/AAB)
     runs-on: ubuntu-latest
 
     steps:
@@ -24,38 +29,77 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      # Cache Gradle + the build cache so all four build tasks reuse work and we
+      # don't quadruple total CI time.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      # Install the Android SDK (platform + build-tools) for the compileSdk used
+      # by the module, and accept licenses.
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Build Release APK (release-signed)
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Rename and Prepare APKs
+      - name: Install SDK packages & accept licenses
         run: |
-          mkdir -p build-apks
-          cp app/build/outputs/apk/debug/app-debug.apk build-apks/Pulse-Music-Player-AI-Debug.apk
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk build-apks/Pulse-Music-Player-AI-Release.apk
-          else
-            cp app/build/outputs/apk/release/app-release-unsigned.apk build-apks/Pulse-Music-Player-AI-Release.apk
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          sdkmanager --version
+
+      # Safety net: if a release keystore is ever missing, generate one so the
+      # Release build is genuinely signed (NOT debug-signed) instead of failing.
+      # NOTE: this is a CI-generated dev keystore — rotate to a real Play upload
+      # key before publishing to the Play Store.
+      - name: Ensure release keystore exists
+        run: |
+          if [ ! -f app/keystore/pulse-release.keystore ]; then
+            mkdir -p app/keystore
+            keytool -genkeypair -v \
+              -keystore app/keystore/pulse-release.keystore \
+              -alias pulse-release -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass pulseMusic2025 -keypass pulseMusic2025 \
+              -dname "CN=Pulse Music Player, OU=Dev, O=Pulse, L=NA, S=NA, C=US"
           fi
 
-      - name: Upload Debug APK Artifact
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      # One Gradle invocation builds all four artifacts, reusing the Gradle/build
+      # cache across tasks in this single job.
+      - name: Build Debug APK / Debug AAB / Release APK / Release AAB
+        run: ./gradlew assembleDebug bundleDebug assembleRelease bundleRelease --no-daemon
+
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: Pulse-Music-Player-AI-Debug
-          path: build-apks/Pulse-Music-Player-AI-Debug.apk
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Upload Release APK Artifact
+      - name: Upload Debug AAB
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: Pulse-Music-Player-AI-Release
-          path: build-apks/Pulse-Music-Player-AI-Release.apk
+          name: app-debug-aab
+          path: app/build/outputs/bundle/debug/*.aab
+          if-no-files-found: error
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error

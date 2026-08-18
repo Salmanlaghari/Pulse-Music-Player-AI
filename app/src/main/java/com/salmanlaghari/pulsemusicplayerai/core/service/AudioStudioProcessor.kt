@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
@@ -686,6 +687,12 @@ class AudioStudioProcessor(private val context: Context) {
             // Bound the render so a very long track cannot produce an endless job.
             if (durationUs > MAX_EXPORT_MS * 1000L) durationUs = MAX_EXPORT_MS * 1000L
 
+            // If a built-in background track is selected, layer it UNDER the source
+            // audio at a reduced gain. The visualizer keeps reacting to the source
+            // audio (so the on-screen preview stays truthful); only the output audio
+            // track is the mix.
+            val audioPcm = mixBackgroundTrack(pcm, config) ?: pcm
+
             // ---------- Pass 2: render + encode the video track ----------
             if (!renderVideoTrack(videoOnly, config, pcm, durationUs) { p ->
                     onProgress((20 + p * 0.60f).toInt().coerceIn(20, 80))
@@ -695,7 +702,7 @@ class AudioStudioProcessor(private val context: Context) {
             }
 
             // ---------- Pass 3: encode audio + mux both tracks ----------
-            if (!encodePcmToM4a(pcm, audioOnly, bitRate = 192_000, progStart = 80, progEnd = 90, onProgress = onProgress)) {
+            if (!encodePcmToM4a(audioPcm, audioOnly, bitRate = 192_000, progStart = 80, progEnd = 90, onProgress = onProgress)) {
                 lastExportError = "AAC audio encoding failed."
                 return@withContext null
             }
@@ -756,7 +763,9 @@ class AudioStudioProcessor(private val context: Context) {
         var lastVideoPts = -1L
 
         val background = loadBackgroundBitmap(config, width, height)
-        val renderer = VisualizerFrameRenderer(config)
+        // High-res Pulse logo burned into the frame (recycled in finally).
+        val watermark = if (config.watermarkEnabled) WatermarkAssets.loadPulseWatermark(context) else null
+        val renderer = VisualizerFrameRenderer(config, watermark)
         val bgPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
         try {
@@ -895,6 +904,7 @@ class AudioStudioProcessor(private val context: Context) {
             try { if (muxerStarted) muxer?.stop() } catch (_: Exception) { }
             try { muxer?.release() } catch (_: Exception) { }
             try { background?.recycle() } catch (_: Exception) { }
+            try { watermark?.recycle() } catch (_: Exception) { }
         }
     }
 
@@ -1550,6 +1560,134 @@ class AudioStudioProcessor(private val context: Context) {
             try { extractor.release() } catch (_: Exception) { }
         }
     }
+
+    /**
+     * Decodes a bundled raw resource (e.g. a built-in background music WAV under
+     * res/raw) to PCM using the same MediaCodec pipeline as [decodeToPcm]. Used
+     * to layer a curated background track under the user's audio during export.
+     */
+    private suspend fun decodeRawResourceToPcm(resId: Int): PcmAudio? {
+        val afd = try {
+            context.resources.openRawResourceFd(resId)
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Raw resource open failed: " + e.message, e)
+            return null
+        } ?: return null
+        val extractor = MediaExtractor()
+        var codec: MediaCodec? = null
+        try {
+            extractor.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            var trackIndex = -1
+            var format: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    trackIndex = i
+                    format = fmt
+                    break
+                }
+            }
+            if (trackIndex < 0 || format == null) return null
+            extractor.selectTrack(trackIndex)
+            val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+            val sampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            } else 44100
+            val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            } else 2
+
+            codec = MediaCodec.createDecoderByType(mime)
+            codec.configure(format, null, null, 0)
+            codec.start()
+
+            val info = MediaCodec.BufferInfo()
+            val out = ByteArrayOutputStream()
+            var sawInputEos = false
+            var sawOutputEos = false
+
+            while (!sawOutputEos) {
+                if (!coroutineContext.isActive) return null
+                if (!sawInputEos) {
+                    val inIndex = codec.dequeueInputBuffer(10_000L)
+                    if (inIndex >= 0) {
+                        val inBuf = codec.getInputBuffer(inIndex)
+                        val sampleSize = if (inBuf != null) extractor.readSampleData(inBuf, 0) else -1
+                        if (sampleSize < 0) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            sawInputEos = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+                val outIndex = codec.dequeueOutputBuffer(info, 10_000L)
+                if (outIndex >= 0) {
+                    if (info.size > 0) {
+                        val outBuf = codec.getOutputBuffer(outIndex)
+                        if (outBuf != null) {
+                            val chunk = ByteArray(info.size)
+                            outBuf.position(info.offset)
+                            outBuf.get(chunk, 0, info.size)
+                            out.write(chunk)
+                        }
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) sawOutputEos = true
+                }
+            }
+            if (out.size() == 0) return null
+            return PcmAudio(out.toByteArray(), sampleRate, channelCount)
+        } catch (e: Exception) {
+            Log.e("AudioStudioProcessor", "Raw PCM decode failed: " + e.message, e)
+            return null
+        } finally {
+            try { codec?.stop() } catch (_: Exception) { }
+            try { codec?.release() } catch (_: Exception) { }
+            try { extractor.release() } catch (_: Exception) { }
+            try { afd.close() } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * Mixes a built-in background track under the source audio.
+     *
+     * The background PCM is resampled to the source's sample rate / channel count,
+     * looped to exactly match the source length, and added at [config.backgroundTrackVolume]
+     * gain (so the user's track remains clearly on top). Returns null when no
+     * background track is selected or it cannot be decoded — in which case the
+     * caller falls back to the source audio only (original behaviour).
+     */
+    private suspend fun mixBackgroundTrack(source: PcmAudio, config: VisualizerVideoConfig): PcmAudio? {
+        val resName = config.backgroundTrackResName ?: return null
+        if (resName == BuiltInBackgroundTracks.NONE) return null
+        val resId = try {
+            context.resources.getIdentifier(resName, "raw", context.packageName)
+        } catch (e: Exception) { 0 }
+        if (resId == 0) return null
+        val bg = decodeRawResourceToPcm(resId) ?: return null
+
+        val bgMatched = if (bg.sampleRate != source.sampleRate || bg.channelCount != source.channelCount) {
+            PcmAudio(resamplePcm(bg, source.sampleRate, source.channelCount), source.sampleRate, source.channelCount)
+        } else bg
+
+        val gain = config.backgroundTrackVolume.coerceIn(0f, 1f)
+        val out = ByteArray(source.data.size)
+        val srcShorts = ByteBuffer.wrap(source.data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val bgShorts = ByteBuffer.wrap(bgMatched.data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val outShorts = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val bgSamples = bgShorts.capacity()
+        val n = minOf(outShorts.capacity(), srcShorts.capacity())
+        for (i in 0 until n) {
+            val s = srcShorts.get(i).toInt()
+            val b = if (bgSamples > 0) bgShorts.get(i % bgSamples).toInt() else 0
+            val mixed = (s + (b * gain)).toInt().coerceIn(-32768, 32767)
+            outShorts.put(i, mixed.toShort())
+        }
+        return PcmAudio(out, source.sampleRate, source.channelCount)
+    }
+
 
     /**
      * Encodes raw PCM to AAC-LC inside an MP4 container (a valid .m4a file).

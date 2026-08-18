@@ -145,6 +145,19 @@ data class VisualizerVideoConfig(
     /** Vertical anchor of the visualizer inside the frame (0f = top, 1f = bottom). */
     val visualizerPositionY: Float = 0.6f,
     val glow: Boolean = true,
+    /**
+     * Built-in background music track (a raw resource entry name under res/raw)
+     * that is layered UNDER the source audio at [backgroundTrackVolume]. Null means
+     * "source audio only" (the original behaviour) — the default.
+     */
+    val backgroundTrackResName: String? = null,
+    /** Mix gain (0f..1f) applied to the built-in background track. */
+    val backgroundTrackVolume: Float = 0.35f,
+    /**
+     * Burn the Pulse Music Player logo as a semi-transparent watermark into the
+     * exported MP4. Default ON; users can disable it for a clean export.
+     */
+    val watermarkEnabled: Boolean = true,
     val outputName: String = "PulseVisualizer"
 ) {
     /**
