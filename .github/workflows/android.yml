@@ -31,8 +31,16 @@ jobs:
 
       # Cache Gradle + the build cache so all four build tasks reuse work and we
       # don't quadruple total CI time.
+      #
+      # Use the current, non-deprecated setup-gradle action (v3 had a broken
+      # cache-restore path that returned HTTP 400, so the dependency cache never
+      # restored and every run re-downloaded everything from Maven Central /
+      # Google's Maven repo -> HTTP 429 rate limits). v4's built-in caching
+      # stores GRADLE_USER_HOME (~/.gradle/caches + ~/.gradle/wrapper) and is
+      # enabled by default. We do NOT set cache-read-only so push builds save
+      # the cache for the next run to reuse.
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
@@ -64,13 +72,41 @@ jobs:
               -dname "CN=Pulse Music Player, OU=Dev, O=Pulse, L=NA, S=NA, C=US"
           fi
 
+      # Gradle does not auto-retry HTTP 429s, so wrap the invocation in a small
+      # retry loop as a pragmatic safety net (caching above is the real fix).
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: |
+          retry() {
+            local attempt=1 max=3
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::Gradle failed after $max attempts"
+                return 1
+              fi
+              echo "::warning::Attempt $attempt failed (possible transient 429/network); retrying in 20s..."
+              attempt=$((attempt + 1))
+              sleep 20
+            done
+          }
+          retry ./gradlew testDebugUnitTest --no-daemon
 
       # One Gradle invocation builds all four artifacts, reusing the Gradle/build
       # cache across tasks in this single job.
       - name: Build Debug APK / Debug AAB / Release APK / Release AAB
-        run: ./gradlew assembleDebug bundleDebug assembleRelease bundleRelease --no-daemon
+        run: |
+          retry() {
+            local attempt=1 max=3
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::Gradle failed after $max attempts"
+                return 1
+              fi
+              echo "::warning::Attempt $attempt failed (possible transient 429/network); retrying in 20s..."
+              attempt=$((attempt + 1))
+              sleep 20
+            done
+          }
+          retry ./gradlew assembleDebug bundleDebug assembleRelease bundleRelease --no-daemon
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
