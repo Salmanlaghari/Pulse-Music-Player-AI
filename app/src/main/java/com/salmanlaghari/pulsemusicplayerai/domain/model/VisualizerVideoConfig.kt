@@ -7,13 +7,87 @@ package com.salmanlaghari.pulsemusicplayerai.domain.model
  * [com.salmanlaghari.pulsemusicplayerai.core.service.VisualizerFrameRenderer]
  * and every one of them is driven by the real audio spectrum/waveform data.
  */
-enum class VideoVisualizerPreset(val displayName: String, val description: String) {
-    SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from a baseline."),
-    CIRCULAR_SPECTRUM("Circular Spectrum", "Spectrum bars radiating outward around a centre ring."),
-    WAVEFORM("Waveform", "The raw audio waveform drawn as a continuous line."),
-    RADIAL_PULSE("Radial Pulse", "Concentric rings that expand with the low-frequency energy."),
-    PARTICLE_BEAT("Particle Beat", "Particles pushed outward by detected beats."),
-    MIRROR_BARS("Mirror Bars", "Spectrum bars mirrored around the horizontal centre line.")
+/**
+ * Every preset maps to a genuinely different drawing routine in
+ * [com.salmanlaghari.pulsemusicplayerai.core.service.VisualizerFrameRenderer]
+ * and is driven by the real audio spectrum/waveform data. The names intentionally
+ * mirror the "Playing Song" visualizers so the same looks are available for export.
+ */
+enum class VideoVisualizerPreset(
+    val displayName: String,
+    val description: String,
+    val category: String
+) {
+    // ---------- BARS ----------
+    SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from a baseline.", "Bars"),
+    MIRROR_BARS("Mirror Bars", "Spectrum bars mirrored around the horizontal centre line.", "Bars"),
+    NEON_BARS("Neon Bars", "Vibrant neon bars pulsing from top and bottom baselines.", "Bars"),
+    FLAME_SPECTRUM("Flame Spectrum", "Rising red-to-yellow bars resembling flames.", "Bars"),
+    INFINITY_BARS("Infinity Bars", "Bars expanding from the centre horizon to both sides.", "Bars"),
+    EXTREME_SPECTRUM_X("Extreme Spectrum X", "Dual-ended spectrum cross expanding on beats.", "Bars"),
+    LINEAR_BARS("Linear Bars", "Clean equalizer bars standing on a bottom baseline.", "Bars"),
+    DUAL_ENDED_BARS("Dual Ended Bars", "Bars growing outward from the centre line.", "Bars"),
+    RAINBOW_BARS("Rainbow Bars", "Full-spectrum coloured bars on a baseline.", "Bars"),
+    GLOW_BARS("Glow Bars", "Bottom bars with a heavy neon glow.", "Bars"),
+    PEAK_BARS("Peak Bars", "Bottom bars topped with bright peak caps.", "Bars"),
+    THICK_BARS("Thick Bars", "Bold thick equalizer bars.", "Bars"),
+
+    // ---------- CIRCULAR ----------
+    CIRCULAR_SPECTRUM("Circular Spectrum", "Spectrum bars radiating outward around a centre ring.", "Circular"),
+    RAINBOW_RING("Rainbow Ring", "A full-spectrum ring of dots pulsating radially.", "Circular"),
+    GALAXY_RING("Galaxy Ring", "A rotating ring of particles orbiting on bass drops.", "Circular"),
+    SPIRAL_GALAXY("Spiral Galaxy", "A multi-arm spiral of glowing cosmic dust.", "Circular"),
+    RADIAL_DOTS("Radial Dots", "Dots radiating outward from the centre.", "Circular"),
+    FUTURE_PULSE("Future Pulse", "An advanced circular telemetry pulse indicator ring.", "Circular"),
+    ORBITAL_SR("Orbital Ring", "Planetary rings revolving with custom tilt.", "Circular"),
+    PULSE_RING("Pulse Ring", "A single ring scaling with the acoustic beat.", "Circular"),
+    CONCENTRIC_DOTS("Concentric Dots", "Dots arranged in concentric rings.", "Circular"),
+    WHEEL_SPECTRUM("Wheel Spectrum", "Spoked wheel of spectrum bars.", "Circular"),
+
+    // ---------- WAVE ----------
+    WAVEFORM("Waveform", "The raw audio waveform drawn as a continuous line.", "Wave"),
+    DUAL_WAVE("Dual Wave", "Two mirrored waveform lines.", "Wave"),
+    MULTI_WAVE("Multi Wave", "Several layered waveform lines.", "Wave"),
+    MIRRORED_WAVE("Mirrored Wave", "Left-to-right perfectly mirrored wave.", "Wave"),
+    FILLED_WAVE("Filled Wave", "A waveform filled with colour underneath.", "Wave"),
+    RIBBON_WAVE("Sound Ribbon", "A smooth bezier ribbon weaving across the screen.", "Wave"),
+    STEP_WAVE("Step Wave", "An 8-bit stepped digital waveform.", "Wave"),
+    SMOOTH_WAVE("Smooth Wave", "A smooth filled waveform area.", "Wave"),
+    CROSS_WAVE("Cross Wave", "Two crossing waveform lines.", "Wave"),
+    ECHO_WAVE("Echo Wave", "Trailing echo waveform lines.", "Wave"),
+
+    // ---------- PARTICLE ----------
+    PARTICLE_BEAT("Particle Beat", "Particles pushed outward by detected beats.", "Particle"),
+    PARTICLE_ORB("Particle Orb", "A central glowing orb surrounded by orbiting particles.", "Particle"),
+    STARFIELD("Starfield", "Stars moving outward from the centre on audio.", "Particle"),
+    QUANTUM_CLOUD("Quantum Cloud", "A cloud of high-velocity subatomic particles.", "Particle"),
+    FIREWORKS("Fireworks", "Explosive firework bursts on beats.", "Particle"),
+    METEOR_SHOWER("Meteor Shower", "Diagonal meteor streaks flashing on transients.", "Particle"),
+    SNOWFALL("Snowfall", "Delicate snowflakes drifting on the beat.", "Particle"),
+    COLOR_BURST("Color Burst", "Explosive colour particle bursts from centre.", "Particle"),
+    ORBIT_PARTICLES("Orbit Particles", "Particles orbiting the centre on elliptical paths.", "Particle"),
+    GALAXY_CLOUD("Galaxy Cloud", "A rotating cloud of glowing particles.", "Particle"),
+
+    // ---------- GEOMETRIC ----------
+    HEXAGON_MESH("Hexagon Mesh", "A structural grid of glowing hexagons.", "Geometric"),
+    CRYSTAL_MESH("Crystal Mesh", "Interconnected glowing crystal nodes.", "Geometric"),
+    ISOMETRIC_GRID("Isometric Grid", "Cubes in isometric projection scaling with frequency.", "Geometric"),
+    DOUBLE_HELIX("Double Helix", "Two intertwined rotating waves forming a helix.", "Geometric"),
+    KALEIDOSCOPE("Kaleidoscope", "Symmetric vectors mirrored around a rotating origin.", "Geometric"),
+    PRISM("Prism", "Light refraction vectors splitting into rainbow colours.", "Geometric"),
+    DIAMOND_GLOW("Diamond Glow", "Nested glowing diamonds scaling with beats.", "Geometric"),
+    LASER_BEAMS("Laser Beams", "Sharp laser rays projecting from the centre.", "Geometric"),
+    INFINITY_LOOP("Infinity Loop", "An overlaid rotating infinity loop.", "Geometric"),
+    FREQUENCY_LINES("Frequency Lines", "Clean overlaid sine-wave indicator bands.", "Geometric"),
+    TUNNEL_WARP("Tunnel Warp", "Concentric squares zooming outward into a tunnel.", "Geometric"),
+
+    // ---------- MINIMAL ----------
+    LINE_SPECTRUM("Line Spectrum", "Thin spectrum lines on a clean baseline.", "Minimal"),
+    DOT_SPECTRUM("Dot Spectrum", "Dots rising on a baseline.", "Minimal"),
+    PULSE_LINE("Pulse Line", "A single horizontal pulse line.", "Minimal"),
+    MINIMAL_BARS("Minimal Bars", "Thin minimal equalizer bars.", "Minimal"),
+    EQUALIZER_DOTS("Equalizer Dots", "Vertical columns of equializer dots.", "Minimal"),
+    TICK_SPECTRUM("Tick Spectrum", "Spectrum drawn as vertical ticks.", "Minimal")
 }
 
 enum class VideoAspectRatio(val displayName: String, val widthRatio: Int, val heightRatio: Int) {

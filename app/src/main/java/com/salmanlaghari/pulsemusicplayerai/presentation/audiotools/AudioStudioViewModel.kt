@@ -44,6 +44,10 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
     private val _showResultDialog = MutableStateFlow<Pair<Boolean, ExportedFile?>?>(null) // (Success, File)
     val showResultDialog: StateFlow<Pair<Boolean, ExportedFile?>?> = _showResultDialog.asStateFlow()
 
+    /** Holds the detailed failure reason for the last export (or null on success). */
+    private val _exportError = MutableStateFlow<String?>(null)
+    val exportError: StateFlow<String?> = _exportError.asStateFlow()
+
     init {
         loadRecentExports()
     }
@@ -72,6 +76,7 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
 
     fun closeResultDialog() {
         _showResultDialog.value = null
+        _exportError.value = null
     }
 
     // --- Core Operations ---
@@ -271,9 +276,12 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 }
                 _isProcessing.value = false
                 if (result != null) {
+                    _exportError.value = null
                     _showResultDialog.value = Pair(true, result)
                     loadRecentExports()
                 } else {
+                    _exportError.value = processor.lastExportError
+                        ?: "Export failed before completion. Check the audio file and device codec support."
                     _showResultDialog.value = Pair(false, null)
                 }
             } catch (e: CancellationException) {
@@ -281,6 +289,7 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 _isProcessing.value = false
+                _exportError.value = e.message ?: "Unexpected export error."
                 _showResultDialog.value = Pair(false, null)
             }
         }

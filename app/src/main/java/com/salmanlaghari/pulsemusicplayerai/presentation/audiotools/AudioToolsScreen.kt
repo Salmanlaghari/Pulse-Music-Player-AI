@@ -107,6 +107,7 @@ fun AudioToolsScreen() {
     val progress by studioViewModel.progress.collectAsState()
     val statusMessage by studioViewModel.statusMessage.collectAsState()
     val showResultDialog by studioViewModel.showResultDialog.collectAsState()
+    val exportError by studioViewModel.exportError.collectAsState()
 
     // Handle system back press
     BackHandler(enabled = currentScreen != StudioScreen.MAIN_LIST) {
@@ -324,7 +325,11 @@ fun AudioToolsScreen() {
                         }
                     } else {
                         Text(
-                            text = "An unexpected error occurred while processing your audio track. Please verify input details or permission scopes.",
+                            text = if (exportError.isNullOrBlank()) {
+                                "An unexpected error occurred while processing your audio track. Please verify input details or permission scopes."
+                            } else {
+                                "Export failed:\n$exportError"
+                            },
                             fontSize = 13.sp,
                             color = TextLight
                         )

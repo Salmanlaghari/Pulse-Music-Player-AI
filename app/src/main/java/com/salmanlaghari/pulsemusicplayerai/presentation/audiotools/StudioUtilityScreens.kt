@@ -436,7 +436,7 @@ fun VideoStudioScreen(
                 VideoStudioType.SPECTRUM -> VideoVisualizerPreset.SPECTRUM_BARS
                 VideoStudioType.CIRCULAR -> VideoVisualizerPreset.CIRCULAR_SPECTRUM
                 VideoStudioType.NEON -> VideoVisualizerPreset.MIRROR_BARS
-                VideoStudioType.ALBUM_ART -> VideoVisualizerPreset.RADIAL_PULSE
+                VideoStudioType.ALBUM_ART -> VideoVisualizerPreset.PULSE_RING
                 else -> VideoVisualizerPreset.SPECTRUM_BARS
             }
         )
