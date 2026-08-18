@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_bg_start">#0B0820</color>
+    <string name="app_name">Pulse Music Player AI</string>
+    <style name="Theme.PulseMusicPlayerAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0B0820</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.PulseMusicPlayerAI.Splash" parent="Theme.PulseMusicPlayerAI">
+        <item name="android:windowBackground">@drawable/splash_window_background</item>
+    </style>
+</resources>
