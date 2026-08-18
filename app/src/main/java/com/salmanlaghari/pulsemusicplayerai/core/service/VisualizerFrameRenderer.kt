@@ -117,6 +117,7 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
             VideoVisualizerPreset.ECHO_WAVE -> drawWave(canvas, width, height, waveform, magnitudes, scale, WaveMode.ECHO)
 
             // ---------------- PARTICLE ----------------
+<<<<<<< ours
             VideoVisualizerPreset.PARTICLE_BEAT -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.BURST)
             VideoVisualizerPreset.PARTICLE_ORB -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.ORB)
             VideoVisualizerPreset.STARFIELD -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.STAR)
@@ -127,6 +128,18 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
             VideoVisualizerPreset.COLOR_BURST -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.RADIAL)
             VideoVisualizerPreset.ORBIT_PARTICLES -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.ORBIT)
             VideoVisualizerPreset.GALAXY_CLOUD -> drawParticles(canvas, cx, cy, width, height, beat, magnitudes, scale, ParticleMode.GALAXY)
+=======
+            VideoVisualizerPreset.PARTICLE_BEAT -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.BURST)
+            VideoVisualizerPreset.PARTICLE_ORB -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.ORB)
+            VideoVisualizerPreset.STARFIELD -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.STAR)
+            VideoVisualizerPreset.QUANTUM_CLOUD -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.CLOUD)
+            VideoVisualizerPreset.FIREWORKS -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.FIREWORKS)
+            VideoVisualizerPreset.METEOR_SHOWER -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.METEOR)
+            VideoVisualizerPreset.SNOWFALL -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.SNOW)
+            VideoVisualizerPreset.COLOR_BURST -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.RADIAL)
+            VideoVisualizerPreset.ORBIT_PARTICLES -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.ORBIT)
+            VideoVisualizerPreset.GALAXY_CLOUD -> drawParticles(canvas, cx, cy, width, beat, magnitudes, scale, ParticleMode.GALAXY)
+>>>>>>> theirs
 
             // ---------------- GEOMETRIC ----------------
             VideoVisualizerPreset.HEXAGON_MESH -> drawGeometric(canvas, cx, cy, width, height, beat, magnitudes, scale, GeoMode.HEX)
@@ -286,7 +299,11 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
                     val left = gap + i * (barWidth + gap)
                     setFill(barColor(palette, m, i, bars), glow = true, glowRadius = 22f)
                     canvas.drawRoundRect(left, 0f, left + barWidth, h, barWidth / 2f, barWidth / 2f, fill)
+<<<<<<< ours
                     canvas.drawRoundRect(left, height - h, left + barWidth, height.toFloat(), barWidth / 2f, barWidth / 2f, fill)
+=======
+                    canvas.drawRoundRect(left, height - h, left + barWidth, height, barWidth / 2f, barWidth / 2f, fill)
+>>>>>>> theirs
                 }
             }
             BarsAlign.CENTEROUT -> {
@@ -532,7 +549,11 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
                 for (i in wave.indices) {
                     val x = i * step
                     val y = midY + sin(i.toFloat() / wave.size * 12.56f + wave[i] * 2f) * amp * 0.8f
+<<<<<<< ours
                     if (i == 0) p.moveTo(x, y) else p.quadTo(x - step / 2f, y, x, y)
+=======
+                    if (i == 0) p.moveTo(x, y) else p.quadraticBezierTo(x - step / 2f, y, x, y)
+>>>>>>> theirs
                 }
                 fill.shader = LinearGradient(0f, 0f, width.toFloat(), 0f, config.accentColor, config.secondaryColor, Shader.TileMode.CLAMP)
                 fill.alpha = 200
@@ -581,7 +602,11 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
     // PARTICLES
     // ===================================================================
     private fun drawParticles(
+<<<<<<< ours
         canvas: Canvas, cx: Float, cy: Float, width: Int, height: Int,
+=======
+        canvas: Canvas, cx: Float, cy: Float, width: Int,
+>>>>>>> theirs
         beat: Float, mags: FloatArray, scale: Float, mode: ParticleMode
     ) {
         val energy = avg(mags, 0, mags.size).coerceIn(0f, 1f)
@@ -1061,7 +1086,11 @@ object AudioSpectrum {
                 sum += kotlin.math.sqrt(re[k] * re[k] + im[k] * im[k])
             }
             val avg = sum / (end - start)
+<<<<<<< ours
             raw[b] = (kotlin.math.ln(1f + avg * 8f) / kotlin.math.ln(9f)).coerceIn(0f, 1f)
+=======
+            raw[b] = (kotlin.math.ln(1f + avg * 8f) / kotlin.math.Ln(9f)).coerceIn(0f, 1f)
+>>>>>>> theirs
         }
         return raw
     }
