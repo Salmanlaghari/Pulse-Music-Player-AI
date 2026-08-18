@@ -22,7 +22,9 @@ jobs:
     # Release signing is driven by GitHub Secrets so the SAME keystore (and thus
     # the same SHA-1/SHA-256 fingerprints) signs every release build.
     env:
-      RELEASE_KEYSTORE_FILE: app/keystore/pulse-release.keystore
+      # Gradle resolves signingConfigs storeFile relative to the module dir (app/),
+      # so this is module-relative (resolves to app/keystore/pulse-release.keystore).
+      RELEASE_KEYSTORE_FILE: keystore/pulse-release.keystore
       RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
       RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
       RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
@@ -86,7 +88,7 @@ jobs:
       - name: Verify release keystore fingerprint
         run: |
           keytool -list -v \
-            -keystore "$RELEASE_KEYSTORE_FILE" \
+            -keystore app/keystore/pulse-release.keystore \
             -alias "$RELEASE_KEY_ALIAS" \
             -storepass "$RELEASE_KEYSTORE_PASSWORD" 2>/dev/null \
             | grep -Ei "Alias name|SHA1|SHA256|MD5|Valid from|until" || true
