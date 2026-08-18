@@ -768,6 +768,21 @@ class AudioStudioProcessor(private val context: Context) {
         val renderer = VisualizerFrameRenderer(config, watermark)
         val bgPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
+        // Offscreen software buffer: the ENTIRE frame (visualizer + optional
+        // background image + watermark) is composited here first, then blitted
+        // to the encoder's input surface with a SINGLE drawBitmap. Doing all the
+        // heavy/complex Canvas work (gradient/shadow-layer shaders, the per-frame
+        // watermark bitmap blit, thousands of glowing shapes from the visualizer
+        // presets) on an offscreen Canvas — instead of issuing it straight onto
+        // the encoder surface — keeps the encoder surface in a clean, consistent
+        // state every frame. This eliminates the device-specific "H.264 encoder /
+        // surface error" that re-appeared once the watermark + Task-F polish made
+        // the per-frame draw much heavier on real-device timing. PR #34's rule is
+        // preserved below: we still use lockCanvas(null), never lockHardwareCanvas.
+        val frameBitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val frameCanvas = android.graphics.Canvas(frameBitmap)
+        val blitPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+
         try {
             Log.d("AudioStudioProcessor", "Video encoder plan: ${width}x${height} @ ${fps}fps, bitrate=${plan.bitrate}, encoder=${plan.encoderName}")
 
@@ -804,22 +819,29 @@ class AudioStudioProcessor(private val context: Context) {
                 // Cyclic phase driven by time, modulated by real energy.
                 val beatPhase = ((ptsUs / 1_000_000f) * (0.5f + beatEnergy)) % 1f
 
-                // IMPORTANT: encoder input surfaces do NOT support lockHardwareCanvas
-                // (it throws UnsupportedOperationException on real devices) — the standard
-                // approach is lockCanvas(null), which is what makes the export work.
+                // Compose the whole frame onto the offscreen software Canvas
+                // (visualizer + optional background image + animated watermark),
+                // then blit it to the encoder input surface with a single
+                // surface-safe drawBitmap. Every complex/scene op stays OFF the
+                // encoder surface so its state never becomes inconsistent frame
+                // to frame. PR #34's rule is preserved: we still use
+                // lockCanvas(null), never lockHardwareCanvas().
+                var drewBackground = false
+                if (background != null) {
+                    frameCanvas.drawColor(android.graphics.Color.BLACK)
+                    frameCanvas.drawBitmap(background, null, backgroundDestRect(background, width, height, config), bgPaint)
+                    drewBackground = true
+                }
+                renderer.draw(frameCanvas, width, height, mags, wave, beatPhase, drewBackground, ptsUs)
+
+                // Single surface-safe blit of the finished frame.
                 val canvas = lockEncoderCanvas(surface)
                 if (canvas == null) {
                     Log.e("AudioStudioProcessor", "Failed to lock encoder surface canvas")
                     return false
                 }
                 try {
-                    var drewBackground = false
-                    if (background != null) {
-                        canvas.drawColor(android.graphics.Color.BLACK)
-                        canvas.drawBitmap(background, null, backgroundDestRect(background, width, height, config), bgPaint)
-                        drewBackground = true
-                    }
-                    renderer.draw(canvas, width, height, mags, wave, beatPhase, drewBackground)
+                    canvas.drawBitmap(frameBitmap, null, android.graphics.Rect(0, 0, width, height), blitPaint)
                 } finally {
                     surface.unlockCanvasAndPost(canvas)
                 }
@@ -905,6 +927,7 @@ class AudioStudioProcessor(private val context: Context) {
             try { muxer?.release() } catch (_: Exception) { }
             try { background?.recycle() } catch (_: Exception) { }
             try { watermark?.recycle() } catch (_: Exception) { }
+            try { frameBitmap.recycle() } catch (_: Exception) { }
         }
     }
 

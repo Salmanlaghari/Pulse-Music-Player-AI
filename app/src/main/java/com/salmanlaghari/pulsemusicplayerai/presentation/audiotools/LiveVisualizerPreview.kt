@@ -98,7 +98,7 @@ fun LiveVisualizerPreview(
                     )
                     drewBackground = true
                 }
-                renderer.draw(native, w, h, mags, wave, beatPhase, drewBackground)
+                renderer.draw(native, w, h, mags, wave, beatPhase, drewBackground, positionMs * 1000L)
             }
         }
     }

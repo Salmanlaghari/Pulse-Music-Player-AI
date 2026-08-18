@@ -97,7 +97,8 @@ class VisualizerFrameRenderer(
         magnitudes: FloatArray,
         waveform: FloatArray,
         beat: Float,
-        backgroundBitmapDrawn: Boolean
+        backgroundBitmapDrawn: Boolean,
+        frameTimeUs: Long = 0L
     ) {
         if (!backgroundBitmapDrawn) {
             drawBackground(canvas, width, height)
@@ -189,20 +190,39 @@ class VisualizerFrameRenderer(
 
         if (config.showText) drawText(canvas, width, height)
 
-        if (watermark != null && config.watermarkEnabled) drawWatermark(canvas, width, height)
+        if (watermark != null && config.watermarkEnabled) drawWatermark(canvas, width, height, frameTimeUs)
     }
 
-    /** Burns the Pulse logo into the bottom-right corner at a fixed opacity. */
-    private fun drawWatermark(canvas: Canvas, width: Int, height: Int) {
+    /**
+     * Burns the animated Pulse logo into the exported frame.
+     *
+     * The watermark is no longer a static corner overlay: it loops through the
+     * four safe corners, appears for a fixed window with a smooth fade in/out,
+     * hides for a gap, then reappears at the next corner. While visible it gets a
+     * subtle "breathing" scale + slow rotation + alpha shimmer so it reads as
+     * polished branding rather than a static stamp. Everything is computed
+     * deterministically from the frame's presentation timestamp, so the exact
+     * same motion is baked into every exported frame (there is no live runtime
+     * to animate against after export). The master ON/OFF toggle still gates the
+     * whole effect.
+     */
+    private fun drawWatermark(canvas: Canvas, width: Int, height: Int, frameTimeUs: Long) {
         val wm = watermark ?: return
-        val r = WatermarkLayout.computeRect(width, height)
-        watermarkPaint.alpha = (WatermarkLayout.OPACITY * 255f).toInt().coerceIn(0, 255)
-        canvas.drawBitmap(
-            wm,
-            null,
-            RectF(r.left, r.top, r.right, r.bottom),
-            watermarkPaint
-        )
+        val anim = WatermarkLayout.computeAnimated(frameTimeUs, width, height)
+        if (anim.alpha <= 0f) return
+
+        val w = (anim.right - anim.left)
+        val h = (anim.bottom - anim.top)
+        val cx = (anim.left + anim.right) / 2f
+        val cy = (anim.top + anim.bottom) / 2f
+
+        canvas.save()
+        canvas.translate(cx, cy)
+        canvas.rotate(anim.rotation)
+        canvas.scale(anim.scale, anim.scale)
+        watermarkPaint.alpha = (anim.alpha * 255f).toInt().coerceIn(0, 255)
+        canvas.drawBitmap(wm, null, RectF(-w / 2f, -h / 2f, w / 2f, h / 2f), watermarkPaint)
+        canvas.restore()
     }
 
     // ===================================================================
