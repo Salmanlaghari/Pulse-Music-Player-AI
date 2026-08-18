@@ -191,6 +191,9 @@ class YouTubeViewModel(
             }
         }
     }
+
+    /**
+     * Load 500-1000 Bollywood/Pakistani/South Asian/Northern songs from JioSaavn.
      * Uses curated search queries to build a large deduplicated catalog.
      * All songs come with full 320kbps stream URLs (confirmed working).
      */
