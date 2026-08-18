@@ -132,7 +132,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
         }
 
         // 2. Fetch Videos (MP4 Exporter results)
@@ -196,7 +196,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
         }
 
         list.sortByDescending { it.dateAdded }
@@ -303,7 +303,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             val buffer = ByteBuffer.allocate(256 * 1024)
             val info = MediaCodec.BufferInfo()
-            val rangeUs = (endUs - startUs).coerceAtLeast(1L)
+            val rangeUs = if (endUs != Long.MAX_VALUE) (endUs - startUs).coerceAtLeast(1L) else (format?.let { if (it.containsKey(MediaFormat.KEY_DURATION)) it.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L) else 1L } ?: 1L)
             var wroteAny = false
 
             while (coroutineContext.isActive) {
@@ -811,6 +811,7 @@ class AudioStudioProcessor(private val context: Context) {
             encoder.signalEndOfInputStream()
             var lastPts = totalFrames.toLong() * frameDurationUs
             while (true) {
+                if (!coroutineContext.isActive) return false
                 val outIndex = encoder.dequeueOutputBuffer(info, 10_000L)
                 if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) break
                 if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -889,7 +890,7 @@ class AudioStudioProcessor(private val context: Context) {
      * Muxes a video-only MP4 and an audio-only M4A into one MP4 containing both
      * an H.264 video track and an AAC audio track.
      */
-    private fun muxVideoAndAudio(videoFile: File, audioFile: File, outFile: File): Boolean {
+    private suspend fun muxVideoAndAudio(videoFile: File, audioFile: File, outFile: File): Boolean {
         val videoExtractor = MediaExtractor()
         val audioExtractor = MediaExtractor()
         var muxer: MediaMuxer? = null
@@ -925,6 +926,7 @@ class AudioStudioProcessor(private val context: Context) {
 
             // Copy video samples.
             while (true) {
+                if (!coroutineContext.isActive) return false
                 val size = videoExtractor.readSampleData(buffer, 0)
                 if (size < 0) break
                 info.offset = 0
@@ -938,6 +940,7 @@ class AudioStudioProcessor(private val context: Context) {
             // Copy audio samples.
             if (aTrack >= 0) {
                 while (true) {
+                    if (!coroutineContext.isActive) return false
                     val size = audioExtractor.readSampleData(buffer, 0)
                     if (size < 0) break
                     info.offset = 0
@@ -999,7 +1002,7 @@ class AudioStudioProcessor(private val context: Context) {
         return@withContext try {
             contentResolver.update(uri, values, null, null) > 0
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             false
         }
     }
@@ -1028,7 +1031,7 @@ class AudioStudioProcessor(private val context: Context) {
         return@withContext try {
             contentResolver.delete(uri, null, null) > 0
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             false
         }
     }
@@ -1119,7 +1122,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
             }
@@ -1207,7 +1210,7 @@ class AudioStudioProcessor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Processing failed: "+e.message, e)
+            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
             }
@@ -1348,7 +1351,7 @@ class AudioStudioProcessor(private val context: Context) {
      * Encodes raw PCM to AAC-LC inside an MP4 container (a valid .m4a file).
      * AAC is the one lossy audio encoder the Android platform guarantees.
      */
-    private fun encodePcmToM4a(
+    private suspend fun encodePcmToM4a(
         pcm: PcmAudio,
         tempFile: File,
         bitRate: Int,
@@ -1389,6 +1392,7 @@ class AudioStudioProcessor(private val context: Context) {
             var sawOutputEos = false
 
             while (!sawOutputEos) {
+                if (!coroutineContext.isActive) return false
                 if (!sawInputEos) {
                     val inIndex = codec.dequeueInputBuffer(10_000L)
                     if (inIndex >= 0) {
