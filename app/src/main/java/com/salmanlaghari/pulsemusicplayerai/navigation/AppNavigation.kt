@@ -30,10 +30,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import android.net.Uri
 import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
@@ -53,6 +56,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.FullPlayerScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.QueueScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.SearchScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.youtube.ChannelPlayerScreen
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem(Screen.Home.route, "Home", Icons.Default.Home)
@@ -233,7 +237,12 @@ fun AppNavigation(
             composable(Screen.YouTube.route) {
                 YouTubeScreen(
                     viewModel = youTubeViewModel,
-                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }
+                    onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
+                    onNavigateToChannelPlayer = { videoId, title ->
+                        navController.navigate(
+                            "channel_player/$videoId/${Uri.encode(title)}"
+                        )
+                    }
                 )
             }
             composable(Screen.AudioTools.route) {
@@ -271,6 +280,22 @@ fun AppNavigation(
                     onNavigateBack = { navController.popBackStack() },
                     onShowQueue = { navController.navigate(Screen.Queue.route) },
                     onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
+                )
+            }
+            composable(
+                route = Screen.ChannelPlayer.route,
+                arguments = listOf(
+                    navArgument("videoId") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val videoId = backStackEntry.arguments?.getString("videoId") ?: ""
+                val title = backStackEntry.arguments?.getString("title")?.let { Uri.decode(it) } ?: ""
+                ChannelPlayerScreen(
+                    videoId = videoId,
+                    title = title,
+                    channelName = "A D&E Song Music",
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Equalizer.route) {

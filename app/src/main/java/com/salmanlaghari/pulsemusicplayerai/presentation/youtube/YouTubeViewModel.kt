@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.salmanlaghari.pulsemusicplayerai.core.service.PlaybackConnectionManager
 import com.salmanlaghari.pulsemusicplayerai.data.repository.YouTubeRepository
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -65,6 +66,19 @@ class YouTubeViewModel(
 
     private var youTubeTrendingJob: Job? = null
     private var youTubeTrendingLoaded = false
+
+    // My Channel (owner's YouTube channel) — latest uploads from the RSS feed
+    private val _channelVideos = MutableStateFlow<List<ChannelVideo>>(emptyList())
+    val channelVideos: StateFlow<List<ChannelVideo>> = _channelVideos.asStateFlow()
+
+    private val _isChannelLoading = MutableStateFlow(false)
+    val isChannelLoading: StateFlow<Boolean> = _isChannelLoading.asStateFlow()
+
+    private val _channelError = MutableStateFlow<String?>(null)
+    val channelError: StateFlow<String?> = _channelError.asStateFlow()
+
+    private var channelJob: Job? = null
+    private var channelLoaded = false
 
     private val _currentlyPlaying = MutableStateFlow<YouTubeSong?>(null)
     val currentlyPlaying: StateFlow<YouTubeSong?> = _currentlyPlaying.asStateFlow()
@@ -139,6 +153,41 @@ class YouTubeViewModel(
                 Log.e(TAG, "Failed to load YouTube trending", e)
             } finally {
                 _isYouTubeTrendingLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Load the owner's YouTube channel videos from the public RSS feed.
+     * Playback is handled by the official embedded YouTube player (see UI),
+     * so this only provides the list metadata. Pass [force] = true to bypass
+     * the cache and pull the freshest uploads (used by the refresh button).
+     */
+    fun loadChannelVideos(force: Boolean = false) {
+        if (channelLoaded && !force && _channelVideos.value.isNotEmpty()) {
+            Log.d(TAG, "My Channel already loaded (${_channelVideos.value.size} videos), skipping")
+            return
+        }
+        channelJob?.cancel()
+        channelJob = viewModelScope.launch {
+            _isChannelLoading.value = true
+            _channelError.value = null
+            try {
+                kotlinx.coroutines.delay(100)
+                val videos = youTubeRepository.getChannelVideos()
+                if (videos.isNotEmpty()) {
+                    _channelVideos.value = videos
+                    channelLoaded = true
+                    Log.d(TAG, "Loaded ${videos.size} My Channel videos")
+                } else {
+                    _channelError.value = "No uploads found on this channel yet."
+                    Log.w(TAG, "My Channel returned no videos")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load My Channel videos", e)
+                _channelError.value = "Couldn't load the channel. Tap refresh to retry."
+            } finally {
+                _isChannelLoading.value = false
             }
         }
     }
