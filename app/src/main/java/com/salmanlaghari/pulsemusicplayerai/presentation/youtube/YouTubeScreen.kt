@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
-import java.util.Locale
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
@@ -139,6 +138,7 @@ fun YouTubeScreen(
             MusicSource.SOUNDCLOUD -> viewModel.searchSoundCloud(query)
             MusicSource.ARCHIVE -> viewModel.search(query)
             MusicSource.DEEZER -> viewModel.search(query)
+            MusicSource.MY_CHANNEL -> { /* My Channel shows uploads directly; no cross-source search */ }
         }
     }
 
@@ -256,20 +256,21 @@ fun YouTubeScreen(
             // Search Bar
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
+                onValueChange = { q ->
                     // The My Channel tab shows the owner's uploads directly, so the
                     // global search box is ignored there (no cross-source search).
                     if (selectedSource == MusicSource.MY_CHANNEL) {
+                        searchQuery = q
                         isSearchActive = false
-                        return@onValueChange
-                    }
-                    if (it.length >= 3) {
-                        searchWithSource(it)
-                        isSearchActive = true
-                    } else if (it.isEmpty()) {
-                        viewModel.clearSearch()
-                        isSearchActive = false
+                    } else {
+                        searchQuery = q
+                        if (q.length >= 3) {
+                            searchWithSource(q)
+                            isSearchActive = true
+                        } else if (q.isEmpty()) {
+                            viewModel.clearSearch()
+                            isSearchActive = false
+                        }
                     }
                 },
                 placeholder = {

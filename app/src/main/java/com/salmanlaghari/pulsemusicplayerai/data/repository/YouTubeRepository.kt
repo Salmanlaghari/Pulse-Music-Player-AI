@@ -1341,7 +1341,7 @@ class YouTubeRepository {
             Log.e(TAG, "parseChannelRss failed: ${e.message}")
         }
         Log.d(TAG, "Parsed ${videos.size} My Channel videos from RSS")
-        videos
+        return videos
     }
 
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {
