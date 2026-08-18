@@ -194,10 +194,11 @@ class VisualizerFrameRenderer(
 
     /** Burns the Pulse logo into the bottom-right corner at a fixed opacity. */
     private fun drawWatermark(canvas: Canvas, width: Int, height: Int) {
+        val wm = watermark ?: return
         val r = WatermarkLayout.computeRect(width, height)
         watermarkPaint.alpha = (WatermarkLayout.OPACITY * 255f).toInt().coerceIn(0, 255)
         canvas.drawBitmap(
-            watermark,
+            wm,
             null,
             RectF(r.left, r.top, r.right, r.bottom),
             watermarkPaint
