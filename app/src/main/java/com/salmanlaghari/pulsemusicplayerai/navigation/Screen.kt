@@ -20,4 +20,7 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object Queue : Screen("queue")
     object Equalizer : Screen("equalizer")
+
+    // Embedded official YouTube player for the owner's channel videos
+    object ChannelPlayer : Screen("channel_player/{videoId}/{title}")
 }

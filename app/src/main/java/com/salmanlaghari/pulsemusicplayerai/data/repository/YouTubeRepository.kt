@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.data.repository
 
 import android.util.Log
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -291,6 +292,16 @@ class YouTubeRepository {
         
         // ═══ JioSaavn API - FULL SONGS! (FREE) ═══
         private const val JIOSAAVN_API = "https://saavn.sumit.co/api"
+
+        // ═══ MY CHANNEL (owner's YouTube channel) ═══
+        // Fetched from the public, key-free YouTube RSS feed. Because this is the
+        // owner's own content, playback is routed through the official embedded
+        // YouTube player (fully ToS-compliant) rather than raw audio extraction.
+        private const val CHANNEL_ID = "UC9gMAFtR6CnKiYBh58vLYjQ"
+        private const val CHANNEL_NAME = "A D&E Song Music"
+        private const val CHANNEL_HANDLE = "@beatthemusiclife"
+        private const val CHANNEL_RSS_URL =
+            "https://www.youtube.com/feeds/videos.xml?channel_id=$CHANNEL_ID"
     }
 
     data class FreeSong(
@@ -1246,6 +1257,91 @@ class YouTubeRepository {
 
         Log.d(TAG, "YouTube Music trending: ${songs.size} songs")
         songs.take(40)
+    }
+
+    // ═══════════════════════════════════════════════
+    // MY CHANNEL — owner's YouTube channel via public RSS feed
+    // No API key required; returns the latest uploads for "A D&E Song Music".
+    // Playback is handled by the official embedded YouTube player (see UI).
+    // ═══════════════════════════════════════════════
+    suspend fun getChannelVideos(): List<ChannelVideo> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Loading My Channel videos (RSS) for $CHANNEL_NAME")
+        val xml = httpGetSafe(CHANNEL_RSS_URL, timeout = NORMAL_TIMEOUT)
+        if (xml.isBlank()) {
+            Log.w(TAG, "My Channel RSS returned empty response")
+            return@withContext emptyList()
+        }
+        parseChannelRss(xml)
+    }
+
+    /**
+     * Parse the YouTube channel Atom/RSS feed into [ChannelVideo]s.
+     * The feed exposes, per <entry>: yt:videoId, title, published, and a
+     * media:thumbnail url. Namespace-awareness is disabled so element names
+     * keep their prefixes (e.g. "yt:videoId", "media:thumbnail").
+     */
+    private fun parseChannelRss(xml: String): List<ChannelVideo> {
+        val videos = mutableListOf<ChannelVideo>()
+        try {
+            val factory = org.xmlpull.v1.XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
+            parser.setInput(java.io.StringReader(xml))
+
+            var event = parser.eventType
+            var videoId = ""
+            var title = ""
+            var published = ""
+            var thumbnail = ""
+            var inEntry = false
+
+            while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                when (event) {
+                    org.xmlpull.v1.XmlPullParser.START_TAG -> {
+                        when (parser.name) {
+                            "entry" -> {
+                                inEntry = true
+                                videoId = ""
+                                title = ""
+                                published = ""
+                                thumbnail = ""
+                            }
+                            "yt:videoId" -> if (inEntry) videoId = parser.nextText().trim()
+                            "title" -> if (inEntry) title = parser.nextText().trim()
+                            "published" -> if (inEntry) published = parser.nextText().trim()
+                            "media:thumbnail" -> {
+                                if (inEntry) {
+                                    val url = parser.getAttributeValue(null, "url")
+                                    if (!url.isNullOrBlank()) thumbnail = url
+                                }
+                            }
+                        }
+                    }
+                    org.xmlpull.v1.XmlPullParser.END_TAG -> {
+                        if (parser.name == "entry") {
+                            if (videoId.isNotBlank() && title.isNotBlank()) {
+                                videos.add(
+                                    ChannelVideo(
+                                        videoId = videoId,
+                                        title = decodeHtmlEntities(title),
+                                        thumbnailUrl = if (thumbnail.isBlank())
+                                            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                                        else thumbnail,
+                                        publishedAt = published
+                                    )
+                                )
+                            }
+                            inEntry = false
+                        }
+                    }
+                }
+                event = parser.next()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "parseChannelRss failed: ${e.message}")
+        }
+        Log.d(TAG, "Parsed ${videos.size} My Channel videos from RSS")
+        videos
     }
 
     suspend fun getTrending(): List<YouTubeSong> = withContext(Dispatchers.IO) {

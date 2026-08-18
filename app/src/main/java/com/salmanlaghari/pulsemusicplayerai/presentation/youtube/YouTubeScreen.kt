@@ -61,6 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import java.text.SimpleDateFormat
+import java.util.Locale
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
@@ -70,13 +73,14 @@ import com.salmanlaghari.pulsemusicplayerai.theme.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import kotlinx.coroutines.launch
 
-enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, SOUNDCLOUD, ARCHIVE, DEEZER }
+enum class MusicSource { ALL, JIOSAAVN, DESI_HITS, APPLE_MUSIC, SPOTIFY, YOUTUBE_MUSIC, SOUNDCLOUD, ARCHIVE, DEEZER, MY_CHANNEL }
 enum class ViewMode { LIST, GRID }
 
 @Composable
 fun YouTubeScreen(
     viewModel: YouTubeViewModel,
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onNavigateToChannelPlayer: (videoId: String, title: String) -> Unit
 ) {
     val searchResults by viewModel.searchResults.collectAsState()
     val trendingSongs by viewModel.trendingSongs.collectAsState()
@@ -90,6 +94,9 @@ fun YouTubeScreen(
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
     val playLoadingMessage by viewModel.playLoadingMessage.collectAsState()
+    val channelVideos by viewModel.channelVideos.collectAsState()
+    val isChannelLoading by viewModel.isChannelLoading.collectAsState()
+    val channelError by viewModel.channelError.collectAsState()
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -104,6 +111,9 @@ fun YouTubeScreen(
         }
         if (selectedSource == MusicSource.DESI_HITS) {
             viewModel.loadSouthAsianCatalog()
+        }
+        if (selectedSource == MusicSource.MY_CHANNEL) {
+            viewModel.loadChannelVideos()
         }
     }
 
@@ -248,6 +258,12 @@ fun YouTubeScreen(
                 value = searchQuery,
                 onValueChange = {
                     searchQuery = it
+                    // The My Channel tab shows the owner's uploads directly, so the
+                    // global search box is ignored there (no cross-source search).
+                    if (selectedSource == MusicSource.MY_CHANNEL) {
+                        isSearchActive = false
+                        return@onValueChange
+                    }
                     if (it.length >= 3) {
                         searchWithSource(it)
                         isSearchActive = true
@@ -315,6 +331,17 @@ fun YouTubeScreen(
                             selected = selectedSource == MusicSource.DESI_HITS,
                             onClick = {
                                 selectedSource = MusicSource.DESI_HITS
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "📺 My Channel",
+                            selected = selectedSource == MusicSource.MY_CHANNEL,
+                            onClick = {
+                                selectedSource = MusicSource.MY_CHANNEL
+                                viewModel.clearSearch()
+                                isSearchActive = false
                             }
                         )
                     }
@@ -397,6 +424,17 @@ fun YouTubeScreen(
                                 if (searchQuery.length >= 3) searchWithSource(searchQuery)
                             }
                         )
+                    }
+                    item {
+                        if (selectedSource == MusicSource.MY_CHANNEL) {
+                            IconButton(onClick = { viewModel.loadChannelVideos(force = true) }) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Refresh channel",
+                                    tint = CyanGlow
+                                )
+                            }
+                        }
                     }
                 }
                 
@@ -529,6 +567,89 @@ fun YouTubeScreen(
                                 song = song,
                                 isCurrentlyPlaying = currentlyPlaying?.id == song.id,
                                 onClick = { playAndNavigate(song, youTubeTrending) }
+                            )
+                        }
+                    }
+                }
+            } else if (selectedSource == MusicSource.MY_CHANNEL) {
+                // My Channel tab — owner's YouTube uploads via the official player
+                Text(
+                    text = "MY CHANNEL — A D&E SONG MUSIC",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PurplePrimary,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isChannelLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = CyanGlow)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Loading channel uploads...",
+                                color = TextDim,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                } else if (channelError != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "📺", fontSize = 40.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = channelError ?: "Something went wrong",
+                                color = TextDim,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            androidx.compose.material3.TextButton(
+                                onClick = { viewModel.loadChannelVideos(force = true) }
+                            ) {
+                                Text(
+                                    text = "Retry",
+                                    color = CyanGlow,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else if (channelVideos.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No uploads found on this channel yet.",
+                            color = TextDim,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(channelVideos) { index, video ->
+                            ChannelVideoCard(
+                                video = video,
+                                onClick = {
+                                    onNavigateToChannelPlayer(video.videoId, video.title)
+                                }
                             )
                         }
                     }
@@ -813,6 +934,116 @@ private fun formatDuration(seconds: Long): String {
     val mins = seconds / 60
     val secs = seconds % 60
     return String.format("%d:%02d", mins, secs)
+}
+
+@Composable
+fun ChannelVideoCard(
+    video: ChannelVideo,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = GlassBg)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Thumbnail
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CardNavy),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Small play overlay to signal "tap to play in YouTube player"
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.25f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = CyanGlow,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = video.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "A D&E Song Music • ${formatChannelPublished(video.publishedAt)}",
+                    fontSize = 12.sp,
+                    color = TextDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Source badge
+            Text(
+                text = "My Channel",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextDim,
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(CardNavy)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
+    }
+}
+
+// Render the RSS published timestamp as a friendly "x days ago" string.
+// Uses SimpleDateFormat with the ISO-8601 'XXX' timezone (API 24+ compatible).
+private fun formatChannelPublished(publishedAt: String): String {
+    if (publishedAt.isBlank()) return ""
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+        val date = sdf.parse(publishedAt) ?: return publishedAt.take(10)
+        val diffSeconds = (System.currentTimeMillis() - date.time) / 1000
+        when {
+            diffSeconds < 60 -> "just now"
+            diffSeconds < 3600 -> "${diffSeconds / 60}m ago"
+            diffSeconds < 86400 -> "${diffSeconds / 3600}h ago"
+            diffSeconds < 86400 * 30 -> "${diffSeconds / 86400}d ago"
+            diffSeconds < 86400 * 365 -> "${diffSeconds / (86400 * 30)}mo ago"
+            else -> "${diffSeconds / (86400 * 365)}y ago"
+        }
+    } catch (e: Exception) {
+        publishedAt.take(10)
+    }
 }
 
 // Source Chip Component
