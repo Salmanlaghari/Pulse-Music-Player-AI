@@ -80,6 +80,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -98,6 +99,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import com.salmanlaghari.pulsemusicplayerai.data.ads.RewardedAdSheet
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.NowPlayingControlSizes
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerCanvas
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
 import java.util.Locale
@@ -307,22 +309,22 @@ fun FullPlayerScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToPrevious()
                                 },
-                                modifier = Modifier.size(72.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(62.dp))
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp))
                             }
                             IconButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.togglePlayPause()
                                 },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(100.dp)
+                                modifier = Modifier.shadow(14.dp, CircleShape).background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(100.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(56.dp)
+                                    modifier = Modifier.size(NowPlayingControlSizes.PLAY_PAUSE_ICON_DP.dp)
                                 )
                             }
                             IconButton(
@@ -330,9 +332,9 @@ fun FullPlayerScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToNext()
                                 },
-                                modifier = Modifier.size(72.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(62.dp))
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp))
                             }
                         }
                     }
@@ -766,19 +768,20 @@ fun FullPlayerScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToPrevious()
                             },
-                            modifier = Modifier.size(72.dp)
+                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(66.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                             )
                         }
 
                         Box(
                             modifier = Modifier
-                                .size(104.dp)
+                                .size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
+                                .shadow(14.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
@@ -791,7 +794,7 @@ fun FullPlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play or Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PLAY_PAUSE_ICON_DP.dp)
                             )
                         }
 
@@ -800,13 +803,13 @@ fun FullPlayerScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToNext()
                             },
-                            modifier = Modifier.size(72.dp)
+                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next Song",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(66.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                             )
                         }
 

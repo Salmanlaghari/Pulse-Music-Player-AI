@@ -1,5 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.core.service
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -33,7 +34,11 @@ import kotlin.math.sin
  * decorative animation detached from the sound. The same renderer + same data
  * feed both the preview and the exporter, keeping them in sync.
  */
-class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
+class VisualizerFrameRenderer(
+    private val config: VisualizerVideoConfig,
+    /** Optional high-resolution logo bitmap burned into the frame as a watermark. */
+    private val watermark: Bitmap? = null
+) {
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -43,10 +48,38 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
         typeface = Typeface.DEFAULT_BOLD
     }
     private val dimPaint = Paint()
+    private val watermarkPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    // Cached background shader (rebuilt only when the style or frame size changes)
+    // so we don't allocate a new Gradient object on every rendered frame.
+    private var cachedBgKey = ""
+    private var cachedBgShader: Shader? = null
 
     // Fixed phase per particle index so motion is deterministic and stable.
     private val phaseA = FloatArray(64) { it * 0.197f }
     private val phaseB = FloatArray(64) { it * 0.311f }
+
+    // Signs used by the diagonal (cross) bars preset — precomputed once so the
+    // render loop does not allocate a list every frame.
+    private val diagonalSigns = floatArrayOf(1f, -1f)
+
+    /** Light Gaussian-style smoothing of the spectrum to kill frame-to-frame
+     *  jitter without flattening real peaks. Applied to every preset so the
+     *  whole library reacts smoothly and naturally to the music. */
+    private fun smoothSpectrum(src: FloatArray): FloatArray {
+        if (src.size <= 2) return src
+        val out = FloatArray(src.size)
+        for (i in src.indices) {
+            val a = src[(i - 1).coerceIn(0, src.size - 1)]
+            val b = src[i]
+            val c = src[(i + 1).coerceIn(0, src.size - 1)]
+            // 0.25/0.5/0.25 low-pass, then blend slightly toward the original so
+            // transient hits still read as punchy (not over-smoothed / sluggish).
+            val smoothed = a * 0.25f + b * 0.5f + c * 0.25f
+            out[i] = (b * 0.7f + smoothed * 0.3f).coerceIn(0f, 1f)
+        }
+        return out
+    }
 
     // ---- internal style enums (kept private; selection is by preset) ----
     private enum class BarsAlign { BOTTOM, MIRROR, TOPBOTTOM, CENTEROUT, DIAGONAL }
@@ -76,6 +109,10 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
         val cx = width / 2f
         val cy = height * config.visualizerPositionY
         val scale = config.visualizerScale.coerceIn(0.4f, 1.6f)
+
+        // Smooth the spectrum once so every preset reacts with natural,
+        // jitter-free motion (flagship polish applied library-wide).
+        val magnitudes = smoothSpectrum(magnitudes)
 
         when (config.preset) {
             // ---------------- BARS ----------------
@@ -151,6 +188,21 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
         }
 
         if (config.showText) drawText(canvas, width, height)
+
+        if (watermark != null && config.watermarkEnabled) drawWatermark(canvas, width, height)
+    }
+
+    /** Burns the Pulse logo into the bottom-right corner at a fixed opacity. */
+    private fun drawWatermark(canvas: Canvas, width: Int, height: Int) {
+        val wm = watermark ?: return
+        val r = WatermarkLayout.computeRect(width, height)
+        watermarkPaint.alpha = (WatermarkLayout.OPACITY * 255f).toInt().coerceIn(0, 255)
+        canvas.drawBitmap(
+            wm,
+            null,
+            RectF(r.left, r.top, r.right, r.bottom),
+            watermarkPaint
+        )
     }
 
     // ===================================================================
@@ -212,22 +264,32 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
         when (config.backgroundStyle) {
             VideoBackgroundStyle.SOLID_BLACK -> canvas.drawColor(Color.BLACK)
             VideoBackgroundStyle.DARK_GRADIENT -> {
-                fill.shader = LinearGradient(
-                    0f, 0f, 0f, height.toFloat(),
-                    Color.parseColor("#0a1128"), Color.parseColor("#050510"),
-                    Shader.TileMode.CLAMP
-                )
+                val key = "dark:$width:$height"
+                if (key != cachedBgKey || cachedBgShader == null) {
+                    cachedBgShader = LinearGradient(
+                        0f, 0f, 0f, height.toFloat(),
+                        Color.parseColor("#0a1128"), Color.parseColor("#050510"),
+                        Shader.TileMode.CLAMP
+                    )
+                    cachedBgKey = key
+                }
+                fill.shader = cachedBgShader
                 canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
                 fill.shader = null
             }
             VideoBackgroundStyle.ACCENT_GLOW -> {
+                val key = "accent:$width:$height"
+                if (key != cachedBgKey || cachedBgShader == null) {
+                    cachedBgShader = RadialGradient(
+                        width / 2f, height / 2f, width.coerceAtLeast(height).toFloat() / 1.4f,
+                        intArrayOf((config.accentColor and 0x00FFFFFF) or 0x55000000, Color.TRANSPARENT),
+                        floatArrayOf(0f, 1f),
+                        Shader.TileMode.CLAMP
+                    )
+                    cachedBgKey = key
+                }
                 canvas.drawColor(Color.parseColor("#05060f"))
-                fill.shader = RadialGradient(
-                    width / 2f, height / 2f, width.coerceAtLeast(height).toFloat() / 1.4f,
-                    intArrayOf((config.accentColor and 0x00FFFFFF) or 0x55000000, Color.TRANSPARENT),
-                    floatArrayOf(0f, 1f),
-                    Shader.TileMode.CLAMP
-                )
+                fill.shader = cachedBgShader
                 canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
                 fill.shader = null
             }
@@ -303,7 +365,7 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
             BarsAlign.DIAGONAL -> {
                 val m = avg(mags, 0, mags.size)
                 val maxH = height * 0.42f * scale
-                for (sign in listOf(1f, -1f)) {
+                for (sign in diagonalSigns) {
                     canvas.save()
                     canvas.rotate(sign * 45f, width / 2f, posY)
                     for (i in 0 until bars) {
@@ -476,12 +538,25 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
 
         fun pathOffset(offset: Float, phase: Float, gain: Float): Path {
             val p = Path()
+            var prevX = 0f
+            var prevY = 0f
             for (i in wave.indices) {
                 val x = i * step
                 val y = midY + offset + wave[i].coerceIn(-1f, 1f) * amp * gain
                     + sin((i.toFloat() / wave.size) * 6.28f + phase) * amp * 0.1f
-                if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+                if (i == 0) {
+                    p.moveTo(x, y)
+                } else {
+                    // Quadratic smoothing through midpoints -> fluid, anti-aliased
+                    // curves instead of jagged line segments.
+                    val midX = (prevX + x) / 2f
+                    val midY2 = (prevY + y) / 2f
+                    p.quadTo(prevX, prevY, midX, midY2)
+                }
+                prevX = x
+                prevY = y
             }
+            p.lineTo(prevX, prevY)
             return p
         }
 
@@ -521,7 +596,14 @@ class VisualizerFrameRenderer(private val config: VisualizerVideoConfig) {
                 p.lineTo(0f, midY)
                 p.close()
                 fill.shader = LinearGradient(0f, midY - amp, 0f, midY + amp,
-                    withAlpha(config.accentColor, 0.7f), withAlpha(config.secondaryColor, 0.1f), Shader.TileMode.CLAMP)
+                    intArrayOf(
+                        withAlpha(config.accentColor, 0.85f),
+                        withAlpha(lerp(config.accentColor, config.secondaryColor, 0.5f), 0.4f),
+                        withAlpha(config.secondaryColor, 0.08f)
+                    ),
+                    floatArrayOf(0f, 0.55f, 1f),
+                    Shader.TileMode.CLAMP
+                )
                 canvas.drawPath(p, fill)
                 fill.shader = null
                 setStroke(config.accentColor, 1f, width * 0.005f, true)

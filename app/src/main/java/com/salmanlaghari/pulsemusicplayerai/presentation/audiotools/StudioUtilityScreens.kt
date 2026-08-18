@@ -82,6 +82,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 
 // --- 1. AUDIO CONVERTER SCREEN ---
@@ -462,6 +463,11 @@ fun VideoStudioScreen(
     var vizScale by remember { mutableStateOf(1.0f) }
     var vizPosY by remember { mutableStateOf(0.6f) }
     var glow by remember { mutableStateOf(true) }
+    // Built-in background music (layered UNDER the source audio).
+    var bgTrackResName by remember { mutableStateOf<String?>(null) }
+    var bgTrackVolume by remember { mutableStateOf(0.35f) }
+    // Pulse logo watermark burned into the exported video (default ON).
+    var watermarkOn by remember { mutableStateOf(true) }
     var trimStartMs by remember { mutableStateOf(0L) }
     var trimEndMs by remember { mutableStateOf(0L) }
     var outputFileName by remember { mutableStateOf("Pulse_${type.name}_Video") }
@@ -484,6 +490,9 @@ fun VideoStudioScreen(
         visualizerScale = vizScale,
         visualizerPositionY = vizPosY,
         glow = glow,
+        backgroundTrackResName = bgTrackResName,
+        backgroundTrackVolume = bgTrackVolume,
+        watermarkEnabled = watermarkOn,
         outputName = outputFileName
     )
 
@@ -826,6 +835,69 @@ fun VideoStudioScreen(
                     Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Background Music (built-in)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Layer an owned, royalty-free loop under your audio. Default: your audio only.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        val selected = bgTrackResName == null
+                        Card(
+                            modifier = Modifier.height(40.dp).clickable {
+                                bgTrackResName = null
+                                bgTrackVolume = 0.35f
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                Text("Source only", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                    items(BuiltInBackgroundTracks.ALL) { track ->
+                        val selected = bgTrackResName == track.resEntryName
+                        Card(
+                            modifier = Modifier.height(40.dp).clickable {
+                                bgTrackResName = track.resEntryName
+                                bgTrackVolume = track.suggestedVolume
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                Text(track.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+                if (bgTrackResName != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Background Volume (${(bgTrackVolume * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = bgTrackVolume,
+                        onValueChange = { bgTrackVolume = it },
+                        valueRange = 0f..0.8f,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
+                }
+                Text(
+                    "Burns the Pulse logo into the exported video (default ON). Turn off for a clean export.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
 
                 Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Slider(
