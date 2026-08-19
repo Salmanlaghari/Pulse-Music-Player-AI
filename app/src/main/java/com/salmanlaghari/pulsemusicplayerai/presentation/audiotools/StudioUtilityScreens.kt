@@ -464,7 +464,9 @@ fun VideoStudioScreen(
     var bgDim by remember { mutableStateOf(0.35f) }
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
-    var showText by remember { mutableStateOf(true) }
+    // Generic title overlay is OFF by default — it was an unwanted artifact burned
+    // onto the preview and exported MP4. Users can still opt in via the switch.
+    var showText by remember { mutableStateOf(false) }
     var vizScale by remember { mutableStateOf(1.0f) }
     var vizPosY by remember { mutableStateOf(0.6f) }
     var glow by remember { mutableStateOf(true) }
@@ -497,6 +499,8 @@ fun VideoStudioScreen(
         glow = glow,
         backgroundTrackResName = bgTrackResName,
         backgroundTrackVolume = bgTrackVolume,
+        // Pair the selected track with its distinct animated mood background.
+        backgroundMood = BuiltInBackgroundTracks.resolve(bgTrackResName)?.mood,
         watermarkEnabled = watermarkOn,
         outputName = outputFileName
     )
@@ -883,10 +887,10 @@ fun VideoStudioScreen(
                         }
                     }
                     items(BuiltInBackgroundTracks.ALL) { track ->
-                        val selected = bgTrackResName == track.resEntryName
+                        val selected = bgTrackResName == track.id
                         Card(
                             modifier = Modifier.height(40.dp).clickable {
-                                bgTrackResName = track.resEntryName
+                                bgTrackResName = track.id
                                 bgTrackVolume = track.suggestedVolume
                             },
                             shape = RoundedCornerShape(20.dp),

@@ -12,6 +12,7 @@ import android.graphics.Shader
 import android.graphics.SweepGradient
 import android.graphics.Typeface
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundMood
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
@@ -105,6 +106,15 @@ class VisualizerFrameRenderer(
         } else if (config.backgroundDim > 0f) {
             dimPaint.color = Color.argb((config.backgroundDim * 255).toInt().coerceIn(0, 255), 0, 0, 0)
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+        }
+
+        // Each background track ships its own animated mood: when set, a distinct
+        // procedural (seamless) animated background is drawn behind the visualizer
+        // so the export reads as its own premium "AVEE-style" look. Drawn after the
+        // flat fill / image so the mood background always wins as the visual bed.
+        val mood = config.backgroundMood
+        if (mood != null) {
+            drawAnimatedBackground(canvas, width, height, frameTimeUs, mood)
         }
 
         val cx = width / 2f
@@ -280,6 +290,49 @@ class VisualizerFrameRenderer(
         BarsPalette.THICK -> withAlpha(config.accentColor, 0.6f + m * 0.4f)
     }
 
+    /**
+     * Procedural, seamless animated background for a [BackgroundMood]. Rendered
+     * behind the visualizer during export (and the matching live preview) so each
+     * background track reads as its own premium animated visual. No video assets
+     * are bundled — the loop is generated from the mood's colour palette + time,
+     * keeping the APK size at zero-cost and the motion smooth/CPU-cheap.
+     */
+    private fun drawAnimatedBackground(canvas: Canvas, width: Int, height: Int, frameTimeUs: Long, mood: BackgroundMood) {
+        val t = (frameTimeUs / 1_000_000f) % 12f
+        val pal = mood.palette
+        val c0 = pal[0]
+        val c1 = pal.getOrElse(1) { pal[0] }
+        val c2 = pal.getOrElse(2) { c1 }
+
+        // Slow diagonal gradient sweep — the angle cycles smoothly and wraps, so
+        // the loop is seamless.
+        val angle = (t / 12f) * 360f
+        val rad = Math.toRadians(angle.toDouble()).toFloat()
+        val dx = kotlin.math.cos(rad); val dy = kotlin.math.sin(rad)
+        val grad = LinearGradient(
+            width / 2f - dx * width, height / 2f - dy * height,
+            width / 2f + dx * width, height / 2f + dy * height,
+            intArrayOf(c0, c1, c2), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
+        )
+        fill.shader = grad
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
+        fill.shader = null
+
+        // Drifting particle field — deterministic positions (seeded by phaseA/
+        // phaseB) so it never reallocates and loops cleanly with time.
+        val count = 46
+        val pr = min(width, height) * 0.006f
+        for (i in 0 until count) {
+            val px = (kotlin.math.sin(t * 0.6f + phaseA[i % phaseA.size]) * 0.5f + 0.5f) * width
+            val py = (kotlin.math.cos(t * 0.5f + phaseB[i % phaseB.size]) * 0.5f + 0.5f) * height
+            val alpha = (0.10f + 0.18f * (kotlin.math.sin(t + phaseA[i % phaseA.size]) * 0.5f + 0.5f))
+            fill.color = withAlpha(pal[i % pal.size], alpha.coerceIn(0f, 0.32f))
+            fill.clearShadowLayer()
+            canvas.drawCircle(px, py, pr * (0.6f + 0.8f * (i % 5) / 5f), fill)
+        }
+        fill.clearShadowLayer()
+    }
+
     private fun drawBackground(canvas: Canvas, width: Int, height: Int) {
         when (config.backgroundStyle) {
             VideoBackgroundStyle.SOLID_BLACK -> canvas.drawColor(Color.BLACK)
@@ -323,9 +376,10 @@ class VisualizerFrameRenderer(
         canvas: Canvas, width: Int, height: Int, mags: FloatArray,
         scale: Float, align: BarsAlign, palette: BarsPalette
     ) {
-        val bars = min(mags.size, 64)
+        val bars = min(mags.size, 72)
         if (bars == 0) return
-        val gap = width * 0.004f
+        // Tighter, denser spacing for a sleek, premium (AVEE-style) equalizer.
+        val gap = width * 0.003f
         val barWidth = (width - gap * (bars + 1)) / bars
         val posY = (config.visualizerPositionY * height).coerceIn(height * 0.08f, height * 0.95f)
 
@@ -552,6 +606,8 @@ class VisualizerFrameRenderer(
         mags: FloatArray, scale: Float, mode: WaveMode
     ) {
         if (wave.isEmpty()) return
+        // Rounded line caps -> smooth, fluid (AVEE-style) waveform strokes.
+        stroke.strokeCap = Paint.Cap.ROUND
         val midY = (config.visualizerPositionY * height).coerceIn(height * 0.15f, height * 0.85f)
         val amp = height * 0.3f * scale
         val step = width.toFloat() / (wave.size - 1).coerceAtLeast(1)
