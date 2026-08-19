@@ -398,41 +398,88 @@ object AdManager {
     }
 
     // ═══ REWARDED AD — AUDIO TOOLS "WATCH & UNLOCK" ═══
-    private fun loadRewardedAudioTools(context: Context) {
+    // REWARDED_AUDIO_TOOLS_ID is Google's official TEST rewarded unit
+    // (ca-app-pub-3940256099942544/5224354917). Test units always serve a valid
+    // test ad on a live connection — that is exactly what keeps this flow
+    // reliable in a build we can verify. Before a public production release,
+    // swap it for a real rewarded unit created under pub-8178045957849630 in
+    // the AdMob console (the other 14 units above are already production IDs).
+    private fun loadRewardedAudioTools(
+        context: Context,
+        onResult: ((RewardedAd?, LoadAdError?) -> Unit)? = null
+    ) {
         RewardedAd.load(context, REWARDED_AUDIO_TOOLS_ID, AdRequest.Builder().build(),
             object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) { rewardedAudioTools = ad; Log.d(TAG, "Rewarded AudioTools loaded") }
-                override fun onAdFailedToLoad(error: LoadAdError) { Log.w(TAG, "Rewarded AudioTools failed: ${error.message}") }
+                override fun onAdLoaded(ad: RewardedAd) {
+                    rewardedAudioTools = ad
+                    Log.d(TAG, "Rewarded AudioTools loaded")
+                    onResult?.invoke(ad, null)
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    // Surface the REAL AdMob reason (code + domain + message) so a
+                    // load failure is never silent/obscure again.
+                    Log.e(TAG, "Rewarded AudioTools FAILED to load — code=${error.code} domain=${error.domain} message=${error.message}")
+                    onResult?.invoke(null, error)
+                }
             })
     }
 
     /**
-     * Show the Audio Tools rewarded ad. Returns true if an ad was shown
-     * (reward fires via [onReward] only after the user completes it), or false
-     * if no ad is currently loaded (caller should surface a clear message —
-     * the feature must NOT be unlocked, but the user must also not be soft-locked).
+     * Show the Audio Tools rewarded ad.
+     *
+     * - If an ad is already preloaded, it is shown immediately.
+     * - Otherwise it is loaded ON DEMAND (so a transient miss during the deferred
+     *   startup preload can never leave the user soft-locked) and then shown.
+     *
+     * [onReward] fires only after the user completes the ad. [onError] surfaces
+     * the REAL AdMob error reason (code + message) so failures are diagnosable
+     * instead of showing a generic "couldn't load" message.
      */
-    fun showRewardedAudioTools(activity: Activity, onReward: () -> Unit): Boolean {
-        val ad = rewardedAudioTools
-        if (ad == null) {
-            android.widget.Toast.makeText(activity, "Ad not ready — check your connection and try again", android.widget.Toast.LENGTH_SHORT).show()
-            return false
+    fun showRewardedAudioTools(
+        activity: Activity,
+        onReward: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val preloaded = rewardedAudioTools
+        if (preloaded != null) {
+            showLoadedAudioTools(preloaded, activity, onReward, onError)
+            return
         }
+        Log.d(TAG, "Rewarded AudioTools not preloaded — loading on demand")
+        loadRewardedAudioTools(activity) { ad, error ->
+            if (ad != null) {
+                showLoadedAudioTools(ad, activity, onReward, onError)
+            } else {
+                val reason = error?.let { "code ${it.code}: ${it.message}" } ?: "unknown error"
+                Log.e(TAG, "Rewarded AudioTools on-demand load failed ($reason)")
+                onError("Couldn't load the ad right now ($reason). Please try again.")
+            }
+        }
+    }
+
+    private fun showLoadedAudioTools(
+        ad: RewardedAd,
+        activity: Activity,
+        onReward: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 rewardedAudioTools = null
                 loadRewardedAudioTools(activity)
             }
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                Log.e(TAG, "Rewarded AudioTools failed to SHOW — code=${error.code} message=${error.message}")
                 rewardedAudioTools = null
                 loadRewardedAudioTools(activity)
+                onError("The ad couldn't be shown (${error.message}). Please try again.")
             }
         }
+        Log.d(TAG, "Rewarded AudioTools showing ad")
         ad.show(activity) {
             // Reward earned — caller unlocks the feature.
             onReward()
         }
-        return true
     }
 
     // ═══ NATIVE AD ═══

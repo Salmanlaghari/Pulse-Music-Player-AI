@@ -313,18 +313,48 @@ private fun YouTubePlayerWebView(
         // Allow the embedded YouTube iframe to autoplay without requiring a direct
         // gesture on the WebView surface (the user's tap on the list item opened it).
         settings.mediaPlaybackRequiresUserGesture = false
+        // YouTube's embed mixes https assets; allow it so the player is not blocked.
+        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.javaScriptCanOpenWindowsAutomatically = true
+        settings.useWideViewPort = true
         webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
+                // CRITICAL FIX: only treat MAIN-FRAME resource errors as fatal.
+                // YouTube's embed loads many sub-resources (ads SDK, tracking
+                // pixels, etc.); if ANY of those fail, onReceivedError still fires
+                // here. Treating them as fatal was covering a perfectly working
+                // player with the "tap to retry" overlay — the real "plays nothing"
+                // bug. We only surface a true top-level load failure.
+                if (request?.isForMainFrame != true) return
                 val msg = error?.description?.toString() ?: "unknown error"
-                Log.e(TAG_CHANNEL_PLAYER, "WebView error loading player: $msg")
+                Log.e(TAG_CHANNEL_PLAYER, "WebView MAIN-FRAME error loading player: $msg")
                 onError("Couldn't load the video player ($msg)")
             }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: android.webkit.WebResourceResponse?
+            ) {
+                // Log HTTP-level errors for diagnostics but do NOT block playback
+                // for sub-resources (see above).
+                if (request?.isForMainFrame == true) {
+                    Log.e(TAG_CHANNEL_PLAYER, "WebView HTTP error ${errorResponse?.statusCode} for ${request.url}")
+                }
+            }
         }
-        webChromeClient = WebChromeClient()
+        webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                consoleMessage?.let {
+                    Log.d(TAG_CHANNEL_PLAYER, "YT-Console(${it.messageLevel()}): ${it.message()}")
+                }
+                return super.onConsoleMessage(consoleMessage)
+            }
+        }
 
         // Bridge to receive player-ready / error callbacks from JS.
         addJavascriptInterface(YouTubePlayerBridge(onReady, onError), "Android")
@@ -367,6 +397,26 @@ private fun YouTubePlayerWebView(
                     try { player.playVideo(); } catch (err) {}
                   }
                 }
+                // Safety net: if the IFrame API global never fires (script blocked,
+                // cold network, etc.) fall back to a directly-embedded autoplay
+                // iframe so playback still works instead of hanging on the overlay.
+                setTimeout(function() {
+                  if (typeof player === 'undefined' || !player) {
+                    try {
+                      var f = document.createElement('iframe');
+                      f.src = 'https://www.youtube.com/embed/$safeVideoId?autoplay=1&playsinline=1&rel=0&controls=1';
+                      f.allow = 'autoplay; encrypted-media; picture-in-picture';
+                      f.style.position = 'absolute';
+                      f.style.top = '0'; f.style.left = '0';
+                      f.style.width = '100%'; f.style.height = '100%';
+                      f.style.border = '0';
+                      document.body.appendChild(f);
+                      if (window.Android) Android.onReady();
+                    } catch (err) {
+                      if (window.Android) Android.onError('fallback-embed-failed');
+                    }
+                  }
+                }, 6000);
               </script>
               <script src="https://www.youtube.com/iframe_api"></script>
             </body>
