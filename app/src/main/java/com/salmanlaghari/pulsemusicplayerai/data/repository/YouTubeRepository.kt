@@ -606,6 +606,25 @@ class YouTubeRepository {
             if (freshUrl != null) {
                 return@withContext song.copy(audioUrl = freshUrl)
             }
+            // Fallback: this specific id may have expired or been removed.
+            // Re-search by title to obtain a fresh, playable JioSaavn id and
+            // resolve its stream URL. This keeps Desi Hits/JioSaavn playback
+            // alive even when an individual cached id stops working.
+            try {
+                val candidate = searchJioSaavn(song.title).firstOrNull { it.audioUrl.isNotBlank() }
+                if (candidate != null) {
+                    val candidateRaw = candidate.id.removePrefix("js_")
+                    val fallbackUrl = refreshJioSaavnUrl(candidateRaw)
+                    if (fallbackUrl != null) {
+                        return@withContext song.copy(
+                            id = "dh_$candidateRaw",
+                            audioUrl = fallbackUrl
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "refreshSongAudio fallback failed for '${song.title}': ${e.message}")
+            }
         }
         song
     }
@@ -674,23 +693,34 @@ class YouTubeRepository {
         Log.d(TAG, "Loading South Asian catalog: $totalQueries queries")
 
         for (query in SOUTH_ASIAN_QUERIES) {
-            try {
-                val results = searchJioSaavn(query)
-                for (song in results) {
-                    // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
-                    val rawId = song.id.removePrefix("js_")
-                    if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
-                        // Remap to dh_ prefix so the source badge shows "Desi Hits"
-                        // instead of "JioSaavn". URLs are resolved on-demand at playback
-                        // time via refreshJioSaavnUrl() since CDN URLs expire over time.
-                        allSongs[rawId] = song.copy(
-                            id = "dh_$rawId",
-                            audioUrl = "" // clear cached URL — resolve fresh on play
-                        )
-                    }
+            // Pace the burst of curated queries so we don't get rate-limited
+            // (HTTP 429) by saavn.sumit.co — a burst was causing the catalog to
+            // come back empty/partial and made Desi Hits appear "broken".
+            if (completed > 0) kotlinx.coroutines.delay(350)
+
+            var results: List<YouTubeSong> = emptyList()
+            repeat(2) { attempt ->
+                try {
+                    results = searchJioSaavn(query)
+                    if (results.isNotEmpty()) return@repeat
+                } catch (e: Exception) {
+                    Log.w(TAG, "Catalog query '$query' attempt $attempt failed: ${e.message}")
+                    if (attempt == 0) kotlinx.coroutines.delay(500)
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Catalog query '$query' failed: ${e.message}")
+            }
+
+            for (song in results) {
+                // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
+                val rawId = song.id.removePrefix("js_")
+                if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
+                    // Remap to dh_ prefix so the source badge shows "Desi Hits"
+                    // instead of "JioSaavn". URLs are resolved on-demand at playback
+                    // time via refreshJioSaavnUrl() since CDN URLs expire over time.
+                    allSongs[rawId] = song.copy(
+                        id = "dh_$rawId",
+                        audioUrl = "" // clear cached URL — resolve fresh on play
+                    )
+                }
             }
 
             completed++

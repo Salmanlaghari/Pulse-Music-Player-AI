@@ -63,6 +63,10 @@ class YouTubeViewModel(
 
     private var southAsianJob: Job? = null
     private var southAsianLoaded = false
+    private var southAsianLoadedAtMs = 0L
+    // Re-sync the Desi Hits catalog if it's older than this (keeps the list fresh
+    // without hammering the API on every tab open).
+    private val SOUTH_ASIAN_STALE_MS = 15 * 60 * 1000L
 
     private var youTubeTrendingJob: Job? = null
     private var youTubeTrendingLoaded = false
@@ -99,6 +103,15 @@ class YouTubeViewModel(
         loadTrending()
         // Auto-load Desi Hits catalog on startup (it's the default tab)
         loadSouthAsianCatalog()
+        // Automatic song sync: keep the Desi Hits catalog fresh by re-syncing
+        // periodically in the background (every 30 minutes). The catalog only
+        // re-loads when it is stale, so this is a no-op most of the time.
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                syncSouthAsianCatalog()
+            }
+        }
     }
 
     fun loadTrending() {
@@ -196,9 +209,12 @@ class YouTubeViewModel(
      * Load 500-1000 Bollywood/Pakistani/South Asian/Northern songs from JioSaavn.
      * Uses curated search queries to build a large deduplicated catalog.
      * All songs come with full 320kbps stream URLs (confirmed working).
+     *
+     * @param force When true, bypasses the "already loaded" guard and re-syncs
+     *              the catalog (used by the periodic auto-sync / stale refresh).
      */
-    fun loadSouthAsianCatalog() {
-        if (southAsianLoaded && _southAsianSongs.value.isNotEmpty()) {
+    fun loadSouthAsianCatalog(force: Boolean = false) {
+        if (!force && southAsianLoaded && _southAsianSongs.value.isNotEmpty()) {
             Log.d(TAG, "South Asian catalog already loaded (${_southAsianSongs.value.size} songs), skipping")
             return
         }
@@ -212,12 +228,28 @@ class YouTubeViewModel(
                 }
                 _southAsianSongs.value = songs
                 southAsianLoaded = true
+                southAsianLoadedAtMs = System.currentTimeMillis()
                 Log.d(TAG, "Loaded ${songs.size} South Asian songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load South Asian catalog", e)
             } finally {
                 _isSouthAsianLoading.value = false
             }
+        }
+    }
+
+    /**
+     * Automatic song sync for Desi Hits: re-load the catalog if it hasn't been
+     * loaded yet, came back empty, or is older than [SOUTH_ASIAN_STALE_MS].
+     * This restores the PR #34 "automatic sync" expectation — the Desi Hits
+     * list keeps itself fresh without the user manually pulling to refresh.
+     */
+    fun syncSouthAsianCatalog() {
+        val stale = southAsianLoadedAtMs == 0L ||
+                System.currentTimeMillis() - southAsianLoadedAtMs > SOUTH_ASIAN_STALE_MS
+        if (_southAsianSongs.value.isEmpty() || stale) {
+            Log.d(TAG, "syncSouthAsianCatalog: re-syncing (stale=${stale}, size=${_southAsianSongs.value.size})")
+            loadSouthAsianCatalog(force = true)
         }
     }
 

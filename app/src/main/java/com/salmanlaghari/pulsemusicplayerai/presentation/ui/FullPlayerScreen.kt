@@ -318,7 +318,7 @@ fun FullPlayerScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.togglePlayPause()
                                 },
-                                modifier = Modifier.shadow(14.dp, CircleShape).background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(100.dp)
+                                modifier = Modifier.shadow(14.dp, CircleShape).background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,

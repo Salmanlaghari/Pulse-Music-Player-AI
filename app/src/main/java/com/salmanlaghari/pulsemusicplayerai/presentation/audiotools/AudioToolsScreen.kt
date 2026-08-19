@@ -72,7 +72,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import android.app.Activity
 import com.salmanlaghari.pulsemusicplayerai.common.GlassmorphicCard
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoStudioType
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.VideoStudioScreen
 import com.salmanlaghari.pulsemusicplayerai.theme.*
@@ -94,14 +97,22 @@ enum class StudioScreen {
 @Composable
 fun AudioToolsScreen() {
     val context = LocalContext.current
+    val activity = context as Activity
     val studioViewModel: AudioStudioViewModel = viewModel(
         factory = AudioStudioViewModelFactory(context.applicationContext)
     )
+    val premiumStore = remember { PremiumUnlockStore(context.applicationContext) }
 
     var currentScreen by remember { mutableStateOf(StudioScreen.MAIN_LIST) }
     var showVideoStudioSheet by remember { mutableStateOf(false) }
     var selectedVideoType by remember { mutableStateOf(VideoStudioType.MP3_TO_MP4) }
     var videoFileToPreview by remember { mutableStateOf<com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile?>(null) }
+
+    // Pending "Watch & Unlock" request: when set, the sheet is shown.
+    var pendingUnlock by remember { mutableStateOf<UnlockRequest?>(null) }
+    val requestUnlock: (String, String, () -> Unit) -> Unit = { key, title, onUnlocked ->
+        pendingUnlock = UnlockRequest(key, title, onUnlocked)
+    }
 
     val isProcessing by studioViewModel.isProcessing.collectAsState()
     val progress by studioViewModel.progress.collectAsState()
@@ -120,6 +131,8 @@ fun AudioToolsScreen() {
         when (currentScreen) {
             StudioScreen.MAIN_LIST -> {
                 AudioToolsMainList(
+                    premiumStore = premiumStore,
+                    onRequestUnlock = requestUnlock,
                     onNavigateToTool = { screen ->
                         studioViewModel.clearSelection()
                         currentScreen = screen
@@ -160,6 +173,7 @@ fun AudioToolsScreen() {
                 VideoStudioScreen(
                     type = selectedVideoType,
                     viewModel = studioViewModel,
+                    onRequestUnlock = requestUnlock,
                     onNavigateBack = {
                         studioViewModel.clearSelection()
                         currentScreen = StudioScreen.MAIN_LIST
@@ -451,23 +465,41 @@ fun AudioToolsScreen() {
                 }
             }
         }
+
+        // --- Watch & Unlock sheet for gated premium Audio Tools ---
+        pendingUnlock?.let { req ->
+            WatchUnlockSheet(
+                featureKey = req.key,
+                featureTitle = req.title,
+                activity = activity,
+                store = premiumStore,
+                onDismiss = { pendingUnlock = null },
+                onUnlocked = {
+                    req.onUnlocked()
+                    pendingUnlock = null
+                }
+            )
+        }
     }
 }
 
 @Composable
 fun AudioToolsMainList(
+    premiumStore: PremiumUnlockStore,
+    onRequestUnlock: (String, String, () -> Unit) -> Unit,
     onNavigateToTool: (StudioScreen) -> Unit,
     onOpenVideoStudio: () -> Unit
 ) {
-    // Continuous single list including ALL 7 required Audio Tools as specified
+    // Continuous single list including ALL 7 required Audio Tools as specified.
+    // The 3 headline premium tools are gated behind "Watch & Unlock".
     val toolsList = listOf(
         AudioToolData("MP3 Cutter", "Cut, trim & make ringtones from any audio file", Icons.Default.ContentCut, StudioScreen.CUTTER),
         AudioToolData("Audio Merger", "Merge multiple MP3 files into one seamless track", Icons.Default.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert between MP3, WAV, AAC, FLAC & more", Icons.Default.Transform, StudioScreen.CONVERTER),
-        AudioToolData("Video Studio Pro", "MP3 → MP4 with live visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO),
+        AudioToolData("Video Studio Pro", "MP3 → MP4 with live visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO, isPremium = true, premiumKey = PremiumFeature.VIDEO_STUDIO),
         AudioToolData("Extract Audio", "Pull audio track directly from any video file", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
-        AudioToolData("Compressor", "Reduce file size while keeping audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR),
-        AudioToolData("Speed Changer", "Adjust playback speed & pitch of any track", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH)
+        AudioToolData("Compressor", "Reduce file size while keeping audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR, isPremium = true, premiumKey = PremiumFeature.COMPRESSOR),
+        AudioToolData("Speed Changer", "Adjust playback speed & pitch of any track", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH, isPremium = true, premiumKey = PremiumFeature.SPEED_PITCH)
     )
 
     // Base background with Navy Blue base and radial glows
@@ -594,6 +626,19 @@ fun AudioToolsMainList(
             ) {
                 items(toolsList) { tool ->
                     val isFeatured = tool.targetScreen == StudioScreen.VIDEO_STUDIO
+                    // Premium tools are gated until the user watches a rewarded ad.
+                    val isUnlocked = if (tool.isPremium) {
+                        premiumStore.isUnlocked(tool.premiumKey ?: "").collectAsState(initial = false).value
+                    } else true
+
+                    fun openTool() {
+                        if (tool.targetScreen == StudioScreen.VIDEO_STUDIO) {
+                            onOpenVideoStudio()
+                        } else {
+                            onNavigateToTool(tool.targetScreen)
+                        }
+                    }
+
                     GlassmorphicCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -609,10 +654,11 @@ fun AudioToolsMainList(
                             )
                         } else null,
                         onClick = {
-                            if (tool.targetScreen == StudioScreen.VIDEO_STUDIO) {
-                                onOpenVideoStudio()
+                            if (tool.isPremium && !isUnlocked) {
+                                // Gate: prompt the Watch & Unlock rewarded ad.
+                                onRequestUnlock(tool.premiumKey ?: "", tool.title) { openTool() }
                             } else {
-                                onNavigateToTool(tool.targetScreen)
+                                openTool()
                             }
                         }
                     ) {
@@ -673,6 +719,18 @@ fun AudioToolsMainList(
                                             Text("PRO", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF04262A))
                                         }
                                     }
+                                    if (tool.isPremium && !isUnlocked) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(start = 6.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color(0xFF2A2A33))
+                                                .padding(horizontal = 7.dp, vertical = 2.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("🔒", fontSize = 9.sp)
+                                        }
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(3.dp))
                                 Text(
@@ -715,5 +773,14 @@ data class AudioToolData(
     val title: String,
     val description: String,
     val icon: ImageVector,
-    val targetScreen: StudioScreen
+    val targetScreen: StudioScreen,
+    val isPremium: Boolean = false,
+    val premiumKey: String? = null
+)
+
+/** Pending "Watch & Unlock" request shown as a bottom sheet. */
+data class UnlockRequest(
+    val key: String,
+    val title: String,
+    val onUnlocked: () -> Unit
 )
