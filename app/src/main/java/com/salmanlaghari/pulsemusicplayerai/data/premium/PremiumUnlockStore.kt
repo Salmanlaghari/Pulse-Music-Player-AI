@@ -1,49 +1,51 @@
 package com.salmanlaghari.pulsemusicplayerai.data.premium
 
-import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * Persists which premium ("Watch & Unlock") Audio Tools features a user has
- * unlocked by watching a rewarded ad.
+ * Session-scoped store for "Watch & Unlock" Audio Tools features.
  *
- * Unlock SCOPE: permanent-until-app-data-cleared.
- *   Once a feature is unlocked via a rewarded ad it stays unlocked for the
- *   lifetime of the app install (survives process death / app restart). It is
- *   cleared only when the user clears the app's data. This avoids re-prompting
- *   the user to watch an ad every session while still keeping the feature
- *   genuinely gated behind a completed reward.
+ * IMPORTANT: unlock state is intentionally NOT persisted (no DataStore /
+ * SharedPreferences / file). It lives only for the lifetime of the current app
+ * process, so a feature unlocked by watching a rewarded ad stays available for
+ * THIS session but is reset on app restart. This enforces "watch an ad each
+ * session" instead of a permanent, once-and-done unlock.
+ *
+ * State is held in a companion object so every PremiumUnlockStore instance
+ * (AudioToolsScreen, StudioUtilityScreens, etc.) shares the same in-memory
+ * flags — unlocking in one place reflects everywhere for the session.
  */
-val Context.premiumUnlockDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "premium_unlocks"
-)
+class PremiumUnlockStore(context: android.content.Context) {
 
-/** Stable keys identifying each gated premium feature in Audio Tools. */
-object PremiumFeature {
-    const val VIDEO_STUDIO = "audio_tools_video_studio"
-    const val COMPRESSOR = "audio_tools_compressor"
-    const val SPEED_PITCH = "audio_tools_speed_pitch"
-    const val EXPORT_1080P = "audio_tools_export_1080p"
-}
+    fun isUnlocked(feature: String): Flow<Boolean> = SessionState.flowFor(feature)
 
-class PremiumUnlockStore(private val context: Context) {
+    suspend fun unlock(feature: String) {
+        SessionState.unlock(feature)
+    }
 
-    /** Emits whether [feature] has been unlocked. Defaults to false. */
-    fun isUnlocked(feature: String): Flow<Boolean> =
-        context.premiumUnlockDataStore.data.map { prefs ->
-            prefs[booleanPreferencesKey(feature)] == true
+    /** Reset all session unlocks (e.g. for a manual "lock again" action). */
+    fun clearSession() = SessionState.clear()
+
+    private companion object SessionState {
+        private val unlocked = mutableSetOf<String>()
+        private val flows = mutableMapOf<String, MutableStateFlow<Boolean>>()
+
+        @Synchronized
+        fun flowFor(feature: String): Flow<Boolean> {
+            return flows.getOrPut(feature) { MutableStateFlow(feature in unlocked) }
         }
 
-    /** Persist that [feature] is now unlocked. */
-    suspend fun unlock(feature: String) {
-        context.premiumUnlockDataStore.edit { prefs ->
-            prefs[booleanPreferencesKey(feature)] = true
+        @Synchronized
+        fun unlock(feature: String) {
+            unlocked.add(feature)
+            flows[feature]?.value = true
+        }
+
+        @Synchronized
+        fun clear() {
+            unlocked.clear()
+            flows.values.forEach { it.value = false }
         }
     }
 }

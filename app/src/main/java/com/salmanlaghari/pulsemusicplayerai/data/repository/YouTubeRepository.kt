@@ -423,11 +423,35 @@ class YouTubeRepository {
     // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
         val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
-        if (primary.isNotEmpty()) return primary
-        // Primary endpoint down (e.g. saavn.sumit.co error 1027) — fall back to a
-        // compatible public mirror so the catalog/list still populates.
-        Log.w(TAG, "JioSaavn primary empty for '$query' — trying mirror")
-        return runCatching { searchJioSaavnMirror(query) }.getOrDefault(emptyList())
+        if (primary.isNotEmpty()) {
+            Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
+            return primary
+        }
+        // Primary endpoint is dead in practice (saavn.sumit.co now returns
+        // HTTP 429 / "error code: 1027" — verified). Fall back to the public
+        // mirror, retrying with backoff because the Vercel serverless host can
+        // cold-start or rate-limit under the 25-query catalog burst.
+        Log.w(TAG, "JioSaavn PRIMARY EMPTY for '$query' — using mirror fallback")
+        return searchJioSaavnMirrorRetry(query)
+    }
+
+    /**
+     * Try the mirror up to 3 times with linear backoff. This is the resilience
+     * fix for "Desi Hits not loading": the working mirror is rate-limited under
+     * burst, so a single attempt can come back empty even though the host is up.
+     */
+    private suspend fun searchJioSaavnMirrorRetry(query: String): List<YouTubeSong> {
+        repeat(3) { attempt ->
+            val res = runCatching { searchJioSaavnMirror(query) }.getOrDefault(emptyList())
+            if (res.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${res.size} results (attempt ${attempt + 1})")
+                return res
+            }
+            Log.w(TAG, "JioSaavn MIRROR empty for '$query' (attempt ${attempt + 1})")
+            if (attempt < 2) kotlinx.coroutines.delay(500L * (attempt + 1))
+        }
+        Log.e(TAG, "JioSaavn BOTH primary and mirror FAILED for '$query'")
+        return emptyList()
     }
 
     private suspend fun searchJioSaavnPrimary(query: String): List<YouTubeSong> {
@@ -436,6 +460,13 @@ class YouTubeRepository {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
             val searchUrl = "$JIOSAAVN_API/search/songs?query=$encodedQuery"
             val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+            if (searchResponse.isBlank()) {
+                // httpGetSafe returns "" on any HTTP error (e.g. the primary's
+                // HTTP 429 / "error code: 1027"). Log it so the primary-down
+                // state is visible instead of silently falling through.
+                Log.w(TAG, "JioSaavn PRIMARY returned no body for '$query' (primary likely down/rate-limited)")
+                return@searchJioSaavnPrimary emptyList()
+            }
             Log.d(TAG, "JioSaavn search response length: ${searchResponse.length} for query: $query")
 
             if (searchResponse.isNotBlank()) {
@@ -605,11 +636,32 @@ class YouTubeRepository {
     // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
         val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
-        if (primary != null) return@withContext primary
+        if (primary != null) {
+            Log.d(TAG, "JioSaavn details PRIMARY OK for '$songId'")
+            return@withContext primary
+        }
         // Primary endpoint down (saavn.sumit.co error 1027) — try the mirror,
         // which serves a directly-playable media_url for the same song id.
-        Log.w(TAG, "JioSaavn details primary failed for '$songId' — trying mirror")
-        return@withContext runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+        Log.w(TAG, "JioSaavn details PRIMARY failed for '$songId' — trying mirror")
+        return@withContext getJioSaavnSongDetailsMirrorRetry(songId)
+    }
+
+    /**
+     * Mirror retry for song details (same resilience rationale as the search
+     * fallback): the working mirror can rate-limit, so retry before giving up.
+     */
+    private suspend fun getJioSaavnSongDetailsMirrorRetry(songId: String): JSONObject? {
+        repeat(3) { attempt ->
+            val res = runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+            if (res != null) {
+                Log.d(TAG, "JioSaavn details MIRROR OK for '$songId' (attempt ${attempt + 1})")
+                return res
+            }
+            Log.w(TAG, "JioSaavn details MIRROR failed for '$songId' (attempt ${attempt + 1})")
+            if (attempt < 2) kotlinx.coroutines.delay(400L * (attempt + 1))
+        }
+        Log.e(TAG, "JioSaavn details BOTH primary and mirror FAILED for '$songId'")
+        return null
     }
 
     private suspend fun getJioSaavnSongDetailsPrimary(songId: String): JSONObject? {
@@ -831,7 +883,7 @@ class YouTubeRepository {
             // Pace the burst of curated queries so we don't get rate-limited
             // (HTTP 429) by saavn.sumit.co — a burst was causing the catalog to
             // come back empty/partial and made Desi Hits appear "broken".
-            if (completed > 0) kotlinx.coroutines.delay(350)
+            if (completed > 0) kotlinx.coroutines.delay(500)
 
             var results: List<YouTubeSong> = emptyList()
             repeat(2) { attempt ->

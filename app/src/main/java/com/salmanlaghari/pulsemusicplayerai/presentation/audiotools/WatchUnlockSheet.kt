@@ -17,9 +17,9 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -45,15 +45,15 @@ import kotlinx.coroutines.launch
  *
  * Flow:
  *  1. User taps a locked premium tool → this sheet appears.
- *  2. "Watch ad & unlock" loads + shows the rewarded ad.
- *  3. On completed reward → the feature is persisted as unlocked (via
- *     [PremiumUnlockStore], permanent-until-app-data-cleared) and [onUnlocked]
- *     runs so the caller can open the feature immediately.
+ *  2. "Watch ad & use" loads + shows the rewarded ad.
+ *  3. On completed reward → the feature is unlocked for THIS SESSION (via
+ *     [PremiumUnlockStore], which is intentionally NOT persisted) and
+ *     [onUnlocked] runs so the caller can open the feature immediately. The
+ *     user must watch another ad next session / next app launch.
  *
- * Failure handling: if no ad is available (offline / no fill) the sheet shows a
- * clear message and stays open with a Retry option — the user is NEVER soft-
- * locked out of the app, and the feature is only ever unlocked after a real
- * reward is earned.
+ * Failure handling: if no ad is available (offline / no fill) the sheet shows
+ * the REAL AdMob error and stays open with a Retry option — the user is NEVER
+ * soft-locked, and the feature is only ever unlocked after a real reward.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +65,8 @@ fun WatchUnlockSheet(
     onDismiss: () -> Unit,
     onUnlocked: () -> Unit
 ) {
-    var adError by remember { mutableStateOf(false) }
+    var adErrorMsg by remember { mutableStateOf<String?>(null) }
+    var isLoadingAd by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
@@ -95,7 +96,7 @@ fun WatchUnlockSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Watch a short video ad to permanently unlock this premium tool on your device.",
+                text = "Watch a short ad to use this now. The feature stays unlocked for this session — watch again next time you open the app.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center
@@ -103,9 +104,9 @@ fun WatchUnlockSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            if (adError) {
+            if (adErrorMsg != null) {
                 Text(
-                    text = "Couldn't load an ad right now. Check your connection and try again.",
+                    text = adErrorMsg ?: "Couldn't load an ad right now. Check your connection and try again.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
@@ -115,39 +116,64 @@ fun WatchUnlockSheet(
 
             Button(
                 onClick = {
-                    adError = false
-                    val shown = AdManager.showRewardedAudioTools(activity) {
-                        // Reward earned → persist unlock, then open the feature.
-                        scope.launch {
-                            store.unlock(featureKey)
-                            onUnlocked()
+                    if (isLoadingAd) return@Button
+                    isLoadingAd = true
+                    adErrorMsg = null
+                    AdManager.showRewardedAudioTools(
+                        activity = activity,
+                        onReward = {
+                            isLoadingAd = false
+                            // Reward earned → unlock for THIS SESSION, then open.
+                            scope.launch {
+                                store.unlock(featureKey)
+                                onUnlocked()
+                            }
+                        },
+                        onError = { msg ->
+                            isLoadingAd = false
+                            adErrorMsg = msg
                         }
-                    }
-                    if (!shown) adError = true
+                    )
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
-                )
+                ),
+                enabled = !isLoadingAd
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayCircle,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(
-                        text = "Watch ad & unlock",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
-                    )
+                    if (isLoadingAd) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = "Loading ad…",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = "Watch ad & use now",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
+                    }
                 }
             }
 
@@ -174,7 +200,7 @@ fun WatchUnlockSheet(
                 )
                 Spacer(modifier = Modifier.size(4.dp))
                 Text(
-                    text = "Unlocked features stay available until you clear app data.",
+                    text = "Unlocked for this session only — watch again next time you open the app.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                 )
