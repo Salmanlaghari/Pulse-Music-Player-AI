@@ -1296,12 +1296,20 @@ class YouTubeRepository {
     // ═══════════════════════════════════════════════
     suspend fun getChannelVideos(): List<ChannelVideo> = withContext(Dispatchers.IO) {
         Log.d(TAG, "Loading My Channel videos (RSS) for $CHANNEL_NAME")
-        val xml = httpGetSafe(CHANNEL_RSS_URL, timeout = NORMAL_TIMEOUT)
-        if (xml.isBlank()) {
-            Log.w(TAG, "My Channel RSS returned empty response")
-            return@withContext emptyList()
+        // Retry once on a blank/empty response so transient network blips (common on
+        // mobile) don't surface as "channel empty" — the list only errors out after
+        // a genuine failure, which the UI shows via channelError.
+        var xml = ""
+        repeat(2) { attempt ->
+            xml = httpGetSafe(CHANNEL_RSS_URL, timeout = NORMAL_TIMEOUT)
+            if (xml.isNotBlank()) return@withContext parseChannelRss(xml)
+            if (attempt == 0) {
+                Log.w(TAG, "My Channel RSS blank on attempt 1, retrying")
+                kotlinx.coroutines.delay(400)
+            }
         }
-        parseChannelRss(xml)
+        Log.w(TAG, "My Channel RSS returned empty response after retries")
+        emptyList()
     }
 
     /**
