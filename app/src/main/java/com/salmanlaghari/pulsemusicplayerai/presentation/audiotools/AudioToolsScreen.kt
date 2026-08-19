@@ -173,6 +173,7 @@ fun AudioToolsScreen() {
                 VideoStudioScreen(
                     type = selectedVideoType,
                     viewModel = studioViewModel,
+                    premiumStore = premiumStore,
                     onRequestUnlock = requestUnlock,
                     onNavigateBack = {
                         studioViewModel.clearSelection()
