@@ -605,11 +605,11 @@ class YouTubeRepository {
     // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
         val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
-        if (primary != null) return primary
+        if (primary != null) return@withContext primary
         // Primary endpoint down (saavn.sumit.co error 1027) — try the mirror,
         // which serves a directly-playable media_url for the same song id.
         Log.w(TAG, "JioSaavn details primary failed for '$songId' — trying mirror")
-        return runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+        return@withContext runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
     }
 
     private suspend fun getJioSaavnSongDetailsPrimary(songId: String): JSONObject? {
