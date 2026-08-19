@@ -309,9 +309,9 @@ class VisualizerFrameRenderer(
         val angle = (t / 12f) * 360f
         val rad = Math.toRadians(angle.toDouble()).toFloat()
         val dx = kotlin.math.cos(rad); val dy = kotlin.math.sin(rad)
-        val gx = width / 2f + dx * width; val gy = height / 2f + dy * height
         val grad = LinearGradient(
-            width / 2f - dx * width, height / 2f - dy * height, gx, gy,
+            width / 2f - dx * width, height / 2f - dy * height,
+            width / 2f + dx * width, height / 2f + dy * height,
             intArrayOf(c0, c1, c2), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
         )
         fill.shader = grad

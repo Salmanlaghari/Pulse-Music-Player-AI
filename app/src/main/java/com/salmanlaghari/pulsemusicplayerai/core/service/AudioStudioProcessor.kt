@@ -19,7 +19,6 @@ import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundAudioSource
-import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundMood
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
@@ -1691,7 +1690,7 @@ class AudioStudioProcessor(private val context: Context) {
         // Resolve the selection to a catalogue track so we know whether the audio
         // is a BUNDLED res loop or a REMOTE royalty-free loop streamed on demand.
         val track = BuiltInBackgroundTracks.resolve(sel)
-        val bg = (if (track?.audioSource == BackgroundAudioSource.REMOTE && track.remoteUrl != null) {
+        val bg = if (track?.audioSource == BackgroundAudioSource.REMOTE && track.remoteUrl != null) {
             // Best-effort on-demand download + decode. Any failure (CDN down,
             // unsupported format) returns null and we fall back to source-only.
             decodeRemoteUrlToPcm(track.remoteUrl)
@@ -1701,7 +1700,7 @@ class AudioStudioProcessor(private val context: Context) {
                 context.resources.getIdentifier(resName, "raw", context.packageName)
             } catch (e: Exception) { 0 }
             if (resId == 0) null else decodeRawResourceToPcm(resId)
-        }) ?: return null
+        } ?: return null
 
         val bgMatched = if (bg.sampleRate != source.sampleRate || bg.channelCount != source.channelCount) {
             PcmAudio(resamplePcm(bg, source.sampleRate, source.channelCount), source.sampleRate, source.channelCount)
