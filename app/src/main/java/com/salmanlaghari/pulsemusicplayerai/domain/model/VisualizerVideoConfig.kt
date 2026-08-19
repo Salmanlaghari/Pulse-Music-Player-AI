@@ -131,7 +131,13 @@ data class VisualizerVideoConfig(
     val endMs: Long = 0L,
     val title: String = "",
     val artist: String = "",
-    val showText: Boolean = true,
+    /**
+     * Burn the song title/artist text onto the frame. Default OFF: the generic
+     * title overlay was an unwanted artifact on both the preview and the exported
+     * MP4 (no preset is designed around showing the title as a core look). Users
+     * can still opt in via the "Show title text" switch in the export UI.
+     */
+    val showText: Boolean = false,
     /** Optional background image content/file uri, as a string. */
     val backgroundImageUri: String? = null,
     val backgroundFit: BackgroundFit = BackgroundFit.CROP,
@@ -153,6 +159,13 @@ data class VisualizerVideoConfig(
     val backgroundTrackResName: String? = null,
     /** Mix gain (0f..1f) applied to the built-in background track. */
     val backgroundTrackVolume: Float = 0.35f,
+    /**
+     * Animated visual mood drawn behind the visualizer during export. Each
+     * background track carries its own [BackgroundMood]; when set, a distinct
+     * procedural animated background (seamless gradient/particle loop) is rendered
+     * instead of the flat [backgroundStyle] fill. Null keeps the flat style.
+     */
+    val backgroundMood: BackgroundMood? = null,
     /**
      * Burn the Pulse Music Player logo as a semi-transparent watermark into the
      * exported MP4. Default ON; users can disable it for a clean export.

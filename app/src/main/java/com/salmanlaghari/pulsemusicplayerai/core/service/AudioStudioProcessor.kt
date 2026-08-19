@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.annotation.IntDef
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundAudioSource
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
@@ -1683,13 +1684,23 @@ class AudioStudioProcessor(private val context: Context) {
      * caller falls back to the source audio only (original behaviour).
      */
     private suspend fun mixBackgroundTrack(source: PcmAudio, config: VisualizerVideoConfig): PcmAudio? {
-        val resName = config.backgroundTrackResName ?: return null
-        if (resName == BuiltInBackgroundTracks.NONE) return null
-        val resId = try {
-            context.resources.getIdentifier(resName, "raw", context.packageName)
-        } catch (e: Exception) { 0 }
-        if (resId == 0) return null
-        val bg = decodeRawResourceToPcm(resId) ?: return null
+        val sel = config.backgroundTrackResName ?: return null
+        if (sel == BuiltInBackgroundTracks.NONE) return null
+
+        // Resolve the selection to a catalogue track so we know whether the audio
+        // is a BUNDLED res loop or a REMOTE royalty-free loop streamed on demand.
+        val track = BuiltInBackgroundTracks.resolve(sel)
+        val bg = if (track?.audioSource == BackgroundAudioSource.REMOTE && track.remoteUrl != null) {
+            // Best-effort on-demand download + decode. Any failure (CDN down,
+            // unsupported format) returns null and we fall back to source-only.
+            decodeRemoteUrlToPcm(track.remoteUrl)
+        } else {
+            val resName = track?.resEntryName ?: sel
+            val resId = try {
+                context.resources.getIdentifier(resName, "raw", context.packageName)
+            } catch (e: Exception) { 0 }
+            if (resId == 0) null else decodeRawResourceToPcm(resId)
+        } ?: return null
 
         val bgMatched = if (bg.sampleRate != source.sampleRate || bg.channelCount != source.channelCount) {
             PcmAudio(resamplePcm(bg, source.sampleRate, source.channelCount), source.sampleRate, source.channelCount)
@@ -1709,6 +1720,46 @@ class AudioStudioProcessor(private val context: Context) {
             outShorts.put(i, mixed.toShort())
         }
         return PcmAudio(out, source.sampleRate, source.channelCount)
+    }
+
+    /**
+     * Downloads a royalty-free background loop from [url] to the cache and decodes
+     * it to PCM. Returns null on any failure so callers can gracefully fall back
+     * to source-audio-only (the export still succeeds, just without the bed).
+     */
+    private suspend fun decodeRemoteUrlToPcm(url: String): PcmAudio? = withContext(Dispatchers.IO) {
+        val tmp = File(context.cacheDir, "bg_remote_${System.currentTimeMillis()}.mp3")
+        try {
+            if (!downloadToFile(url, tmp)) return@withContext null
+            val uri = Uri.fromFile(tmp)
+            decodeToPcm(uri)
+        } catch (e: Exception) {
+            Log.w("AudioStudioProcessor", "Remote bg decode failed: ${e.message}")
+            null
+        } finally {
+            try { if (tmp.exists()) tmp.delete() } catch (_: Exception) { }
+        }
+    }
+
+    /** Streams [url] bytes into [outFile]. Returns true on success. */
+    private fun downloadToFile(url: String, outFile: File): Boolean {
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
+            conn.instanceFollowRedirects = true
+            conn.inputStream.use { input ->
+                FileOutputStream(outFile).use { fos ->
+                    val buf = ByteArray(32 * 1024)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) fos.write(buf, 0, read)
+                }
+            }
+            outFile.length() > 0L
+        } catch (e: Exception) {
+            Log.w("AudioStudioProcessor", "bg download failed: ${e.message}")
+            false
+        }
     }
 
 
