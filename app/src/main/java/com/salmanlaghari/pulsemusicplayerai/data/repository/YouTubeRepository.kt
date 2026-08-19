@@ -291,7 +291,12 @@ class YouTubeRepository {
         private const val JAMENDO_API_BASE = "https://api.jamendo.com/v3.0"
         
         // ═══ JioSaavn API - FULL SONGS! (FREE) ═══
+        // Primary endpoint. NOTE: saavn.sumit.co has been observed returning
+        // "error code: 1027" (upstream outage) — when that happens we transparently
+        // fall back to a compatible public mirror so Desi Hits / JioSaavn keep
+        // working instead of showing an empty catalog.
         private const val JIOSAAVN_API = "https://saavn.sumit.co/api"
+        private const val JIOSAAVN_MIRROR = "https://jiosaavn-api.vercel.app"
 
         // ═══ MY CHANNEL (owner's YouTube channel) ═══
         // Fetched from the public, key-free YouTube RSS feed. Because this is the
@@ -416,7 +421,16 @@ class YouTubeRepository {
         }
     }
     // ═══════════════════════════════════════════════
-    suspend fun searchJioSaavn(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+    suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
+        val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
+        if (primary.isNotEmpty()) return primary
+        // Primary endpoint down (e.g. saavn.sumit.co error 1027) — fall back to a
+        // compatible public mirror so the catalog/list still populates.
+        Log.w(TAG, "JioSaavn primary empty for '$query' — trying mirror")
+        return runCatching { searchJioSaavnMirror(query) }.getOrDefault(emptyList())
+    }
+
+    private suspend fun searchJioSaavnPrimary(query: String): List<YouTubeSong> {
         val songs = mutableListOf<YouTubeSong>()
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
@@ -431,7 +445,7 @@ class YouTubeRepository {
                 val dataObj = searchJson.optJSONObject("data")
                 val results = dataObj?.optJSONArray("results")
                     ?: searchJson.optJSONArray("results") // fallback to old format
-                    ?: return@withContext emptyList()
+                    ?: return emptyList()
 
                 for (i in 0 until minOf(results.length(), 20)) {
                     try {
@@ -501,7 +515,68 @@ class YouTubeRepository {
         } catch (e: Exception) {
             Log.w(TAG, "JioSaavn search error: ${e.message}")
         }
-        songs
+        return songs
+    }
+
+    /**
+     * Mirror of [searchJioSaavnPrimary] for the public jiosaavn-api.vercel.app
+     * endpoint. The response shape differs slightly (top-level `results` with
+     * `title` instead of `name`, `image` as a plain string, and `more_info`
+     * carrying `singers`), so it is parsed separately.
+     */
+    private suspend fun searchJioSaavnMirror(query: String): List<YouTubeSong> {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val searchUrl = "$JIOSAAVN_MIRROR/api/search?query=$encodedQuery"
+            val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+            if (searchResponse.isBlank()) return emptyList()
+            val searchJson = JSONObject(searchResponse)
+            val results = searchJson.optJSONArray("results") ?: return emptyList()
+            for (i in 0 until minOf(results.length(), 20)) {
+                try {
+                    val result = results.getJSONObject(i)
+                    val id = result.optString("id", "")
+                    val title = decodeHtmlEntities(result.optString("title", "Unknown"))
+                    val artistsArr = result.optJSONArray("primary_artists")
+                        ?: result.optJSONArray("artists")
+                    val artistName = StringBuilder()
+                    if (artistsArr != null) {
+                        for (a in 0 until artistsArr.length()) {
+                            val name = artistsArr.optString(a, "")
+                            if (name.isNotBlank()) {
+                                if (artistName.isNotEmpty()) artistName.append(", ")
+                                artistName.append(decodeHtmlEntities(name))
+                            }
+                        }
+                    }
+                    if (artistName.isBlank()) {
+                        artistName.append(decodeHtmlEntities(result.optString("singers", "")))
+                    }
+                    if (artistName.isBlank()) {
+                        (result.optJSONObject("more_info")?.optString("singers", ""))?.let {
+                            if (it.isNotBlank()) artistName.append(decodeHtmlEntities(it))
+                        }
+                    }
+                    val thumbnail = result.optString("image", "")
+                    val durationSec = result.optLong("duration", 0)
+                    if (id.isNotBlank()) {
+                        songs.add(YouTubeSong(
+                            id = "js_$id",
+                            title = title,
+                            artist = artistName.toString().ifBlank { "Unknown Artist" },
+                            duration = if (durationSec > 0) durationSec else 0,
+                            thumbnailUrl = thumbnail,
+                            audioUrl = "" // resolved fresh at playback via the mirror
+                        ))
+                    }
+                } catch (e: Exception) { /* skip invalid */ }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "JioSaavn mirror search error: ${e.message}")
+        }
+        Log.d(TAG, "JioSaavn mirror returned ${songs.size} results for '$query'")
+        return songs
     }
 
     // Pick the highest quality media URL from JioSaavn downloadUrl array
@@ -529,6 +604,15 @@ class YouTubeRepository {
     // BOTH shapes here so song resolution (and therefore JioSaavn/Desi Hits
     // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
+        val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
+        if (primary != null) return primary
+        // Primary endpoint down (saavn.sumit.co error 1027) — try the mirror,
+        // which serves a directly-playable media_url for the same song id.
+        Log.w(TAG, "JioSaavn details primary failed for '$songId' — trying mirror")
+        return runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+    }
+
+    private suspend fun getJioSaavnSongDetailsPrimary(songId: String): JSONObject? {
         try {
             val url = "$JIOSAAVN_API/songs/$songId"
             val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
@@ -539,7 +623,7 @@ class YouTubeRepository {
                 val dataArr = json.optJSONArray("data")
                 if (dataArr != null && dataArr.length() > 0) {
                     val first = dataArr.optJSONObject(0)
-                    if (first != null) return@withContext first
+                    if (first != null) return first
                 }
 
                 // Case 2: data is an OBJECT (older format)
@@ -550,18 +634,69 @@ class YouTubeRepository {
                         ?: dataObj.optJSONArray("songs")
                     if (nested != null && nested.length() > 0) {
                         val first = nested.optJSONObject(0)
-                        if (first != null) return@withContext first
+                        if (first != null) return first
                     }
-                    return@withContext dataObj
+                    return dataObj
                 }
 
                 // Case 3: legacy top-level format with status flag
                 if (json.optBoolean("status", false)) {
-                    return@withContext json
+                    return json
                 }
             }
         } catch (e: Exception) { Log.w(TAG, "JioSaavn song details error: ${e.message}") }
-        null
+        return null
+    }
+
+    /**
+     * Mirror fallback for song details. The jiosaavn-api.vercel.app /song?id=
+     * endpoint returns a directly-playable [media_url] (and a [media_urls] map of
+     * bitrates). We surface it via a synthetic JSONObject so the existing
+     * [refreshJioSaavnUrl] caller (which reads the `media_url` field) keeps working.
+     */
+    private suspend fun getJioSaavnSongDetailsMirror(songId: String): JSONObject? {
+        try {
+            val url = "$JIOSAAVN_MIRROR/song?id=$songId"
+            val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
+            if (response.isBlank()) return null
+            val json = JSONObject(response)
+            if (!json.optBoolean("status", true)) return null
+
+            val bestUrl = pickBestVercelMediaUrl(json)
+            if (bestUrl.isNullOrBlank()) return null
+            // Synthetic object carrying the resolved media URL.
+            val out = JSONObject()
+            out.put("media_url", bestUrl)
+            return out
+        } catch (e: Exception) {
+            Log.w(TAG, "JioSaavn mirror song details error: ${e.message}")
+            return null
+        }
+    }
+
+    /** Prefer the highest bitrate in media_urls, then fall back to media_url. */
+    private fun pickBestVercelMediaUrl(json: JSONObject): String? {
+        val mediaUrls = json.optJSONObject("media_urls")
+        if (mediaUrls != null) {
+            // Iterate keys (e.g. "320_KBPS", "160_KBPS", "96_KBPS") and pick the
+            // highest numeric bitrate available.
+            var best: String? = null
+            var bestKbps = -1
+            val keys = mediaUrls.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val url = mediaUrls.optString(key, "")
+                if (url.isBlank() || !url.startsWith("http")) continue
+                val kbps = Regex("(\\d+)").find(key)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                if (kbps >= bestKbps) {
+                    bestKbps = kbps
+                    best = url
+                }
+            }
+            if (best != null) return best
+        }
+        val single = json.optString("media_url", "")
+        return if (single.startsWith("http")) single else null
     }
 
     /**
