@@ -100,7 +100,7 @@ fun YouTubeScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
-    var selectedSource by remember { mutableStateOf(MusicSource.DESI_HITS) }
+    var selectedSource by remember { mutableStateOf(MusicSource.MY_CHANNEL) }
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
 
     // Auto-load YouTube trending when YouTube Music tab is selected (no search needed)
@@ -109,7 +109,7 @@ fun YouTubeScreen(
             viewModel.loadYouTubeTrending()
         }
         if (selectedSource == MusicSource.DESI_HITS) {
-            viewModel.loadSouthAsianCatalog()
+            viewModel.syncSouthAsianCatalog()
         }
         if (selectedSource == MusicSource.MY_CHANNEL) {
             viewModel.loadChannelVideos()
@@ -324,17 +324,8 @@ fun YouTubeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Source Tabs (scrollable) — Desi Hits first!
+                // Source Tabs (scrollable) — "My Channel" first (default), then "Desi Hits"
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        SourceChip(
-                            text = "🎭 Desi Hits",
-                            selected = selectedSource == MusicSource.DESI_HITS,
-                            onClick = {
-                                selectedSource = MusicSource.DESI_HITS
-                            }
-                        )
-                    }
                     item {
                         SourceChip(
                             text = "📺 My Channel",
@@ -343,6 +334,15 @@ fun YouTubeScreen(
                                 selectedSource = MusicSource.MY_CHANNEL
                                 viewModel.clearSearch()
                                 isSearchActive = false
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🎭 Desi Hits",
+                            selected = selectedSource == MusicSource.DESI_HITS,
+                            onClick = {
+                                selectedSource = MusicSource.DESI_HITS
                             }
                         )
                     }

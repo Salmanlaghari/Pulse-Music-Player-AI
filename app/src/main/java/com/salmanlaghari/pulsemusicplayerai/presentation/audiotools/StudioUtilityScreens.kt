@@ -2,8 +2,11 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -417,6 +420,8 @@ enum class VideoStudioType(val displayName: String, val description: String) {
 fun VideoStudioScreen(
     type: VideoStudioType,
     viewModel: AudioStudioViewModel,
+    premiumStore: PremiumUnlockStore,
+    onRequestUnlock: (String, String, () -> Unit) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -705,13 +710,29 @@ fun VideoStudioScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     VideoResolution.values().forEach { res ->
                         val isSelected = resolution == res
+                        val isLockedPremium = res == VideoResolution.FHD_1080 &&
+                                !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
                         Card(
-                            modifier = Modifier.weight(1f).height(44.dp).clickable { resolution = res },
+                            modifier = Modifier.weight(1f).height(44.dp).clickable {
+                                if (res == VideoResolution.FHD_1080 && isLockedPremium) {
+                                    onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") {
+                                        resolution = VideoResolution.FHD_1080
+                                    }
+                                } else {
+                                    resolution = res
+                                }
+                            },
                             shape = RoundedCornerShape(8.dp),
                             colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(res.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(res.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                    if (isLockedPremium) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.Default.Lock, contentDescription = "Locked", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(14.dp))
+                                    }
+                                }
                             }
                         }
                     }

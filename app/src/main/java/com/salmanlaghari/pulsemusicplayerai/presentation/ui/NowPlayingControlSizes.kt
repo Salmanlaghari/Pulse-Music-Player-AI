@@ -12,11 +12,11 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.ui
  */
 object NowPlayingControlSizes {
     /** Visual size of the Previous / Next icon buttons. */
-    const val PREV_NEXT_SIZE_DP = 72
+    const val PREV_NEXT_SIZE_DP = 64
     /** Icon size drawn inside the Previous / Next buttons. */
     const val PREV_NEXT_ICON_DP = 48
     /** Visual (container) size of the central Play / Pause button. */
-    const val PLAY_PAUSE_SIZE_DP = 104
+    const val PLAY_PAUSE_SIZE_DP = 96
     /** Icon size drawn inside the Play / Pause button (must read as primary). */
     const val PLAY_PAUSE_ICON_DP = 72
 

@@ -42,6 +42,14 @@ object AdManager {
     private const val REWARDED_SLEEP_TIMER_ID = "ca-app-pub-8178045957849630/1313961528"
     private const val NATIVE_PLAYLIST_ID = "ca-app-pub-8178045957849630/6837750948"
 
+    // ⚠️ PLACEHOLDER AD UNIT (TEST ID) ⚠️
+    // This uses Google's official TEST rewarded ad unit so the Watch & Unlock
+    // flow can be exercised end-to-end in development. BEFORE SHIPPING PUBLICLY,
+    // replace it with a real production AdMob rewarded ad unit you create in the
+    // AdMob console (account tied to pub-8178045957849630). See the PR
+    // description for details. Do not ship with a test ID in production.
+    private const val REWARDED_AUDIO_TOOLS_ID = "ca-app-pub-3940256099942544/5224354917"
+
     // Ad instances
     private var appOpenAd: AppOpenAd? = null
     private var interstitialSongChange: InterstitialAd? = null
@@ -54,6 +62,7 @@ object AdManager {
     private var rewardedOfflineDownload: RewardedAd? = null
     private var rewardedPremiumTheme: RewardedAd? = null
     private var rewardedSleepTimer: RewardedAd? = null
+    private var rewardedAudioTools: RewardedAd? = null
     var nativePlaylistAd: NativeAd? = null
         private set
 
@@ -90,6 +99,7 @@ object AdManager {
         loadRewardedOfflineDownload(context)
         loadRewardedPremiumTheme(context)
         loadRewardedSleepTimer(context)
+        loadRewardedAudioTools(context)
         loadNativePlaylist(context)
     }
 
@@ -385,6 +395,44 @@ object AdManager {
             return
         }
         android.widget.Toast.makeText(activity, "Ad not ready, try again", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    // ═══ REWARDED AD — AUDIO TOOLS "WATCH & UNLOCK" ═══
+    private fun loadRewardedAudioTools(context: Context) {
+        RewardedAd.load(context, REWARDED_AUDIO_TOOLS_ID, AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) { rewardedAudioTools = ad; Log.d(TAG, "Rewarded AudioTools loaded") }
+                override fun onAdFailedToLoad(error: LoadAdError) { Log.w(TAG, "Rewarded AudioTools failed: ${error.message}") }
+            })
+    }
+
+    /**
+     * Show the Audio Tools rewarded ad. Returns true if an ad was shown
+     * (reward fires via [onReward] only after the user completes it), or false
+     * if no ad is currently loaded (caller should surface a clear message —
+     * the feature must NOT be unlocked, but the user must also not be soft-locked).
+     */
+    fun showRewardedAudioTools(activity: Activity, onReward: () -> Unit): Boolean {
+        val ad = rewardedAudioTools
+        if (ad == null) {
+            android.widget.Toast.makeText(activity, "Ad not ready — check your connection and try again", android.widget.Toast.LENGTH_SHORT).show()
+            return false
+        }
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                rewardedAudioTools = null
+                loadRewardedAudioTools(activity)
+            }
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                rewardedAudioTools = null
+                loadRewardedAudioTools(activity)
+            }
+        }
+        ad.show(activity) {
+            // Reward earned — caller unlocks the feature.
+            onReward()
+        }
+        return true
     }
 
     // ═══ NATIVE AD ═══
