@@ -4,6 +4,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
+ * Stable keys identifying each gated premium feature in Audio Tools. These are
+ * the values persisted (session-only, see [PremiumUnlockStore]) per feature.
+ */
+object PremiumFeature {
+    const val VIDEO_STUDIO = "audio_tools_video_studio"
+    const val COMPRESSOR = "audio_tools_compressor"
+    const val SPEED_PITCH = "audio_tools_speed_pitch"
+    const val EXPORT_1080P = "audio_tools_export_1080p"
+}
+
+/**
  * Session-scoped store for "Watch & Unlock" Audio Tools features.
  *
  * IMPORTANT: unlock state is intentionally NOT persisted (no DataStore /
