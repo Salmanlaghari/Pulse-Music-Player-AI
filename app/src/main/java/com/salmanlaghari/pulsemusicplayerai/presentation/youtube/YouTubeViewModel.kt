@@ -66,7 +66,6 @@ class YouTubeViewModel(
 
     private var southAsianJob: Job? = null
     private var southAsianLoaded = false
-    private var southAsianLoadedAtMs = 0L
     // Re-sync the Desi Hits catalog if it's older than this (keeps the list fresh
     // without hammering the API on every tab open).
     private val SOUTH_ASIAN_STALE_MS = 15 * 60 * 1000L
@@ -233,8 +232,7 @@ class YouTubeViewModel(
                 }
                 _southAsianSongs.value = songs
                 southAsianLoaded = true
-                southAsianLoadedAtMs = System.currentTimeMillis()
-                _southAsianLoadedAtMs.value = southAsianLoadedAtMs
+                _southAsianLoadedAtMs.value = System.currentTimeMillis()
                 Log.d(TAG, "Loaded ${songs.size} South Asian songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load South Asian catalog", e)
@@ -251,8 +249,8 @@ class YouTubeViewModel(
      * list keeps itself fresh without the user manually pulling to refresh.
      */
     fun syncSouthAsianCatalog() {
-        val stale = southAsianLoadedAtMs == 0L ||
-                System.currentTimeMillis() - southAsianLoadedAtMs > SOUTH_ASIAN_STALE_MS
+        val stale = _southAsianLoadedAtMs.value == 0L ||
+                System.currentTimeMillis() - _southAsianLoadedAtMs.value > SOUTH_ASIAN_STALE_MS
         if (_southAsianSongs.value.isEmpty() || stale) {
             Log.d(TAG, "syncSouthAsianCatalog: re-syncing (stale=${stale}, size=${_southAsianSongs.value.size})")
             loadSouthAsianCatalog(force = true)
