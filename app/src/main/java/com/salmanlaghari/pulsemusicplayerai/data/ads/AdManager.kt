@@ -48,7 +48,7 @@ object AdManager {
     // In RELEASE builds, uses the production ID to comply with AdMob policies.
     private val REWARDED_AUDIO_TOOLS_ID =
         if (BuildConfig.DEBUG) "ca-app-pub-3940256099942544/5224354917" // Test ID
-        else "ca-app-pub-8178045957849630/1965386577" // Production ID (Ad-Free Hour slot)
+        else "ca-app-pub-8178045957849630/2527520554" // Production ID (pluse_rewarded_studio_unlock)
 
     // Ad instances
     private var appOpenAd: AppOpenAd? = null
