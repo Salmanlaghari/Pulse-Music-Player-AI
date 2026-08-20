@@ -613,64 +613,416 @@ fun VideoStudioScreen(
                 }
             }
         } else {
-            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier.fillMaxSize()) {
 
-                // ---------------- LIVE PREVIEW ----------------
+                // ---------------- LIVE PREVIEW (fixed, stable) ----------------
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(280.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.Black),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                 ) {
-                    Column {
+                    Column(modifier = Modifier.fillMaxSize()) {
                         LiveVisualizerPreview(
                             config = config,
                             spectrum = spectrum,
                             positionMs = positionMs + trimStartMs,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (importError != null) {
+                // ---------------- SCROLLABLE SETTINGS ----------------
+                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+
+                    if (importError != null) {
+                        Text(
+                            importError!!,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else if (isAnalyzing) {
+                        Text(
+                            "Analysing real audio spectrum… $analysisProgress%",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = analysisProgress / 100f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else if (spectrum == null) {
+                        Text(
+                            "Audio analysis unavailable for this file — preview cannot react to it.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Transport controls: these drive the real player, and the preview
+                    // follows the real playback position.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (isPreviewPlaying) {
+                                    exoPlayer.pause()
+                                    isPreviewPlaying = false
+                                } else {
+                                    exoPlayer.play()
+                                    isPreviewPlaying = true
+                                }
+                            },
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPreviewPlaying) "Pause preview" else "Play preview",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+                        Text(formatTime(positionMs), fontSize = 11.sp)
+                        Slider(
+                            value = positionMs.toFloat(),
+                            onValueChange = {
+                                positionMs = it.toLong()
+                                exoPlayer.seekTo(it.toLong())
+                            },
+                            valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Text(formatTime(durationMs), fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Visualizer preset picker (horizontal scroll, large cards)
+                    VisualizerStudioProPicker(
+                        selected = preset,
+                        onSelect = { preset = it }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Aspect Ratio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalChipRow(
+                        options = VideoAspectRatio.values().map { ar ->
+                            ChipOption(
+                                label = ar.displayName,
+                                selected = aspectRatio == ar,
+                                onClick = { aspectRatio = ar }
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Resolution  •  ${config.videoWidth}x${config.videoHeight}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalChipRow(
+                        options = VideoResolution.values().map { res ->
+                            val isLockedPremium = res == VideoResolution.FHD_1080 &&
+                                    !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
+                            ChipOption(
+                                label = res.displayName,
+                                selected = resolution == res && !isLockedPremium,
+                                locked = isLockedPremium,
+                                onClick = {
+                                    if (isLockedPremium) {
+                                        onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") {
+                                            resolution = VideoResolution.FHD_1080
+                                        }
+                                    } else {
+                                        resolution = res
+                                    }
+                                }
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalChipRow(
+                        options = listOf(24, 30, 60).map { f ->
+                            ChipOption(
+                                label = "$f fps",
+                                selected = fps == f,
+                                onClick = { fps = f; viewModel.analyzeForPreview(sourceUri, f) }
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Background", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalChipRow(
+                        options = VideoBackgroundStyle.values().map { st ->
+                            ChipOption(
+                                label = st.displayName,
+                                selected = bgStyle == st && bgImageUri == null,
+                                onClick = { bgStyle = st; bgImageUri = null }
+                            )
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Text(if (bgImageUri == null) "Pick Background Image" else "Change Image", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        if (bgImageUri != null) {
+                            Button(
+                                onClick = { bgImageUri = null },
+                                modifier = Modifier.height(44.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                            ) {
+                                Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    if (bgImageUri != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Image Fit", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalChipRow(
+                            options = BackgroundFit.values().map { f ->
+                                ChipOption(
+                                    label = f.displayName,
+                                    selected = bgFit == f,
+                                    onClick = { bgFit = f }
+                                )
+                            }
+                        )
+                        Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(
+                            value = bgDim,
+                            onValueChange = { bgDim = it },
+                            valueRange = 0f..0.9f,
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Show Title / Artist Overlay", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        androidx.compose.material3.Switch(checked = showText, onCheckedChange = { showText = it })
+                    }
+                    if (showText) {
+                        OutlinedTextField(
+                            value = titleText,
+                            onValueChange = { titleText = it },
+                            label = { Text("Title text") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = artistText,
+                            onValueChange = { artistText = it },
+                            label = { Text("Artist text") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Background Music (built-in)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        importError!!,
+                        "Layer an owned, royalty-free loop under your audio. Default: your audio only.",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
-                } else if (isAnalyzing) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            val selected = bgTrackResName == null
+                            Card(
+                                modifier = Modifier.height(40.dp).clickable {
+                                    bgTrackResName = null
+                                    bgTrackVolume = 0.35f
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text("Source only", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                        items(BuiltInBackgroundTracks.ALL) { track ->
+                            val selected = bgTrackResName == track.id
+                            Card(
+                                modifier = Modifier.height(40.dp).clickable {
+                                    bgTrackResName = track.id
+                                    bgTrackVolume = track.suggestedVolume
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                    Text(track.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+                    if (bgTrackResName != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Background Volume (${(bgTrackVolume * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(
+                            value = bgTrackVolume,
+                            onValueChange = { bgTrackVolume = it },
+                            valueRange = 0f..0.8f,
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
+                    }
                     Text(
-                        "Analysing real audio spectrum… $analysisProgress%",
+                        "Burns the Pulse logo into the exported video (default ON). Turn off for a clean export.",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = analysisProgress / 100f,
-                        modifier = Modifier.fillMaxWidth()
+
+                    Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = vizScale,
+                        onValueChange = { vizScale = it },
+                        valueRange = 0.4f..1.6f,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
                     )
-                } else if (spectrum == null) {
-                    Text(
-                        "Audio analysis unavailable for this file — preview cannot react to it.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.error
+
+                    Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = vizPosY,
+                        onValueChange = { vizPosY = it },
+                        valueRange = 0.15f..0.9f,
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
                     )
+
+                    if (durationMs > 0) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(
+                            value = trimStartMs.toFloat(),
+                            onValueChange = { trimStartMs = it.toLong() },
+                            valueRange = 0f..durationMs.toFloat(),
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Text(
+                            if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Slider(
+                            value = trimEndMs.toFloat(),
+                            onValueChange = { trimEndMs = it.toLong() },
+                            valueRange = 0f..durationMs.toFloat(),
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                // ---------------- BOTTOM ACTION AREA ----------------
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Transport controls: these drive the real player, and the preview
-                // follows the real playback position.
+                // Horizontal feature chips (main editing features)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(end = 4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        val isSelected = preset == VisualizerPreset.CIRCULAR_BARS
+                        ChipOption(
+                            label = "Preset",
+                            selected = isSelected,
+                            onClick = { /* Preset is selected above in scrollable area */ }
+                        )
+                    }
+                    items(VideoAspectRatio.values()) { ar ->
+                        val isSelected = aspectRatio == ar
+                        ChipOption(
+                            label = ar.displayName,
+                            selected = isSelected,
+                            onClick = { aspectRatio = ar }
+                        )
+                    }
+                    items(VideoResolution.values()) { res ->
+                        val isSelected = resolution == res
+                        ChipOption(
+                            label = res.displayName,
+                            selected = isSelected,
+                            onClick = { resolution = res }
+                        )
+                    }
+                    item {
+                        ChipOption(
+                            label = "$fps fps",
+                            selected = true,
+                            onClick = { /* Frame rate is selected above */ }
+                        )
+                    }
+                    items(VideoBackgroundStyle.values()) { st ->
+                        val isSelected = bgStyle == st && bgImageUri == null
+                        ChipOption(
+                            label = st.displayName,
+                            selected = isSelected,
+                            onClick = { bgStyle = st; bgImageUri = null }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    IconButton(
+                    Button(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.analyzeForPreview(sourceUri, fps)
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Apply", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Button(
+                        onClick = {
                             if (isPreviewPlaying) {
                                 exoPlayer.pause()
                                 isPreviewPlaying = false
@@ -679,304 +1031,23 @@ fun VideoStudioScreen(
                                 isPreviewPlaying = true
                             }
                         },
-                        modifier = Modifier.size(56.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPreviewPlaying) "Pause preview" else "Play preview",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(38.dp)
-                        )
-                    }
-                    Text(formatTime(positionMs), fontSize = 11.sp)
-                    Slider(
-                        value = positionMs.toFloat(),
-                        onValueChange = {
-                            positionMs = it.toLong()
-                            exoPlayer.seekTo(it.toLong())
-                        },
-                        valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Text(formatTime(durationMs), fontSize = 11.sp)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                // "Visualizer Studio Pro" preset library — the SAME categorised
-                // library shown on the Now Playing screen, so the export flow
-                // exposes every preset the user can pick for live playback.
-                VisualizerStudioProPicker(
-                    selected = preset,
-                    onSelect = { preset = it }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Aspect Ratio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalChipRow(
-                    options = VideoAspectRatio.values().map { ar ->
-                        ChipOption(
-                            label = ar.displayName,
-                            selected = aspectRatio == ar,
-                            onClick = { aspectRatio = ar }
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Resolution  •  ${config.videoWidth}x${config.videoHeight}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalChipRow(
-                    options = VideoResolution.values().map { res ->
-                        val isLockedPremium = res == VideoResolution.FHD_1080 &&
-                                !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
-                        ChipOption(
-                            label = res.displayName,
-                            selected = resolution == res && !isLockedPremium,
-                            locked = isLockedPremium,
-                            onClick = {
-                                if (isLockedPremium) {
-                                    onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") {
-                                        resolution = VideoResolution.FHD_1080
-                                    }
-                                } else {
-                                    resolution = res
-                                }
-                            }
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalChipRow(
-                    options = listOf(24, 30, 60).map { f ->
-                        ChipOption(
-                            label = "$f fps",
-                            selected = fps == f,
-                            onClick = { fps = f; viewModel.analyzeForPreview(sourceUri, f) }
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Background", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalChipRow(
-                    options = VideoBackgroundStyle.values().map { st ->
-                        ChipOption(
-                            label = st.displayName,
-                            selected = bgStyle == st && bgImageUri == null,
-                            onClick = { bgStyle = st; bgImageUri = null }
-                        )
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { imagePickerLauncher.launch("image/*") },
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Text(if (bgImageUri == null) "Pick Background Image" else "Change Image", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    if (bgImageUri != null) {
-                        Button(
-                            onClick = { bgImageUri = null },
-                            modifier = Modifier.height(44.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
-                        ) {
-                            Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-
-                if (bgImageUri != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Image Fit", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalChipRow(
-                        options = BackgroundFit.values().map { f ->
-                            ChipOption(
-                                label = f.displayName,
-                                selected = bgFit == f,
-                                onClick = { bgFit = f }
-                            )
-                        }
-                    )
-                    Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = bgDim,
-                        onValueChange = { bgDim = it },
-                        valueRange = 0f..0.9f,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Show Title / Artist Overlay", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    androidx.compose.material3.Switch(checked = showText, onCheckedChange = { showText = it })
-                }
-                if (showText) {
-                    OutlinedTextField(
-                        value = titleText,
-                        onValueChange = { titleText = it },
-                        label = { Text("Title text") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = artistText,
-                        onValueChange = { artistText = it },
-                        label = { Text("Artist text") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Background Music (built-in)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Layer an owned, royalty-free loop under your audio. Default: your audio only.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        val selected = bgTrackResName == null
-                        Card(
-                            modifier = Modifier.height(40.dp).clickable {
-                                bgTrackResName = null
-                                bgTrackVolume = 0.35f
-                            },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                Text("Source only", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
-                    items(BuiltInBackgroundTracks.ALL) { track ->
-                        val selected = bgTrackResName == track.id
-                        Card(
-                            modifier = Modifier.height(40.dp).clickable {
-                                bgTrackResName = track.id
-                                bgTrackVolume = track.suggestedVolume
-                            },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                Text(track.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
-                }
-                if (bgTrackResName != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Background Volume (${(bgTrackVolume * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = bgTrackVolume,
-                        onValueChange = { bgTrackVolume = it },
-                        valueRange = 0f..0.8f,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
-                }
-                Text(
-                    "Burns the Pulse logo into the exported video (default ON). Turn off for a clean export.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-
-                Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = vizScale,
-                    onValueChange = { vizScale = it },
-                    valueRange = 0.4f..1.6f,
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                )
-
-                Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = vizPosY,
-                    onValueChange = { vizPosY = it },
-                    valueRange = 0.15f..0.9f,
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                )
-
-                if (durationMs > 0) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = trimStartMs.toFloat(),
-                        onValueChange = { trimStartMs = it.toLong() },
-                        valueRange = 0f..durationMs.toFloat(),
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Text(
-                        if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Slider(
-                        value = trimEndMs.toFloat(),
-                        onValueChange = { trimEndMs = it.toLong() },
-                        valueRange = 0f..durationMs.toFloat(),
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (isProcessing) {
-                    Text(statusMessage, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = progress / 100f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { viewModel.cancelActiveOperation() },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text("Cancel Export", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        Icon(if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isPreviewPlaying) "Pause" else "Preview", fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                } else {
                     Button(
                         onClick = { showSaveDialog = true },
                         enabled = spectrum != null && !isAnalyzing,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text("Export", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
@@ -985,9 +1056,10 @@ fun VideoStudioScreen(
                 TextButton(onClick = { viewModel.clearSelection() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Text("Import another audio file", color = MaterialTheme.colorScheme.primary)
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
     }
 
     if (showSaveDialog) {
@@ -1023,6 +1095,82 @@ fun VideoStudioScreen(
                 TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
             }
         )
+    }
+
+    // Centered export progress dialog with semi-transparent overlay
+    if (isProcessing) {
+        val exportStartTime = remember { System.currentTimeMillis() }
+        LaunchedEffect(progress) {
+            if (progress >= 100) {
+                kotlinx.coroutines.delay(500)
+            }
+        }
+        val elapsedSeconds = ((System.currentTimeMillis() - exportStartTime) / 1000).coerceAtLeast(1)
+        val estimatedTotal = if (progress > 0) (elapsedSeconds * 100 / progress) else 0
+        val remainingSeconds = (estimatedTotal - elapsedSeconds).coerceAtLeast(0)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .padding(24.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Exporting Video",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        statusMessage,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = progress / 100f,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        if (remainingSeconds > 0 && progress < 100) {
+                            "About $remainingSeconds seconds remaining"
+                        } else if (progress >= 100) {
+                            "Finalizing..."
+                        } else {
+                            "Preparing..."
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.cancelActiveOperation() },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
+                    ) {
+                        Text("Cancel Export", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
     }
 }
 

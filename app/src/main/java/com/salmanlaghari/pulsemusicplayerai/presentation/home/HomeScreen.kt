@@ -519,7 +519,7 @@ fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
     GlassmorphicCard(
         onClick = item.onClick,
         modifier = modifier
-            .height(72.dp)
+            .height(80.dp)
             .shadow(8.dp, RoundedCornerShape(18.dp), clip = false),
         shape = RoundedCornerShape(18.dp),
         containerColor = GlassBg
@@ -533,8 +533,8 @@ fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(11.dp))
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         brush = Brush.linearGradient(
                             colors = listOf(PurplePrimary.copy(alpha = 0.35f), CyanSecondary.copy(alpha = 0.2f))
@@ -544,12 +544,12 @@ fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
             ) {
                 Text(
                     text = item.icon,
-                    fontSize = 17.sp
+                    fontSize = 20.sp
                 )
             }
             Text(
                 text = item.title,
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 maxLines = 1,
@@ -683,7 +683,7 @@ private fun generateFallbackColor(song: Song): Color {
     return Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.6f, 0.35f)))
 }
 
-// Float player card styled with premium 3D Glassmorphism and Large Tappable Targets
+// Float player card styled with premium 3D Glassmorphism and compact size
 @Composable
 fun MiniPlayer(
     viewModel: MusicViewModel,
@@ -700,37 +700,37 @@ fun MiniPlayer(
         onClick = onExpand,
         modifier = Modifier
             .fillMaxWidth()
-            .height(76.dp) // Height increased slightly for better tap target balance
+            .height(56.dp)
             .padding(horizontal = 14.dp)
-            .shadow(12.dp, RoundedCornerShape(18.dp), clip = false),
-        shape = RoundedCornerShape(18.dp),
+            .shadow(8.dp, RoundedCornerShape(14.dp), clip = false),
+        shape = RoundedCornerShape(14.dp),
         containerColor = CardNavy // Frosted dark blue backing
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SongArtwork(
                         song = song,
                         modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(10.dp)),
-                        iconSize = 22.dp
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        iconSize = 18.dp
                     )
 
                     Column {
                         Text(
                             text = song.title,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             maxLines = 1,
@@ -738,7 +738,7 @@ fun MiniPlayer(
                         )
                         Text(
                             text = song.artist,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = TextDim,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -749,7 +749,7 @@ fun MiniPlayer(
                 // Rebuilt play controls with explicit sizes matching FullPlayerScreen
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     IconButton(
                         onClick = { viewModel.skipToPrevious() },
@@ -794,7 +794,7 @@ fun MiniPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(2.dp)
                     .background(Color(0xFF2A2545))
             ) {
                 Box(

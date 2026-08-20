@@ -61,6 +61,9 @@ class YouTubeViewModel(
     private val _southAsianProgress = MutableStateFlow(0 to 0) // (completed, total)
     val southAsianProgress: StateFlow<Pair<Int, Int>> = _southAsianProgress.asStateFlow()
 
+    private val _southAsianLoadedAtMs = MutableStateFlow(0L)
+    val southAsianLoadedAtMs: StateFlow<Long> = _southAsianLoadedAtMs.asStateFlow()
+
     private var southAsianJob: Job? = null
     private var southAsianLoaded = false
     private var southAsianLoadedAtMs = 0L
@@ -231,6 +234,7 @@ class YouTubeViewModel(
                 _southAsianSongs.value = songs
                 southAsianLoaded = true
                 southAsianLoadedAtMs = System.currentTimeMillis()
+                _southAsianLoadedAtMs.value = southAsianLoadedAtMs
                 Log.d(TAG, "Loaded ${songs.size} South Asian songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load South Asian catalog", e)
