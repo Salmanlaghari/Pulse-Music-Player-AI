@@ -61,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         // Avoid lint errors from AdMob SDK and third-party libs
