@@ -1534,7 +1534,7 @@ class YouTubeRepository {
          if (rssVideos.isEmpty()) {
              Log.e(TAG, "My Channel: Both Data API v3 and RSS fallback failed — check network/YouTube status")
          }
-         return rssVideos
+         return@withContext rssVideos
     }
 
     /**
