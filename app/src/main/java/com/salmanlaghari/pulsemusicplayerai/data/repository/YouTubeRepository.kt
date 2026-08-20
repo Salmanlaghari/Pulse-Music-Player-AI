@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.data.repository
 
 import android.util.Log
+import com.salmanlaghari.pulsemusicplayerai.BuildConfig
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
@@ -1477,26 +1478,144 @@ class YouTubeRepository {
     }
 
     // ═══════════════════════════════════════════════
-    // MY CHANNEL — owner's YouTube channel via public RSS feed
-    // No API key required; returns the latest uploads for "A D&E Song Music".
+    // MY CHANNEL — owner's YouTube channel uploads.
+    //
+    // ROOT CAUSE OF THE "thumbnails/titles gone" REGRESSION:
+    //   The previous RSS-only approach called httpGetSafe() and, if the body was
+    //   *non-blank*, handed it straight to parseChannelRss(). But YouTube's RSS
+    //   endpoint frequently answers with an HTML error/consent page (not XML)
+    //   when it rate-limits or blocks the client. That HTML body is "non-blank",
+    //   so parseChannelRss() found zero <entry> elements and returned an EMPTY
+    //   list — the UI then rendered "No uploads found" and the thumbnails/titles
+    //   silently vanished. The retry only re-fetched more HTML, so it never fixed
+    //   anything; it just made the empty state appear more reliably.
+    //
+    // FIX (recommended approach):
+    //   1. PRIMARY — YouTube Data API v3 (requires YOUTUBE_DATA_API_KEY). This is
+    //      the official, stable, ToS-compliant listing API and is immune to the
+    //      RSS-blocking / HTML-error problems above. It returns real thumbnails
+    //      and titles reliably.
+    //   2. FALLBACK — the key-free public RSS feed, but now HTML-aware: if the
+    //      response is not XML it is treated as a failure and retried; only a
+    //      genuine XML feed is parsed. This restores the old behaviour for
+    //      builds that don't ship a Data API key while no longer masking HTML
+    //      errors as "empty channel".
     // Playback is handled by the official embedded YouTube player (see UI).
     // ═══════════════════════════════════════════════
     suspend fun getChannelVideos(): List<ChannelVideo> = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Loading My Channel videos (RSS) for $CHANNEL_NAME")
-        // Retry once on a blank/empty response so transient network blips (common on
-        // mobile) don't surface as "channel empty" — the list only errors out after
-        // a genuine failure, which the UI shows via channelError.
-        var xml = ""
-        repeat(2) { attempt ->
-            xml = httpGetSafe(CHANNEL_RSS_URL, timeout = NORMAL_TIMEOUT)
-            if (xml.isNotBlank()) return@withContext parseChannelRss(xml)
-            if (attempt == 0) {
-                Log.w(TAG, "My Channel RSS blank on attempt 1, retrying")
-                kotlinx.coroutines.delay(400)
-            }
+        val apiKey = BuildConfig.YOUTUBE_DATA_API_KEY
+        if (apiKey.isNotBlank()) {
+            runCatching { getChannelVideosViaDataApi(apiKey) }
+                .onFailure { Log.w(TAG, "My Channel Data API v3 failed: ${it.message}") }
+                .getOrNull()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let {
+                    Log.d(TAG, "Loaded ${it.size} My Channel videos via Data API v3")
+                    return@withContext it
+                }
+            Log.w(TAG, "My Channel Data API v3 returned no videos — falling back to RSS")
         }
-        Log.w(TAG, "My Channel RSS returned empty response after retries")
+        getChannelVideosViaRss()
+    }
+
+    /**
+     * Official YouTube Data API v3 listing: resolve the channel's "uploads"
+     * playlist, then page its items. Returns real thumbnail URLs + titles.
+     */
+    private suspend fun getChannelVideosViaDataApi(apiKey: String): List<ChannelVideo> {
+        Log.d(TAG, "Loading My Channel videos (Data API v3) for $CHANNEL_NAME")
+        // Step 1: channel -> uploads playlist id.
+        val channelJson = httpGetSafe(
+            "https://www.googleapis.com/youtube/v3/channels" +
+                "?part=contentDetails&id=$CHANNEL_ID&key=$apiKey",
+            timeout = NORMAL_TIMEOUT
+        )
+        if (channelJson.isBlank()) return emptyList()
+        val uploadsId = try {
+            val root = JSONObject(channelJson)
+            val items = root.optJSONArray("items") ?: return emptyList()
+            if (items.length() == 0) return emptyList()
+            items.getJSONObject(0)
+                .optJSONObject("contentDetails")
+                ?.optJSONObject("relatedPlaylists")
+                ?.optString("uploads")
+                .orEmpty()
+        } catch (e: Exception) {
+            Log.w(TAG, "Data API: failed to parse channel response: ${e.message}")
+            return emptyList()
+        }
+        if (uploadsId.isBlank()) return emptyList()
+
+        // Step 2: playlistItems -> video list (latest 24).
+        val playlistJson = httpGetSafe(
+            "https://www.googleapis.com/youtube/v3/playlistItems" +
+                "?part=snippet&maxResults=24&playlistId=$uploadsId&key=$apiKey",
+            timeout = NORMAL_TIMEOUT
+        )
+        if (playlistJson.isBlank()) return emptyList()
+        val videos = mutableListOf<ChannelVideo>()
+        try {
+            val root = JSONObject(playlistJson)
+            val items = root.optJSONArray("items") ?: return emptyList()
+            for (i in 0 until items.length()) {
+                val snippet = items.getJSONObject(i).optJSONObject("snippet") ?: continue
+                val resourceId = snippet.optJSONObject("resourceId") ?: continue
+                val videoId = resourceId.optString("videoId").trim()
+                val title = snippet.optString("title", "").trim()
+                if (videoId.isBlank() || title.isBlank()) continue
+                val thumbs = snippet.optJSONObject("thumbnails")
+                val thumbnail = thumbs?.optJSONObject("medium")
+                    ?: thumbs?.optJSONObject("high")
+                    ?: thumbs?.optJSONObject("default")
+                val thumbnailUrl = thumbnail?.optString("url")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                val publishedAt = snippet.optString("publishedAt", "")
+                videos.add(
+                    ChannelVideo(
+                        videoId = videoId,
+                        title = decodeHtmlEntities(title),
+                        thumbnailUrl = thumbnailUrl,
+                        publishedAt = publishedAt
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Data API: failed to parse playlist response: ${e.message}")
+        }
+        return videos
+    }
+
+    /**
+     * Key-free RSS fallback. Robust against YouTube answering with an HTML
+     * error/consent page instead of XML: a non-XML body is treated as a failure
+     * and retried, so we never silently surface "No uploads found".
+     */
+    private suspend fun getChannelVideosViaRss(): List<ChannelVideo> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Loading My Channel videos (RSS fallback) for $CHANNEL_NAME")
+        repeat(3) { attempt ->
+            val xml = httpGetSafe(CHANNEL_RSS_URL, timeout = NORMAL_TIMEOUT)
+            // Treat an HTML/error page (or blank) as a failure, not as "empty feed".
+            if (xml.isNotBlank() && !looksLikeHtml(xml)) {
+                val parsed = parseChannelRss(xml)
+                if (parsed.isNotEmpty()) {
+                    Log.d(TAG, "Loaded ${parsed.size} My Channel videos via RSS")
+                    return@withContext parsed
+                }
+            }
+            Log.w(TAG, "My Channel RSS attempt ${attempt + 1} returned no usable XML (HTML/blank)")
+            if (attempt < 2) kotlinx.coroutines.delay(500L * (attempt + 1))
+        }
+        Log.w(TAG, "My Channel RSS returned no usable feed after retries")
         emptyList()
+    }
+
+    /** Cheap heuristic: YouTube's RSS is XML; an error/consent page is HTML. */
+    private fun looksLikeHtml(body: String): Boolean {
+        val head = body.trim().take(200).lowercase()
+        return head.startsWith("<!doctype html") ||
+                head.startsWith("<html") ||
+                head.contains("<html") && head.contains("</html>")
     }
 
     /**

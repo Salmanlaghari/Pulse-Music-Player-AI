@@ -16,6 +16,13 @@ android {
         versionName = "1.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // YouTube Data API v3 key for listing "My Channel" uploads. Leave blank to
+        // fall back to the key-free public RSS feed. Supply via the
+        // YOUTUBE_DATA_API_KEY Gradle property (e.g. from a CI secret) so the key
+        // is never committed to the repo.
+        val youTubeDataApiKey = providers.gradleProperty("YOUTUBE_DATA_API_KEY").orNull ?: ""
+        buildConfigField("String", "YOUTUBE_DATA_API_KEY", "\"${youTubeDataApiKey}\"")
     }
 
     signingConfigs {

@@ -1,6 +1,8 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.youtube
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 
 /**
@@ -72,6 +75,7 @@ fun ChannelPlayerScreen(
     channelName: String,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     // Overlay state: shown until the player signals it's ready (or on error).
     var showPlayOverlay by remember { mutableStateOf(true) }
     var playerError by remember { mutableStateOf<String?>(null) }
@@ -183,6 +187,10 @@ fun ChannelPlayerScreen(
                         }
 
                         // Error surfaced to the user instead of a silent black box.
+                        // We also offer a graceful fallback: open the video in the
+                        // YouTube app / browser via an implicit ACTION_VIEW Intent,
+                        // which always works even when in-app embed is blocked by the
+                        // publisher's embedding restrictions.
                         if (playerError != null) {
                             Box(
                                 modifier = Modifier
@@ -211,6 +219,31 @@ fun ChannelPlayerScreen(
                                         color = Color.White,
                                         fontSize = 13.sp
                                     )
+                                    androidx.compose.foundation.layout.Spacer(
+                                        modifier = Modifier.height(12.dp)
+                                    )
+                                    // Fallback: open in YouTube app / browser.
+                                    androidx.compose.material3.Button(
+                                        onClick = { openVideoInYouTube(context, videoId) },
+                                        colors = androidx.compose.material3.ButtonDefaults
+                                            .buttonColors(containerColor = CyanGlow)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        androidx.compose.foundation.layout.Spacer(
+                                            modifier = Modifier.width(6.dp)
+                                        )
+                                        Text(
+                                            text = "Open in YouTube",
+                                            color = Color.Black,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -269,6 +302,36 @@ fun ChannelPlayerScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Graceful fallback for when the in-app embed can't play a video (e.g. the
+ * publisher disabled embedding, or the WebView blocked autoplay). We open the
+ * video with an implicit ACTION_VIEW Intent so Android routes it to the YouTube
+ * app (or the browser), guaranteeing the user can always watch the clip.
+ */
+private fun openVideoInYouTube(context: android.content.Context, videoId: String) {
+    val url = "https://www.youtube.com/watch?v=$videoId"
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        // Prefer the YouTube app if installed; otherwise the system picks a browser.
+        `package` = "com.google.android.youtube"
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (e: android.content.ActivityNotFoundException) {
+        // YouTube app not installed — fall back to any browser via a plain Intent.
+        Log.w(TAG_CHANNEL_PLAYER, "YouTube app not found, opening in browser: $url")
+        try {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        } catch (e2: Exception) {
+            Log.e(TAG_CHANNEL_PLAYER, "Failed to open YouTube link: ${e2.message}")
         }
     }
 }

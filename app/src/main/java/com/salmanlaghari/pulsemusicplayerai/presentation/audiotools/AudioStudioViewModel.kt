@@ -2,6 +2,7 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -261,18 +262,17 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
         if (_isProcessing.value) return
         _isProcessing.value = true
         _progress.value = 0
-        _statusMessage.value = "Decoding audio for visualizer analysis..."
+        _statusMessage.value = "Exporting... 0%"
 
         activeJob = viewModelScope.launch {
             try {
                 val result = processor.exportVisualizerVideo(sourceUri, config) { prog ->
+                    // Internal, technical stage names stay in logs only — the user
+                    // sees a single clean "Exporting... X%" percentage.
+                    Log.d("AudioStudio", "Export progress $prog% (preset=${config.preset.displayName}, " +
+                        "${config.videoWidth}x${config.videoHeight} @ ${config.fps}fps)")
                     _progress.value = prog
-                    _statusMessage.value = when {
-                        prog < 20 -> "Decoding audio track: $prog%"
-                        prog < 80 -> "Rendering ${config.preset.displayName} frames (${config.videoWidth}x${config.videoHeight} @ ${config.fps}fps): $prog%"
-                        prog < 92 -> "Encoding AAC audio track: $prog%"
-                        else -> "Muxing final MP4: $prog%"
-                    }
+                    _statusMessage.value = "Exporting... $prog%"
                 }
                 _isProcessing.value = false
                 if (result != null) {
