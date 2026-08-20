@@ -438,23 +438,6 @@ fun ContinueListeningCard(
         }
     }
 }
-                        brush = Brush.linearGradient(
-                            colors = listOf(PurplePrimary, CardNavy2)
-                        )
-                    )
-                    .clickable { onClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Resume",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-    }
-}
 
 @Composable
 fun SectionHeader(
