@@ -34,6 +34,7 @@ object AdManager {
     private const val INTERSTITIAL_SONG_CHANGE_ID = "ca-app-pub-8178045957849630/8315172503"
     private const val INTERSTITIAL_RESUME_ID = "ca-app-pub-8178045957849630/5657219571"
     private const val INTERSTITIAL_PLAYLIST_END_ID = "ca-app-pub-8178045957849630/7820348488"
+    private const val INTERSTITIAL_VIDEO_EXPORT_ID = "ca-app-pub-8178045957849630/0000000000"
     private const val REWARDED_AD_FREE_HOUR_ID = "ca-app-pub-8178045957849630/1965386577"
     private const val REWARDED_UNLIMITED_SKIP_ID = "ca-app-pub-8178045957849630/9652304906"
     private const val REWARDED_PRO_EQUALIZER_ID = "ca-app-pub-8178045957849630/6778729559"
@@ -62,6 +63,7 @@ object AdManager {
         val configured = listOf(
             APP_OPEN_ID, BANNER_NOW_PLAYING_ID, BANNER_LIBRARY_ID, BANNER_EQUALIZER_ID,
             INTERSTITIAL_SONG_CHANGE_ID, INTERSTITIAL_RESUME_ID, INTERSTITIAL_PLAYLIST_END_ID,
+            INTERSTITIAL_VIDEO_EXPORT_ID,
             REWARDED_AD_FREE_HOUR_ID, REWARDED_UNLIMITED_SKIP_ID, REWARDED_PRO_EQUALIZER_ID,
             REWARDED_HQ_AUDIO_ID, REWARDED_OFFLINE_DOWNLOAD_ID, REWARDED_PREMIUM_THEME_ID,
             REWARDED_SLEEP_TIMER_ID, REWARDED_AUDIO_TOOLS_ID
@@ -78,6 +80,7 @@ object AdManager {
     private var interstitialSongChange: InterstitialAd? = null
     private var interstitialResume: InterstitialAd? = null
     private var interstitialPlaylistEnd: InterstitialAd? = null
+    private var interstitialVideoExport: InterstitialAd? = null
     private var rewardedAdFreeHour: RewardedAd? = null
     private var rewardedUnlimitedSkip: RewardedAd? = null
     private var rewardedProEqualizer: RewardedAd? = null
@@ -116,6 +119,7 @@ object AdManager {
         loadInterstitialSongChange(context)
         loadInterstitialResume(context)
         loadInterstitialPlaylistEnd(context)
+        loadInterstitialVideoExport(context)
         loadRewardedAdFreeHour(context)
         loadRewardedUnlimitedSkip(context)
         loadRewardedProEqualizer(context)
@@ -249,6 +253,35 @@ object AdManager {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialPlaylistEnd = null
                     loadInterstitialPlaylistEnd(activity)
+                    onComplete()
+                }
+            }
+            ad.show(activity)
+            return
+        }
+        onComplete()
+    }
+
+    private fun loadInterstitialVideoExport(context: Context) {
+        InterstitialAd.load(context, INTERSTITIAL_VIDEO_EXPORT_ID, AdRequest.Builder().build(),
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    interstitialVideoExport = ad
+                    Log.d(TAG, "Interstitial VideoExport loaded")
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.w(TAG, "Interstitial VideoExport failed: ${error.message}")
+                }
+            })
+    }
+
+    fun showInterstitialVideoExport(activity: Activity, onComplete: () -> Unit) {
+        if (isAdFreeHour()) { onComplete(); return }
+        interstitialVideoExport?.let { ad ->
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    interstitialVideoExport = null
+                    loadInterstitialVideoExport(activity)
                     onComplete()
                 }
             }

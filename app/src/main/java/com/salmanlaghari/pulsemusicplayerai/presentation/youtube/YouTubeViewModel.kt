@@ -102,7 +102,9 @@ class YouTubeViewModel(
         // Load trending songs asynchronously with proper error handling
         loadTrending()
         // Auto-load Desi Hits catalog on startup (it's the default tab)
-        loadSouthAsianCatalog()
+        viewModelScope.launch {
+            loadSouthAsianCatalog()
+        }
         // Automatic song sync: keep the Desi Hits catalog fresh by re-syncing
         // periodically in the background (every 30 minutes). The catalog only
         // re-loads when it is stale, so this is a no-op most of the time.

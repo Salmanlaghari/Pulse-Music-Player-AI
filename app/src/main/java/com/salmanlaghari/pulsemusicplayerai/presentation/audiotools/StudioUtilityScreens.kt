@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -40,9 +41,6 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -85,12 +83,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.BorderStroke
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
-import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 
 // --- 1. AUDIO CONVERTER SCREEN ---
 
@@ -429,6 +428,7 @@ fun VideoStudioScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as Activity
     val haptic = LocalHapticFeedback.current
     val selectedFiles by viewModel.selectedFiles.collectAsState()
     val spectrum by viewModel.spectrumTrack.collectAsState()
@@ -488,6 +488,7 @@ fun VideoStudioScreen(
     var trimEndMs by remember { mutableStateOf(0L) }
     var outputFileName by remember { mutableStateOf("Pulse_${type.name}_Video") }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var importError by remember { mutableStateOf<String?>(null) }
 
     val config = VisualizerVideoConfig(
         preset = preset.toVideoPreset(),
@@ -517,7 +518,10 @@ fun VideoStudioScreen(
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        if (uri != null) viewModel.selectFiles(listOf(uri))
+        if (uri != null) {
+            importError = null
+            viewModel.selectFiles(listOf(uri))
+        }
     }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -547,10 +551,17 @@ fun VideoStudioScreen(
     LaunchedEffect(sourceUri) {
         positionMs = 0L
         isPreviewPlaying = false
+        importError = null
         if (sourceUri != null) {
-            exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(sourceUri))
-            exoPlayer.prepare()
-            viewModel.analyzeForPreview(sourceUri, fps)
+            try {
+                exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(sourceUri))
+                exoPlayer.prepare()
+                viewModel.analyzeForPreview(sourceUri, fps)
+            } catch (e: Exception) {
+                importError = "Couldn't load this audio file. Try a different file or check that the file isn't corrupted. (${e.message})"
+                exoPlayer.clearMediaItems()
+                viewModel.clearPreviewAnalysis()
+            }
         } else {
             exoPlayer.clearMediaItems()
             viewModel.clearPreviewAnalysis()
@@ -620,7 +631,14 @@ fun VideoStudioScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (isAnalyzing) {
+                if (importError != null) {
+                    Text(
+                        importError!!,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else if (isAnalyzing) {
                     Text(
                         "Analysing real audio spectrum… $analysisProgress%",
                         fontSize = 11.sp,
@@ -988,10 +1006,10 @@ fun VideoStudioScreen(
                         showSaveDialog = false
                         exoPlayer.pause()
                         isPreviewPlaying = false
-                        if (sourceUri != null) {
-                            // The exact same config object that produced the
-                            // preview is handed to the exporter.
-                            viewModel.exportVisualizerVideo(sourceUri, config.copy(outputName = outputFileName))
+                        AdManager.showInterstitialVideoExport(activity) {
+                            if (sourceUri != null) {
+                                viewModel.exportVisualizerVideo(sourceUri, config.copy(outputName = outputFileName))
+                            }
                         }
                     }
                 ) {
@@ -1556,35 +1574,54 @@ fun VisualizerStudioProPicker(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Preset grid — every preset here is supported by the export renderer.
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 130.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        // Preset options — horizontal scroll rows of large tappable cards
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(end = 4.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             items(filtered) { p ->
                 val isSelected = selected == p
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp)
+                        .height(56.dp)
                         .clickable { onSelect(p) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (isSelected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceVariant
                     ),
-                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                    else null
+                    border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                    else null,
+                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) Color.White.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             p.displayName,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
