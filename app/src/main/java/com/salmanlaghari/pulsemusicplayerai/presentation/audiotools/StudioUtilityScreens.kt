@@ -2,6 +2,7 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.toVideoPreset
 import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
 import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +40,9 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -84,7 +89,6 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
-import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 
@@ -435,15 +439,20 @@ fun VideoStudioScreen(
     val statusMessage by viewModel.statusMessage.collectAsState()
 
     // ---- Config state. Every one of these fields is consumed by the exporter. ----
+    // The preset picker uses the SAME "Visualizer Studio Pro" library
+    // (com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset)
+    // as the Now Playing screen, so the user sees one consistent, categorised
+    // preset list everywhere. It is converted to the renderer's
+    // VideoVisualizerPreset when the config is built.
     var preset by remember {
         mutableStateOf(
             when (type) {
-                VideoStudioType.WAVEFORM -> VideoVisualizerPreset.WAVEFORM
-                VideoStudioType.SPECTRUM -> VideoVisualizerPreset.SPECTRUM_BARS
-                VideoStudioType.CIRCULAR -> VideoVisualizerPreset.CIRCULAR_SPECTRUM
-                VideoStudioType.NEON -> VideoVisualizerPreset.MIRROR_BARS
-                VideoStudioType.ALBUM_ART -> VideoVisualizerPreset.PULSE_RING
-                else -> VideoVisualizerPreset.SPECTRUM_BARS
+                VideoStudioType.WAVEFORM -> VisualizerPreset.FLUID_WAVE
+                VideoStudioType.SPECTRUM -> VisualizerPreset.LINEAR_BARS
+                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_BARS
+                VideoStudioType.NEON -> VisualizerPreset.NEON_BARS
+                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_RING
+                else -> VisualizerPreset.CIRCULAR_BARS
             }
         )
     }
@@ -481,7 +490,7 @@ fun VideoStudioScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
 
     val config = VisualizerVideoConfig(
-        preset = preset,
+        preset = preset.toVideoPreset(),
         aspectRatio = aspectRatio,
         resolution = resolution,
         fps = fps,
@@ -673,116 +682,76 @@ fun VideoStudioScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Visualizer Preset (live)", fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(VideoVisualizerPreset.values()) { pr ->
-                        val isSelected = preset == pr
-                        Card(
-                            modifier = Modifier.height(38.dp).clickable { preset = pr },
-                            shape = RoundedCornerShape(19.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                                Text(pr.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
-                }
+                // "Visualizer Studio Pro" preset library — the SAME categorised
+                // library shown on the Now Playing screen, so the export flow
+                // exposes every preset the user can pick for live playback.
+                VisualizerStudioProPicker(
+                    selected = preset,
+                    onSelect = { preset = it }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Aspect Ratio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VideoAspectRatio.values().forEach { ar ->
-                        val isSelected = aspectRatio == ar
-                        Card(
-                            modifier = Modifier.weight(1f).height(44.dp).clickable { aspectRatio = ar },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(ar.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
+                HorizontalChipRow(
+                    options = VideoAspectRatio.values().map { ar ->
+                        ChipOption(
+                            label = ar.displayName,
+                            selected = aspectRatio == ar,
+                            onClick = { aspectRatio = ar }
+                        )
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Resolution  •  ${config.videoWidth}x${config.videoHeight}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VideoResolution.values().forEach { res ->
-                        val isSelected = resolution == res
+                HorizontalChipRow(
+                    options = VideoResolution.values().map { res ->
                         val isLockedPremium = res == VideoResolution.FHD_1080 &&
                                 !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
-                        Card(
-                            modifier = Modifier.weight(1f).height(44.dp).clickable {
-                                if (res == VideoResolution.FHD_1080 && isLockedPremium) {
+                        ChipOption(
+                            label = res.displayName,
+                            selected = resolution == res && !isLockedPremium,
+                            locked = isLockedPremium,
+                            onClick = {
+                                if (isLockedPremium) {
                                     onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") {
                                         resolution = VideoResolution.FHD_1080
                                     }
                                 } else {
                                     resolution = res
                                 }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(res.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                    if (isLockedPremium) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(Icons.Default.Lock, contentDescription = "Locked", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(14.dp))
-                                    }
-                                }
                             }
-                        }
+                        )
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(24, 30, 60).forEach { f ->
-                        val isSelected = fps == f
-                        Card(
-                            modifier = Modifier.weight(1f).height(44.dp).clickable {
-                                fps = f
-                                viewModel.analyzeForPreview(sourceUri, f)
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("$f fps", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
+                HorizontalChipRow(
+                    options = listOf(24, 30, 60).map { f ->
+                        ChipOption(
+                            label = "$f fps",
+                            selected = fps == f,
+                            onClick = { fps = f; viewModel.analyzeForPreview(sourceUri, f) }
+                        )
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Background", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VideoBackgroundStyle.values().forEach { st ->
-                        val isSelected = bgStyle == st && bgImageUri == null
-                        Card(
-                            modifier = Modifier.weight(1f).height(44.dp).clickable {
-                                bgStyle = st
-                                bgImageUri = null
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(st.displayName, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
+                HorizontalChipRow(
+                    options = VideoBackgroundStyle.values().map { st ->
+                        ChipOption(
+                            label = st.displayName,
+                            selected = bgStyle == st && bgImageUri == null,
+                            onClick = { bgStyle = st; bgImageUri = null }
+                        )
                     }
-                }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -807,20 +776,17 @@ fun VideoStudioScreen(
 
                 if (bgImageUri != null) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BackgroundFit.values().forEach { f ->
-                            val isSelected = bgFit == f
-                            Card(
-                                modifier = Modifier.weight(1f).height(40.dp).clickable { bgFit = f },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(f.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                }
-                            }
+                    Text("Image Fit", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalChipRow(
+                        options = BackgroundFit.values().map { f ->
+                            ChipOption(
+                                label = f.displayName,
+                                selected = bgFit == f,
+                                onClick = { bgFit = f }
+                            )
                         }
-                    }
+                    )
                     Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Slider(
                         value = bgDim,
@@ -990,7 +956,7 @@ fun VideoStudioScreen(
                     ) {
                         Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Render and Export MP4", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Export", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
 
@@ -1497,5 +1463,210 @@ fun SpeedPitchToolScreen(
                 TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/**
+ * "Visualizer Studio Pro" preset picker, shared styling with the Now Playing
+ * screen. Exposes the SAME categorised [VisualizerPreset] library (search +
+ * category chips + grid) so the MP3→MP4 export flow offers every preset the
+ * user can pick for live playback. The chosen [VisualizerPreset] is converted to
+ * the renderer's [com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset]
+ * when the export config is built, so the exact selected look is rendered into
+ * the final MP4.
+ */
+@Composable
+fun VisualizerStudioProPicker(
+    selected: VisualizerPreset,
+    onSelect: (VisualizerPreset) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("All") }
+
+    val categories = remember {
+        listOf("All") + VisualizerPreset.values().map { it.category }.distinct()
+    }
+    val filtered = remember(query, category) {
+        VisualizerPreset.values().filter { p ->
+            val matchesCat = category == "All" || p.category == category
+            val q = query.trim()
+            val matchesQuery = q.isBlank() ||
+                    p.displayName.contains(q, ignoreCase = true) ||
+                    p.category.contains(q, ignoreCase = true)
+            matchesCat && matchesQuery
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Visualizer Studio Pro",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search presets…", fontSize = 12.sp) },
+            singleLine = true,
+            leadingIcon = {
+                Icon(Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                cursorColor = MaterialTheme.colorScheme.primary
+            )
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Category chips (horizontal scroll)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(categories) { cat ->
+                val isSelected = category == cat
+                Card(
+                    modifier = Modifier.height(34.dp).clickable { category = cat },
+                    shape = RoundedCornerShape(17.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            cat,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Preset grid — every preset here is supported by the export renderer.
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 130.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(filtered) { p ->
+                val isSelected = selected == p
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .clickable { onSelect(p) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    else null
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            p.displayName,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A single selectable option used by [HorizontalChipRow]. Mirrors the premium,
+ * tactile chip rows found in studio apps (CapCut / InShot): horizontally
+ * scrollable, with the active option highlighted in the accent colour.
+ */
+private data class ChipOption(
+    val label: String,
+    val selected: Boolean,
+    val locked: Boolean = false,
+    val onClick: () -> Unit
+)
+
+/**
+ * Premium horizontal-scroll chip row for a setting category (Resolution, Frame
+ * Rate, Background, Aspect Ratio, …). Replaces the old stacked, equal-width
+ * cards so the settings screen scrolls horizontally per group instead of
+ * stacking everything vertically — matching the CapCut/InShot studio feel.
+ */
+@Composable
+private fun HorizontalChipRow(options: List<ChipOption>) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(end = 4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(options) { opt ->
+            val containerColor = when {
+                opt.locked -> MaterialTheme.colorScheme.surfaceVariant
+                opt.selected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val contentColor = when {
+                opt.locked -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                opt.selected -> Color.White
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+            Card(
+                modifier = Modifier
+                    .height(42.dp)
+                    .clickable(enabled = !opt.locked) { opt.onClick() },
+                shape = RoundedCornerShape(21.dp),
+                colors = CardDefaults.cardColors(containerColor = containerColor),
+                border = if (opt.selected && !opt.locked)
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        opt.label,
+                        fontSize = 12.sp,
+                        fontWeight = if (opt.selected) FontWeight.Bold else FontWeight.Medium,
+                        color = contentColor,
+                        maxLines = 1
+                    )
+                    if (opt.locked) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = contentColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.ui
 
+import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -751,6 +752,15 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Proof (per Issue 2) that NowPlayingControlSizes are the
+                        // EXACT values rendered here and nowhere else overrides them.
+                        Log.d(
+                            "NowPlayingControls",
+                            "Transport sizes -> play/pause ${NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP}dp" +
+                                " (icon ${NowPlayingControlSizes.PLAY_PAUSE_ICON_DP}dp, filled circle)," +
+                                " prev/next ${NowPlayingControlSizes.PREV_NEXT_SIZE_DP}dp" +
+                                " (icon ${NowPlayingControlSizes.PREV_NEXT_ICON_DP}dp)"
+                        )
                         IconButton(onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.toggleShuffle()
