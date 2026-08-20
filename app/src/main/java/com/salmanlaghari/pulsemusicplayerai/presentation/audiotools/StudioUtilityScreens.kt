@@ -613,7 +613,7 @@ fun VideoStudioScreen(
                 }
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.weight(1f)) {
 
                 // ---------------- LIVE PREVIEW (fixed, stable) ----------------
                 Card(
@@ -957,52 +957,15 @@ fun VideoStudioScreen(
                 // ---------------- BOTTOM ACTION AREA ----------------
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Horizontal feature chips (main editing features)
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(end = 4.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    item {
-                        val isSelected = preset == VisualizerPreset.CIRCULAR_BARS
-                        ChipOption(
-                            label = "Preset",
-                            selected = isSelected,
-                            onClick = { /* Preset is selected above in scrollable area */ }
-                        )
+                HorizontalChipRow(
+                    options = buildList {
+                        add(ChipOption(label = "Preset", selected = preset == VisualizerPreset.CIRCULAR_BARS, onClick = { }))
+                        addAll(VideoAspectRatio.values().map { ChipOption(label = it.displayName, selected = aspectRatio == it, onClick = { aspectRatio = it }) })
+                        addAll(VideoResolution.values().map { ChipOption(label = it.displayName, selected = resolution == it, onClick = { resolution = it }) })
+                        add(ChipOption(label = "$fps fps", selected = true, onClick = { }))
+                        addAll(VideoBackgroundStyle.values().map { ChipOption(label = it.displayName, selected = bgStyle == it && bgImageUri == null, onClick = { bgStyle = it; bgImageUri = null }) })
                     }
-                    items(VideoAspectRatio.values()) { ar ->
-                        val isSelected = aspectRatio == ar
-                        ChipOption(
-                            label = ar.displayName,
-                            selected = isSelected,
-                            onClick = { aspectRatio = ar }
-                        )
-                    }
-                    items(VideoResolution.values()) { res ->
-                        val isSelected = resolution == res
-                        ChipOption(
-                            label = res.displayName,
-                            selected = isSelected,
-                            onClick = { resolution = res }
-                        )
-                    }
-                    item {
-                        ChipOption(
-                            label = "$fps fps",
-                            selected = true,
-                            onClick = { /* Frame rate is selected above */ }
-                        )
-                    }
-                    items(VideoBackgroundStyle.values()) { st ->
-                        val isSelected = bgStyle == st && bgImageUri == null
-                        ChipOption(
-                            label = st.displayName,
-                            selected = isSelected,
-                            onClick = { bgStyle = st; bgImageUri = null }
-                        )
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
