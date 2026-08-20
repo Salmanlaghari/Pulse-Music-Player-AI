@@ -168,7 +168,6 @@ class AudioStudioProcessor(private val context: Context) {
         }
 
         try {
-        try {
             val resolver = context.contentResolver ?: run {
                 Log.e("AudioStudioProcessor", "ContentResolver is null — cannot query MediaStore")
                 return@withContext emptyList()
