@@ -102,6 +102,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.RewardedAdSheet
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.NowPlayingControlSizes
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerCanvas
+import com.salmanlaghari.pulsemusicplayerai.theme.*
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
 import java.util.Locale
 
@@ -413,14 +414,16 @@ fun FullPlayerScreen(
                             .size(180.dp)
                             .scale(playPauseScale)
                             .shadow(
-                                radius = 24.dp,
+                                elevation = 24.dp,
                                 shape = RoundedCornerShape(90.dp),
+                                clip = false,
                                 ambientColor = NeonPurpleGlow,
                                 spotColor = NeonPurpleGlow
                             )
                             .shadow(
-                                radius = 12.dp,
+                                elevation = 12.dp,
                                 shape = RoundedCornerShape(90.dp),
+                                clip = false,
                                 ambientColor = NeonCyanGlow,
                                 spotColor = NeonCyanGlow
                             )
