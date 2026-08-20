@@ -424,17 +424,31 @@ class YouTubeRepository {
     }
     // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
+        // Try primary endpoint first
         val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
         if (primary.isNotEmpty()) {
             Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
             return primary
         }
-        // Primary endpoint is dead in practice (saavn.sumit.co now returns
-        // HTTP 429 / "error code: 1027" — verified). Fall back to the public
-        // mirror, retrying with backoff because the Vercel serverless host can
-        // cold-start or rate-limit under the 25-query catalog burst.
         Log.w(TAG, "JioSaavn PRIMARY EMPTY for '$query' — using mirror fallback")
-        return searchJioSaavnMirrorRetry(query)
+        
+        // Try mirror 1 (jiosaavn-api.vercel.app)
+        val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
+        if (mirror1.isNotEmpty()) {
+            Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
+            return mirror1
+        }
+        Log.w(TAG, "JioSaavn MIRROR empty for '$query' — trying mirror 2")
+        
+        // Try mirror 2 (jiosaavn-api-blue.vercel.app)
+        val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
+        if (mirror2.isNotEmpty()) {
+            Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
+            return mirror2
+        }
+        
+        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
+        return emptyList()
     }
 
     /**
@@ -444,7 +458,7 @@ class YouTubeRepository {
      */
     private suspend fun searchJioSaavnMirrorRetry(query: String): List<YouTubeSong> {
         repeat(3) { attempt ->
-            val res = runCatching { searchJioSaavnMirror(query) }.getOrDefault(emptyList())
+            val res = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
             if (res.isNotEmpty()) {
                 Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${res.size} results (attempt ${attempt + 1})")
                 return res
