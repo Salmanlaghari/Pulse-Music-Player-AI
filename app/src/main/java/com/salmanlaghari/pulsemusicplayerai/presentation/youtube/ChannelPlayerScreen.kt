@@ -151,7 +151,8 @@ fun ChannelPlayerScreen(
                                 val webView = YouTubePlayerWebView(
                                     context = context,
                                     videoId = videoId,
-                                    onReady = { showPlayOverlay = false },
+                                    onReady = { /* player created; keep overlay until actually playing */ },
+                                    onPlaying = { showPlayOverlay = false },
                                     onError = { msg -> playerError = msg }
                                 )
                                 webViewRef = webView
@@ -302,6 +303,31 @@ fun ChannelPlayerScreen(
                         }
                     }
                 }
+
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+
+                // Guaranteed fallback: if the in-app embed can't autoplay on this
+                // device, this always opens the video in the YouTube app / browser.
+                androidx.compose.material3.Button(
+                    onClick = { openVideoInYouTube(context, videoId) },
+                    colors = androidx.compose.material3.ButtonDefaults
+                        .buttonColors(containerColor = CyanGlow),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Open in YouTube app",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
             }
         }
     }
@@ -343,11 +369,17 @@ private fun openVideoInYouTube(context: android.content.Context, videoId: String
  */
 private class YouTubePlayerBridge(
     private val onReady: () -> Unit,
+    private val onPlaying: () -> Unit,
     private val onError: (String) -> Unit
 ) {
     @JavascriptInterface
     fun onReady() {
         onReady()
+    }
+
+    @JavascriptInterface
+    fun onPlaying() {
+        onPlaying()
     }
 
     @JavascriptInterface
@@ -368,6 +400,7 @@ private fun YouTubePlayerWebView(
     context: android.content.Context,
     videoId: String,
     onReady: () -> Unit,
+    onPlaying: () -> Unit,
     onError: (String) -> Unit
 ): WebView {
     return WebView(context).apply {
@@ -420,8 +453,8 @@ private fun YouTubePlayerWebView(
             }
         }
 
-        // Bridge to receive player-ready / error callbacks from JS.
-        addJavascriptInterface(YouTubePlayerBridge(onReady, onError), "Android")
+        // Bridge to receive player-ready / playing / error callbacks from JS.
+        addJavascriptInterface(YouTubePlayerBridge(onReady, onPlaying, onError), "Android")
 
         val safeVideoId = videoId.trim()
         val html = """
@@ -449,6 +482,12 @@ private fun YouTubePlayerWebView(
                       onReady: function(e) {
                         try { e.target.playVideo(); } catch (err) {}
                         if (window.Android) Android.onReady();
+                      },
+                      onStateChange: function(e) {
+                        // 1 == YT.PlayerState.PLAYING — only now is the video
+                        // actually rendering frames, so this is the right moment
+                        // to drop the manual "tap to play" overlay.
+                        if (e.data === 1 && window.Android) Android.onPlaying();
                       },
                       onError: function(e) {
                         if (window.Android) Android.onError(String(e.data));
