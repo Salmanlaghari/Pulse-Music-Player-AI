@@ -1023,7 +1023,6 @@ fun VideoStudioScreen(
             }
         }
     }
-    }
 
     if (showSaveDialog) {
         AlertDialog(
