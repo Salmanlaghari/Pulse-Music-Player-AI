@@ -167,10 +167,14 @@ class AudioStudioProcessor(private val context: Context) {
         }
 
         try {
-            context.contentResolver.query(
-                collectionVideo,
-                projectionVideo,
-                selectionVideo,
+            val resolver = context.contentResolver ?: run {
+                Log.e("AudioStudioProcessor", "ContentResolver is null — cannot query MediaStore")
+                return@withContext emptyList()
+            }
+            resolver.query(
+                collectionAudio,
+                projectionAudio,
+                selectionAudio,
                 selectionArgs,
                 sortOrder
             )?.use { cursor ->

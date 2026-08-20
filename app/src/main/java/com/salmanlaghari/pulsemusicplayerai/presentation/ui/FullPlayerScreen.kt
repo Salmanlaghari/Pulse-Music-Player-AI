@@ -752,7 +752,8 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Proof (per Issue 2) that NowPlayingControlSizes are the
+                         // Debug log to confirm control sizes at runtime
+                         Log.d("PulsePlayer", "Control sizes: Play/Pause=${NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP}dp, Prev/Next=${NowPlayingControlSizes.PREV_NEXT_SIZE_DP}dp")
                         // EXACT values rendered here and nowhere else overrides them.
                         Log.d(
                             "NowPlayingControls",

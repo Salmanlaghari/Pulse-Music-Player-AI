@@ -298,6 +298,7 @@ class YouTubeRepository {
         // working instead of showing an empty catalog.
         private const val JIOSAAVN_API = "https://saavn.sumit.co/api"
         private const val JIOSAAVN_MIRROR = "https://jiosaavn-api.vercel.app"
+        private const val JIOSAAVN_MIRROR_2 = "https://jiosaavn-api-blue.vercel.app"
 
         // ═══ MY CHANNEL (owner's YouTube channel) ═══
         // Fetched from the public, key-free YouTube RSS feed. Because this is the
@@ -551,16 +552,16 @@ class YouTubeRepository {
     }
 
     /**
-     * Mirror of [searchJioSaavnPrimary] for the public jiosaavn-api.vercel.app
-     * endpoint. The response shape differs slightly (top-level `results` with
+     * Mirror of [searchJioSaavnPrimary] for public mirror endpoints.
+     * The response shape differs slightly (top-level `results` with
      * `title` instead of `name`, `image` as a plain string, and `more_info`
      * carrying `singers`), so it is parsed separately.
      */
-    private suspend fun searchJioSaavnMirror(query: String): List<YouTubeSong> {
+    private suspend fun searchJioSaavnMirror(query: String, mirrorUrl: String): List<YouTubeSong> {
         val songs = mutableListOf<YouTubeSong>()
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val searchUrl = "$JIOSAAVN_MIRROR/api/search?query=$encodedQuery"
+            val searchUrl = "$mirrorUrl/api/search?query=$encodedQuery"
             val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
             if (searchResponse.isBlank()) return emptyList()
             val searchJson = JSONObject(searchResponse)
@@ -1510,12 +1511,16 @@ class YouTubeRepository {
                 .getOrNull()
                 ?.takeIf { it.isNotEmpty() }
                 ?.let {
-                    Log.d(TAG, "Loaded ${it.size} My Channel videos via Data API v3")
-                    return@withContext it
-                }
-            Log.w(TAG, "My Channel Data API v3 returned no videos — falling back to RSS")
-        }
-        getChannelVideosViaRss()
+                     Log.d(TAG, "Loaded ${it.size} My Channel videos via Data API v3")
+                     return@withContext it
+                 }
+             Log.w(TAG, "My Channel Data API v3 returned no videos — falling back to RSS")
+         }
+         val rssVideos = getChannelVideosViaRss()
+         if (rssVideos.isEmpty()) {
+             Log.e(TAG, "My Channel: Both Data API v3 and RSS fallback failed — check network/YouTube status")
+         }
+         return rssVideos
     }
 
     /**
