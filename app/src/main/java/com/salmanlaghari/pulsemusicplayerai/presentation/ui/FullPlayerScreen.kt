@@ -407,10 +407,10 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Flagship Large Album Art Box (Increased size to 300dp) with dynamic glowing borders
+                    // Flagship Large Album Art Box with dynamic glowing borders
                     Box(
                         modifier = Modifier
-                            .size(300.dp)
+                            .size(180.dp)
                             .scale(playPauseScale)
                             .border(
                                 BorderStroke(
@@ -423,9 +423,9 @@ fun FullPlayerScreen(
                                         )
                                     )
                                 ),
-                                shape = RoundedCornerShape(150.dp)
+                                shape = RoundedCornerShape(90.dp)
                             )
-                            .clip(RoundedCornerShape(150.dp)),
+                            .clip(RoundedCornerShape(90.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (showVisualizer) {
@@ -442,7 +442,7 @@ fun FullPlayerScreen(
                         } else {
                             Card(
                                 modifier = Modifier.fillMaxSize(),
-                                shape = RoundedCornerShape(150.dp),
+                                shape = RoundedCornerShape(90.dp),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 24.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
@@ -464,9 +464,9 @@ fun FullPlayerScreen(
                                         song = currentSong,
                                         modifier = Modifier
                                             .fillMaxSize(0.96f)
-                                            .clip(RoundedCornerShape(145.dp))
+                                            .clip(RoundedCornerShape(86.dp))
                                             .rotate(resolvedRotation),
-                                        iconSize = 110.dp
+                                        iconSize = 66.dp
                                     )
                                 }
                             }

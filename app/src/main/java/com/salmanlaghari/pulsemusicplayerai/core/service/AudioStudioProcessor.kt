@@ -1013,7 +1013,7 @@ class AudioStudioProcessor(private val context: Context) {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
             if (prof != null && lvl != null) {
                 setInteger(MediaFormat.KEY_PROFILE, prof)
                 setInteger(MediaFormat.KEY_LEVEL, lvl)

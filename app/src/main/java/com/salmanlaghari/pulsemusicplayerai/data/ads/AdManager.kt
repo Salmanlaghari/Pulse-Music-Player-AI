@@ -28,6 +28,7 @@ object AdManager {
 
     // ✅ REAL AdMob IDs — DO NOT MODIFY
     private const val APP_OPEN_ID = "ca-app-pub-8178045957849630/9910636842"
+    private const val BANNER_HOME_ID = "ca-app-pub-8178045957849630/2647078704"
     private const val BANNER_NOW_PLAYING_ID = "ca-app-pub-8178045957849630/5273242041"
     private const val BANNER_LIBRARY_ID = "ca-app-pub-8178045957849630/2647078704"
     private const val BANNER_EQUALIZER_ID = "ca-app-pub-8178045957849630/3892023409"
@@ -61,7 +62,7 @@ object AdManager {
         if (BuildConfig.DEBUG) return
         val googleTestPrefix = "ca-app-pub-3940256099942544"
         val configured = listOf(
-            APP_OPEN_ID, BANNER_NOW_PLAYING_ID, BANNER_LIBRARY_ID, BANNER_EQUALIZER_ID,
+            APP_OPEN_ID, BANNER_HOME_ID, BANNER_NOW_PLAYING_ID, BANNER_LIBRARY_ID, BANNER_EQUALIZER_ID,
             INTERSTITIAL_SONG_CHANGE_ID, INTERSTITIAL_RESUME_ID, INTERSTITIAL_PLAYLIST_END_ID,
             INTERSTITIAL_VIDEO_EXPORT_ID,
             REWARDED_AD_FREE_HOUR_ID, REWARDED_UNLIMITED_SKIP_ID, REWARDED_PRO_EQUALIZER_ID,
@@ -173,6 +174,7 @@ object AdManager {
     }
 
     // ═══ BANNER ADS ═══
+    fun getBannerHomeId() = BANNER_HOME_ID
     fun getBannerNowPlayingId() = BANNER_NOW_PLAYING_ID
     fun getBannerLibraryId() = BANNER_LIBRARY_ID
     fun getBannerEqualizerId() = BANNER_EQUALIZER_ID

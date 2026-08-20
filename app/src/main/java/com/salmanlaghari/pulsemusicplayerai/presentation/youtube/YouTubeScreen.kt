@@ -90,6 +90,7 @@ fun YouTubeScreen(
     val southAsianSongs by viewModel.southAsianSongs.collectAsState()
     val isSouthAsianLoading by viewModel.isSouthAsianLoading.collectAsState()
     val southAsianProgress by viewModel.southAsianProgress.collectAsState()
+    val southAsianLoadedAtMs by viewModel.southAsianLoadedAtMs.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
     val playLoadingMessage by viewModel.playLoadingMessage.collectAsState()
@@ -657,16 +658,83 @@ fun YouTubeScreen(
                 }
             } else if (selectedSource == MusicSource.DESI_HITS && searchQuery.isBlank()) {
                 // Desi Hits tab — Bollywood / Pakistani / South Asian / Northern songs catalog
-                Text(
-                    text = "DESI HITS — BOLLYWOOD & SOUTH ASIAN",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PurplePrimary,
-                    letterSpacing = 1.5.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "DESI HITS — BOLLYWOOD & SOUTH ASIAN",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PurplePrimary,
+                            letterSpacing = 1.5.sp
+                        )
+                        if (southAsianLoadedAtMs > 0 && !isSouthAsianLoading) {
+                            val lastSync = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(southAsianLoadedAtMs))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = Color.Green
+                                )
+                                Text(
+                                    text = "Synced at $lastSync",
+                                    fontSize = 10.sp,
+                                    color = Color.Green,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.loadSouthAsianCatalog(force = true) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh Desi Hits",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (isSouthAsianLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = CyanGlow)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val (completed, total) = southAsianProgress
+                            val progressText = if (total > 0) {
+                                "Loading $completed / $total playlists…"
+                            } else {
+                                "Loading Desi Hits catalog…"
+                            }
+                            Text(
+                                text = progressText,
+                                color = TextDim,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Fetching Bollywood, Pakistani, Punjabi & South Indian songs",
+                                color = TextDim,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                } else if (southAsianSongs.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -741,7 +809,11 @@ fun YouTubeScreen(
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            itemsIndexed(southAsianSongs) { index, song ->
+                            items(
+                                count = southAsianSongs.size,
+                                key = { index -> southAsianSongs[index].id }
+                            ) { index ->
+                                val song = southAsianSongs[index]
                                 YouTubeSongCard(
                                     song = song,
                                     isCurrentlyPlaying = currentlyPlaying?.id == song.id,

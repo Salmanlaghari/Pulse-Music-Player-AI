@@ -200,6 +200,6 @@ data class VisualizerVideoConfig(
         get() {
             val pixels = videoWidth.toLong() * videoHeight.toLong()
             val perPixel = (pixels * fps / 30L)
-            return (perPixel / 8L).toInt().coerceIn(1_500_000, 12_000_000)
+            return (perPixel / 4L).toInt().coerceIn(2_000_000, 16_000_000)
         }
 }
