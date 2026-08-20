@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.salmanlaghari.pulsemusicplayerai.common.PulseBranding
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.NowPlayingControlSizes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ElectricBolt
@@ -745,26 +746,26 @@ fun MiniPlayer(
                     }
                 }
 
-                // Spacious high-fidelity play controls with explicit 48dp touch targets
+                // Rebuilt play controls with explicit sizes matching FullPlayerScreen
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
                         onClick = { viewModel.skipToPrevious() },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
                             contentDescription = "Previous Song",
                             tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                         )
                     }
                     IconButton(
                         onClick = { viewModel.togglePlayPause() },
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
                             .clip(CircleShape)
                             .background(PurplePrimary)
                     ) {
@@ -772,18 +773,18 @@ fun MiniPlayer(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Play or Pause",
                             tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(NowPlayingControlSizes.PLAY_PAUSE_ICON_DP.dp)
                         )
                     }
                     IconButton(
                         onClick = { viewModel.skipToNext() },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,
                             contentDescription = "Next Song",
                             tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                         )
                     }
                 }

@@ -1493,7 +1493,13 @@ class AudioStudioProcessor(private val context: Context) {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
-            extractor.setDataSource(context, uri, null)
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            if (pfd == null) {
+                Log.e("AudioStudioProcessor", "decodeToPcm: openFileDescriptor returned null for $uri")
+                return null
+            }
+            extractor.setDataSource(pfd.fileDescriptor)
+            pfd.close()
 
             var trackIndex = -1
             var format: MediaFormat? = null

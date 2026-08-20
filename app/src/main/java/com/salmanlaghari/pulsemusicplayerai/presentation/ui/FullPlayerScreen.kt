@@ -746,22 +746,12 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Music Controller Actions Row
+                    // Music Controller Actions Row — rebuilt with explicit dp sizes
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                         // Debug log to confirm control sizes at runtime
-                         Log.d("PulsePlayer", "Control sizes: Play/Pause=${NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP}dp, Prev/Next=${NowPlayingControlSizes.PREV_NEXT_SIZE_DP}dp")
-                        // EXACT values rendered here and nowhere else overrides them.
-                        Log.d(
-                            "NowPlayingControls",
-                            "Transport sizes -> play/pause ${NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP}dp" +
-                                " (icon ${NowPlayingControlSizes.PLAY_PAUSE_ICON_DP}dp, filled circle)," +
-                                " prev/next ${NowPlayingControlSizes.PREV_NEXT_SIZE_DP}dp" +
-                                " (icon ${NowPlayingControlSizes.PREV_NEXT_ICON_DP}dp)"
-                        )
                         IconButton(onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.toggleShuffle()
@@ -770,7 +760,7 @@ fun FullPlayerScreen(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = "Shuffle",
                                 tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
 
@@ -792,7 +782,7 @@ fun FullPlayerScreen(
                         Box(
                             modifier = Modifier
                                 .size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
-                                .shadow(14.dp, CircleShape)
+                                .shadow(12.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
@@ -840,7 +830,7 @@ fun FullPlayerScreen(
                                 imageVector = repeatIcon,
                                 contentDescription = "Repeat Settings",
                                 tint = repeatColor,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     }
