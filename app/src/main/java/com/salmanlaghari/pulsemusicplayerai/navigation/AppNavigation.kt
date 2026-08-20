@@ -123,8 +123,8 @@ fun AppNavigation(
                     )
 
                     NavigationBar(
-                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
-                        tonalElevation = 8.dp
+                        containerColor = NeonSurface.copy(alpha = 0.85f),
+                        tonalElevation = 0.dp
                     ) {
                         bottomNavItems.forEach { item ->
                             val selected = currentRoute == item.route
@@ -144,7 +144,8 @@ fun AppNavigation(
                                 icon = {
                                     Icon(
                                         imageVector = item.icon,
-                                        contentDescription = item.title
+                                        contentDescription = item.title,
+                                        tint = if (selected) NeonPurple else NeonTextSecondary
                                     )
                                 },
                                 label = {
@@ -159,11 +160,11 @@ fun AppNavigation(
                                     )
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    selectedIconColor = NeonPurple,
+                                    selectedTextColor = NeonPurple,
+                                    unselectedIconColor = NeonTextSecondary,
+                                    unselectedTextColor = NeonTextSecondary,
+                                    indicatorColor = NeonPurple.copy(alpha = 0.15f)
                                 )
                             )
                         }

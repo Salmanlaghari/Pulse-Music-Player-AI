@@ -4,18 +4,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val GlassmorphicColorScheme = darkColorScheme(
-    primary = PurpleAccent,
-    secondary = BlueAccent,
-    tertiary = CyanGlow,
-    background = BaseNavyBlue,
-    surface = CardNavy,
-    surfaceVariant = CardNavy2,
-    onPrimary = TextLight,
-    onSecondary = BaseNavyBlue,
-    onBackground = TextLight,
-    onSurface = TextLight,
-    onSurfaceVariant = TextDim
+private val NeonColorScheme = darkColorScheme(
+    primary = NeonPurple,
+    secondary = NeonBlue,
+    tertiary = NeonCyan,
+    background = NeonBackground,
+    surface = NeonSurface,
+    surfaceVariant = NeonSurfaceVariant,
+    onPrimary = NeonTextPrimary,
+    onSecondary = NeonBackground,
+    onBackground = NeonTextPrimary,
+    onSurface = NeonTextPrimary,
+    onSurfaceVariant = NeonTextSecondary
 )
 
 @Composable
@@ -24,7 +24,7 @@ fun PulseMusicPlayerAITheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = GlassmorphicColorScheme,
+        colorScheme = NeonColorScheme,
         typography = Typography,
         content = content
     )

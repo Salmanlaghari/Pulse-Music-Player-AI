@@ -168,35 +168,30 @@ fun HomeScreenContent(
         label = "HomeBgAccent"
     )
 
-    // Base background with Navy Blue base and radial glows
+    // Base background with premium dark neon
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(BaseDeepNavy, BaseNavyBlue, BaseNavyBlue)
-                )
-            )
+            .background(NeonBackground)
     ) {
-        // Glowing dynamic accent radial overlay (Artwork color mapped smoothly)
+        // Subtle neon ambient glows
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(animatedAccentBgColor.copy(alpha = 0.22f), Color.Transparent),
+                        colors = listOf(NeonPurple.copy(alpha = 0.12f), Color.Transparent),
                         radius = 900f
                     )
                 )
         )
-        // Glowing Purple radial overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(PurplePrimary.copy(alpha = 0.15f), Color.Transparent),
-                        radius = 800f
+                        colors = listOf(NeonCyan.copy(alpha = 0.08f), Color.Transparent),
+                        radius = 700f
                     )
                 )
         )
@@ -376,17 +371,19 @@ fun ContinueListeningCard(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 10.dp,
-                shape = RoundedCornerShape(18.dp),
-                clip = false
+                elevation = 12.dp,
+                shape = RoundedCornerShape(20.dp),
+                clip = false,
+                ambientColor = NeonPurpleGlow,
+                spotColor = NeonPurpleGlow
             ),
-        shape = RoundedCornerShape(18.dp),
-        containerColor = GlassBg
+        shape = RoundedCornerShape(20.dp),
+        containerColor = NeonGlass
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -394,27 +391,27 @@ fun ContinueListeningCard(
                 SongArtwork(
                     song = song,
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp)),
-                    iconSize = 26.dp
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    iconSize = 28.dp
                 )
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(16.dp))
 
                 Column {
                     Text(
                         text = song.title,
-                        fontSize = 13.5.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = "Last listened • ${song.artist}",
-                        fontSize = 11.5.sp,
-                        color = TextDim,
+                        fontSize = 12.sp,
+                        color = NeonTextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -423,10 +420,24 @@ fun ContinueListeningCard(
 
             Box(
                 modifier = Modifier
-                    .size(48.dp) // Large touch target
-                    .clip(CircleShape)
-                    .shadow(8.dp, CircleShape, ambientColor = PurplePrimary, spotColor = CardNavy2)
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .shadow(8.dp, RoundedCornerShape(16.dp), ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow)
                     .background(
+                        brush = Brush.linearGradient(colors = listOf(NeonPurple, NeonPink))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+}
                         brush = Brush.linearGradient(
                             colors = listOf(PurplePrimary, CardNavy2)
                         )
@@ -520,9 +531,9 @@ fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
         onClick = item.onClick,
         modifier = modifier
             .height(80.dp)
-            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false),
+            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow),
         shape = RoundedCornerShape(18.dp),
-        containerColor = GlassBg
+        containerColor = NeonGlass
     ) {
         Row(
             modifier = Modifier
@@ -537,7 +548,7 @@ fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         brush = Brush.linearGradient(
-                            colors = listOf(PurplePrimary.copy(alpha = 0.35f), CyanSecondary.copy(alpha = 0.2f))
+                            colors = listOf(NeonPurple.copy(alpha = 0.4f), NeonCyan.copy(alpha = 0.25f))
                         )
                     ),
                 contentAlignment = Alignment.Center
@@ -702,9 +713,9 @@ fun MiniPlayer(
             .fillMaxWidth()
             .height(56.dp)
             .padding(horizontal = 14.dp)
-            .shadow(8.dp, RoundedCornerShape(14.dp), clip = false),
+            .shadow(8.dp, RoundedCornerShape(14.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow),
         shape = RoundedCornerShape(14.dp),
-        containerColor = CardNavy // Frosted dark blue backing
+        containerColor = NeonSurface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(

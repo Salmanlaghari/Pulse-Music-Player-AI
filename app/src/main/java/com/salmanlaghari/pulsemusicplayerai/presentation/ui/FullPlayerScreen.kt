@@ -407,19 +407,32 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Flagship Large Album Art Box with dynamic glowing borders
+                    // Premium Album Art with neon glow
                     Box(
                         modifier = Modifier
                             .size(180.dp)
                             .scale(playPauseScale)
+                            .shadow(
+                                radius = 24.dp,
+                                shape = RoundedCornerShape(90.dp),
+                                ambientColor = NeonPurpleGlow,
+                                spotColor = NeonPurpleGlow
+                            )
+                            .shadow(
+                                radius = 12.dp,
+                                shape = RoundedCornerShape(90.dp),
+                                ambientColor = NeonCyanGlow,
+                                spotColor = NeonCyanGlow
+                            )
                             .border(
                                 BorderStroke(
                                     2.dp,
                                     Brush.sweepGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            MaterialTheme.colorScheme.secondary,
-                                            MaterialTheme.colorScheme.primary
+                                            NeonCyan,
+                                            NeonPurple,
+                                            NeonPink,
+                                            NeonCyan
                                         )
                                     )
                                 ),
