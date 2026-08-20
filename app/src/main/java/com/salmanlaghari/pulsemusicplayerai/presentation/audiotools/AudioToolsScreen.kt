@@ -503,15 +503,11 @@ fun AudioToolsMainList(
         AudioToolData("Speed Changer", "Adjust playback speed & pitch of any track", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH, isPremium = true, premiumKey = PremiumFeature.SPEED_PITCH)
     )
 
-    // Base background with Navy Blue base and radial glows
+    // Base background with premium neon
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(CardNavy, BaseNavyBlue, BaseNavyBlue)
-                )
-            )
+            .background(NeonBackground)
     ) {
         // Glowing radial mesh background overlays
         Box(
@@ -519,7 +515,7 @@ fun AudioToolsMainList(
                 .fillMaxSize()
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(CyanGlow.copy(alpha = 0.12f), Color.Transparent),
+                        colors = listOf(NeonCyan.copy(alpha = 0.10f), Color.Transparent),
                         radius = 800f
                     )
                 )
@@ -529,7 +525,7 @@ fun AudioToolsMainList(
                 .fillMaxSize()
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(PurpleAccent.copy(alpha = 0.16f), Color.Transparent),
+                        colors = listOf(NeonPurple.copy(alpha = 0.10f), Color.Transparent),
                         radius = 900f
                     )
                 )

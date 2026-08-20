@@ -102,6 +102,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.RewardedAdSheet
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.NowPlayingControlSizes
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerCanvas
+import com.salmanlaghari.pulsemusicplayerai.theme.*
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
 import java.util.Locale
 
@@ -407,19 +408,34 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Flagship Large Album Art Box with dynamic glowing borders
+                    // Premium Album Art with neon glow
                     Box(
                         modifier = Modifier
                             .size(180.dp)
                             .scale(playPauseScale)
+                            .shadow(
+                                elevation = 24.dp,
+                                shape = RoundedCornerShape(90.dp),
+                                clip = false,
+                                ambientColor = NeonPurpleGlow,
+                                spotColor = NeonPurpleGlow
+                            )
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = RoundedCornerShape(90.dp),
+                                clip = false,
+                                ambientColor = NeonCyanGlow,
+                                spotColor = NeonCyanGlow
+                            )
                             .border(
                                 BorderStroke(
                                     2.dp,
                                     Brush.sweepGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            MaterialTheme.colorScheme.secondary,
-                                            MaterialTheme.colorScheme.primary
+                                            NeonCyan,
+                                            NeonPurple,
+                                            NeonPink,
+                                            NeonCyan
                                         )
                                     )
                                 ),
