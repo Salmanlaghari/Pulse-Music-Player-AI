@@ -1,6 +1,7 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
+import android.app.Activity
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.toVideoPreset
 import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -82,6 +84,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.BorderStroke
 import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
