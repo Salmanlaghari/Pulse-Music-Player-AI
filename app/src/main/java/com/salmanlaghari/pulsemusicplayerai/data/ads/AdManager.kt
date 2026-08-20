@@ -50,6 +50,29 @@ object AdManager {
         if (BuildConfig.DEBUG) "ca-app-pub-3940256099942544/5224354917" // Test ID
         else "ca-app-pub-8178045957849630/2527520554" // Production ID (pluse_rewarded_studio_unlock)
 
+    /**
+     * Release-build safety net for the "test ads in release" policy risk (Issue 1).
+     * Every configured ad unit is checked; if any resolves to Google's reserved
+     * test-publisher ID (ca-app-pub-3940256099942544) we log a loud policy warning
+     * instead of silently serving test ads to real users in a RELEASE build.
+     */
+    private fun assertNoTestAdUnitsInRelease() {
+        if (BuildConfig.DEBUG) return
+        val googleTestPrefix = "ca-app-pub-3940256099942544"
+        val configured = listOf(
+            APP_OPEN_ID, BANNER_NOW_PLAYING_ID, BANNER_LIBRARY_ID, BANNER_EQUALIZER_ID,
+            INTERSTITIAL_SONG_CHANGE_ID, INTERSTITIAL_RESUME_ID, INTERSTITIAL_PLAYLIST_END_ID,
+            REWARDED_AD_FREE_HOUR_ID, REWARDED_UNLIMITED_SKIP_ID, REWARDED_PRO_EQUALIZER_ID,
+            REWARDED_HQ_AUDIO_ID, REWARDED_OFFLINE_DOWNLOAD_ID, REWARDED_PREMIUM_THEME_ID,
+            REWARDED_SLEEP_TIMER_ID, REWARDED_AUDIO_TOOLS_ID
+        )
+        configured.forEach { id ->
+            if (id.startsWith(googleTestPrefix)) {
+                Log.e(TAG, "POLICY RISK: test ad unit detected in RELEASE build: $id")
+            }
+        }
+    }
+
     // Ad instances
     private var appOpenAd: AppOpenAd? = null
     private var interstitialSongChange: InterstitialAd? = null
@@ -84,6 +107,7 @@ object AdManager {
         MobileAds.initialize(context) { status ->
             Log.d(TAG, "AdMob initialized: $status")
         }
+        assertNoTestAdUnitsInRelease()
         loadAllAds(context)
     }
 

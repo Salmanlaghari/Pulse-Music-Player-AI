@@ -28,6 +28,8 @@ target/
 .env
 .env.local
 *.env.*
+# Local Gradle overrides (may contain secrets like YOUTUBE_DATA_API_KEY) — never commit.
+local.properties
 
 # Editors
 .vscode/
