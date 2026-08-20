@@ -37,18 +37,26 @@ val NeonCyanGlow = Color(0x4D00E5FF)
 val NeonPurpleGlow = Color(0x4D7C4DFF)
 val NeonPinkGlow = Color(0x4DFF2BD6)
 
-// Backward Compatibility Mapping
+// Backward Compatibility Aliases
 val PurplePrimary = NeonPurple
 val CyanSecondary = NeonCyan
 val GlassBg = NeonGlass
 val CardNavy = NeonSurface
-
+val BaseNavyBlue = NeonBackground
+val BaseDeepNavy = NeonBackgroundSecondary
+val CardNavy2 = NeonSurfaceVariant
+val PurpleAccent = NeonPurple
+val BlueAccent = NeonBlue
+val CyanGlow = NeonCyan
+val CyanGlowSoft = NeonCyan.copy(alpha = 0.5f)
+val TextLight = NeonTextPrimary
+val TextDim = NeonTextSecondary
+val GlassBorder = NeonGlassBorder
 val DarkBackground = NeonBackground
 val DarkSurface = NeonSurface
 val DarkSurfaceVariant = NeonSurfaceVariant
 val DarkOnBackground = NeonTextPrimary
 val DarkOnSurface = NeonTextPrimary
-
 val LightBackground = NeonBackground
 val LightSurface = NeonSurface
 val LightSurfaceVariant = NeonSurfaceVariant
