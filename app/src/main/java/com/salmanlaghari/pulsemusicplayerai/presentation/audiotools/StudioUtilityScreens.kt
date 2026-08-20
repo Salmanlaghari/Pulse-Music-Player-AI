@@ -2,6 +2,7 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.audiotools
 
 import android.net.Uri
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.toVideoPreset
 import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
 import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
 import androidx.activity.compose.rememberLauncherForActivityResult
