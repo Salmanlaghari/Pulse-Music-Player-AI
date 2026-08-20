@@ -444,18 +444,8 @@ fun VideoStudioScreen(
     // as the Now Playing screen, so the user sees one consistent, categorised
     // preset list everywhere. It is converted to the renderer's
     // VideoVisualizerPreset when the config is built.
-    var preset by remember {
-        mutableStateOf(
-            when (type) {
-                VideoStudioType.WAVEFORM -> VisualizerPreset.FLUID_WAVE
-                VideoStudioType.SPECTRUM -> VisualizerPreset.LINEAR_BARS
-                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_BARS
-                VideoStudioType.NEON -> VisualizerPreset.NEON_BARS
-                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_RING
-                else -> VisualizerPreset.CIRCULAR_BARS
-            }
-        )
-    }
+    // Visualizer Preset (replaces scale/position sliders)
+    var visualizerPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_BARS) }
     var aspectRatio by remember {
         mutableStateOf(
             when (type) {
@@ -490,7 +480,7 @@ fun VideoStudioScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
 
     val config = VisualizerVideoConfig(
-        preset = preset.toVideoPreset(),
+        preset = visualizerPreset.toVideoPreset(),
         aspectRatio = aspectRatio,
         resolution = resolution,
         fps = fps,
@@ -503,8 +493,8 @@ fun VideoStudioScreen(
         backgroundFit = bgFit,
         backgroundStyle = bgStyle,
         backgroundDim = bgDim,
-        visualizerScale = vizScale,
-        visualizerPositionY = vizPosY,
+        visualizerScale = 1.0f,  // Default scale (preset handles sizing)
+        visualizerPositionY = 0.5f,  // Default position (preset handles positioning)
         glow = glow,
         backgroundTrackResName = bgTrackResName,
         backgroundTrackVolume = bgTrackVolume,
@@ -514,11 +504,19 @@ fun VideoStudioScreen(
         outputName = outputFileName
     )
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) filePickerLauncher.launch("audio/*")
+        else viewModel.setExportError("Permission denied: cannot read audio files.")
+    }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) viewModel.selectFiles(listOf(uri))
     }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -586,7 +584,17 @@ fun VideoStudioScreen(
         if (sourceUri == null) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(220.dp).clickable { filePickerLauncher.launch("audio/*") },
+                    modifier = Modifier.fillMaxWidth().height(220.dp).clickable {
+                        if (ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_EXTERNAL_STORAGE
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            filePickerLauncher.launch("audio/*")
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                        }
+                    },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -890,24 +898,16 @@ fun VideoStudioScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
 
-                Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = vizScale,
-                    onValueChange = { vizScale = it },
-                    valueRange = 0.4f..1.6f,
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                // Visualizer Preset Picker (replaces scale/position sliders)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Visualizer Preset", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                VisualizerStudioProPicker(
+                    selectedPreset = visualizerPreset,
+                    onPresetSelected = { preset -> visualizerPreset = preset },
+                    modifier = Modifier.fillMaxWidth().height(200.dp)
                 )
 
-                Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Slider(
-                    value = vizPosY,
-                    onValueChange = { vizPosY = it },
-                    valueRange = 0.15f..0.9f,
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                )
-
-                if (durationMs > 0) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                     Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Slider(
                         value = trimStartMs.toFloat(),
@@ -948,7 +948,11 @@ fun VideoStudioScreen(
                     }
                 } else {
                     Button(
-                        onClick = { showSaveDialog = true },
+                        onClick = {
+                            AdManager.showInterstitialVideoExport(context as Activity) {
+                                showSaveDialog = true
+                            }
+                        },
                         enabled = spectrum != null && !isAnalyzing,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = RoundedCornerShape(12.dp),

@@ -750,41 +750,43 @@ fun MiniPlayer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(
+                    FloatingActionButton(
                         onClick = { viewModel.skipToPrevious() },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(56.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
                             contentDescription = "Previous Song",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(
+                    FloatingActionButton(
                         onClick = { viewModel.togglePlayPause() },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(PurplePrimary)
+                        modifier = Modifier.size(56.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play or Pause",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(
+                    }
+                    FloatingActionButton(
                         onClick = { viewModel.skipToNext() },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(56.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,
                             contentDescription = "Next Song",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(40.dp)
                         )
+                    }
                     }
                 }
             }

@@ -675,6 +675,12 @@ class AudioStudioProcessor(private val context: Context) {
             val startUs = config.startMs.coerceAtLeast(0L) * 1000L
             val endUs = if (config.endMs > config.startMs) config.endMs * 1000L else Long.MAX_VALUE
 
+            // Pre-export validation: check if the file is readable and has an audio track
+            if (!validateAudioFile(sourceUri)) {
+                lastExportError = "The selected file is not a supported audio format or cannot be read."
+                return@withContext null
+            }
+
             val pcm = decodeToPcm(sourceUri, startUs, endUs) { p ->
                 onProgress((p * 0.20f).toInt().coerceIn(0, 20))
             } ?: run {
@@ -1040,12 +1046,15 @@ class AudioStudioProcessor(private val context: Context) {
      * UnsupportedOperationException on real MediaCodec encoder surfaces and was the
      * root cause of the "Process Failed" MP4 export crash.
      */
-    private fun lockEncoderCanvas(surface: android.view.Surface): android.graphics.Canvas? {
+    private fun validateAudioFile(uri: Uri): Boolean {
+        val retriever = MediaMetadataRetriever()
         return try {
-            surface.lockCanvas(null)
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "lockCanvas on encoder surface failed: " + e.message, e)
-            null
+            false
+        } finally {
+            retriever.release()
         }
     }
 

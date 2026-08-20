@@ -305,37 +305,43 @@ fun FullPlayerScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
+                            FloatingActionButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToPrevious()
                                 },
-                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                                modifier = Modifier.size(56.dp),
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp))
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(40.dp))
                             }
-                            IconButton(
+                            FloatingActionButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.togglePlayPause()
+                                    if (isPlaying) viewModel.pause() else viewModel.play()
                                 },
-                                modifier = Modifier.shadow(14.dp, CircleShape).background(MaterialTheme.colorScheme.primary, shape = CircleShape).size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
+                                modifier = Modifier.size(80.dp),
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(NowPlayingControlSizes.PLAY_PAUSE_ICON_DP.dp)
+                                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                    modifier = Modifier.size(52.dp)
                                 )
                             }
-                            IconButton(
+                            }
+                            FloatingActionButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.skipToNext()
                                 },
-                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                                modifier = Modifier.size(56.dp),
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp))
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(40.dp))
                             }
                         }
                     }

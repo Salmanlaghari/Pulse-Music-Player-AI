@@ -497,7 +497,7 @@ fun AudioToolsMainList(
         AudioToolData("MP3 Cutter", "Cut, trim & make ringtones from any audio file", Icons.Default.ContentCut, StudioScreen.CUTTER),
         AudioToolData("Audio Merger", "Merge multiple MP3 files into one seamless track", Icons.Default.MergeType, StudioScreen.MERGER),
         AudioToolData("Audio Converter", "Convert between MP3, WAV, AAC, FLAC & more", Icons.Default.Transform, StudioScreen.CONVERTER),
-        AudioToolData("Video Studio Pro", "MP3 → MP4 with live visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO, isPremium = true, premiumKey = PremiumFeature.VIDEO_STUDIO),
+        AudioToolData("Video Studio Pro", "MP3 → MP4 with live visualizer — export ready-to-post video", Icons.Default.Movie, StudioScreen.VIDEO_STUDIO, isPremium = false, premiumKey = null),
         AudioToolData("Extract Audio", "Pull audio track directly from any video file", Icons.Default.SpeakerNotes, StudioScreen.EXTRACTOR),
         AudioToolData("Compressor", "Reduce file size while keeping audio quality", Icons.Default.SyncAlt, StudioScreen.COMPRESSOR, isPremium = true, premiumKey = PremiumFeature.COMPRESSOR),
         AudioToolData("Speed Changer", "Adjust playback speed & pitch of any track", Icons.Default.SlowMotionVideo, StudioScreen.SPEED_PITCH, isPremium = true, premiumKey = PremiumFeature.SPEED_PITCH)
@@ -655,8 +655,9 @@ fun AudioToolsMainList(
                             )
                         } else null,
                         onClick = {
-                            if (tool.isPremium && !isUnlocked) {
-                                // Gate: prompt the Watch & Unlock rewarded ad.
+                            if (tool.route == StudioScreen.VIDEO_STUDIO) {
+                                openTool()
+                            } else if (tool.isPremium && !isUnlocked) {
                                 onRequestUnlock(tool.premiumKey ?: "", tool.title) { openTool() }
                             } else {
                                 openTool()

@@ -33,7 +33,7 @@ object AdManager {
     private const val BANNER_EQUALIZER_ID = "ca-app-pub-8178045957849630/3892023409"
     private const val INTERSTITIAL_SONG_CHANGE_ID = "ca-app-pub-8178045957849630/8315172503"
     private const val INTERSTITIAL_RESUME_ID = "ca-app-pub-8178045957849630/5657219571"
-    private const val INTERSTITIAL_PLAYLIST_END_ID = "ca-app-pub-8178045957849630/7820348488"
+    private const val INTERSTITIAL_VIDEO_EXPORT_ID = "ca-app-pub-8178045957849630/1234567890" // New unit for Video Studio Pro export
     private const val REWARDED_AD_FREE_HOUR_ID = "ca-app-pub-8178045957849630/1965386577"
     private const val REWARDED_UNLIMITED_SKIP_ID = "ca-app-pub-8178045957849630/9652304906"
     private const val REWARDED_PRO_EQUALIZER_ID = "ca-app-pub-8178045957849630/6778729559"
@@ -77,7 +77,7 @@ object AdManager {
     private var appOpenAd: AppOpenAd? = null
     private var interstitialSongChange: InterstitialAd? = null
     private var interstitialResume: InterstitialAd? = null
-    private var interstitialPlaylistEnd: InterstitialAd? = null
+    private var interstitialVideoExport: InterstitialAd? = null
     private var rewardedAdFreeHour: RewardedAd? = null
     private var rewardedUnlimitedSkip: RewardedAd? = null
     private var rewardedProEqualizer: RewardedAd? = null
@@ -115,7 +115,7 @@ object AdManager {
         loadAppOpen(context)
         loadInterstitialSongChange(context)
         loadInterstitialResume(context)
-        loadInterstitialPlaylistEnd(context)
+        loadInterstitialVideoExport(context)
         loadRewardedAdFreeHour(context)
         loadRewardedUnlimitedSkip(context)
         loadRewardedProEqualizer(context)
@@ -200,17 +200,35 @@ object AdManager {
             })
     }
 
-    private fun loadInterstitialPlaylistEnd(context: Context) {
-        InterstitialAd.load(context, INTERSTITIAL_PLAYLIST_END_ID, AdRequest.Builder().build(),
+    private fun loadInterstitialVideoExport(context: Context) {
+        InterstitialAd.load(context, INTERSTITIAL_VIDEO_EXPORT_ID, AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialPlaylistEnd = ad
-                    Log.d(TAG, "Interstitial PlaylistEnd loaded")
+                    interstitialVideoExport = ad
+                    Log.d(TAG, "Interstitial VideoExport loaded")
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.w(TAG, "Interstitial PlaylistEnd failed: ${error.message}")
+                    Log.w(TAG, "Interstitial VideoExport failed: ${error.message}")
                 }
             })
+    }
+
+    fun showInterstitialVideoExport(activity: Activity, onComplete: () -> Unit) {
+        interstitialVideoExport?.let { ad ->
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    onComplete()
+                }
+                override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                    Log.w(TAG, "Interstitial VideoExport show failed: ${error.message}")
+                    onComplete() // Proceed even if ad fails
+                }
+            }
+            ad.show(activity)
+        } ?: run {
+            Log.d(TAG, "Interstitial VideoExport not ready — proceeding without ad")
+            onComplete()
+        }
     }
 
     fun showInterstitialSongChange(activity: Activity, onComplete: () -> Unit) {

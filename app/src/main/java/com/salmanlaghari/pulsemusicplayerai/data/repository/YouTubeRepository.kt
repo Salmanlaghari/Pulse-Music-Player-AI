@@ -298,7 +298,6 @@ class YouTubeRepository {
         // working instead of showing an empty catalog.
         private const val JIOSAAVN_API = "https://saavn.sumit.co/api"
         private const val JIOSAAVN_MIRROR = "https://jiosaavn-api.vercel.app"
-        private const val JIOSAAVN_MIRROR_2 = "https://jiosaavn-api-blue.vercel.app"
 
         // ═══ MY CHANNEL (owner's YouTube channel) ═══
         // Fetched from the public, key-free YouTube RSS feed. Because this is the
@@ -432,42 +431,56 @@ class YouTubeRepository {
         }
         Log.w(TAG, "JioSaavn PRIMARY EMPTY for '$query' — using mirror fallback")
         
-        // Try mirror 1 (jiosaavn-api.vercel.app)
-        val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
-        if (mirror1.isNotEmpty()) {
-            Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
-            return mirror1
-        }
-        Log.w(TAG, "JioSaavn MIRROR empty for '$query' — trying mirror 2")
-        
-        // Try mirror 2 (jiosaavn-api-blue.vercel.app)
-        val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
-        if (mirror2.isNotEmpty()) {
-            Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
-            return mirror2
-        }
-        
-        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
-        return emptyList()
-    }
-
-    /**
-     * Try the mirror up to 3 times with linear backoff. This is the resilience
-     * fix for "Desi Hits not loading": the working mirror is rate-limited under
-     * burst, so a single attempt can come back empty even though the host is up.
-     */
-    private suspend fun searchJioSaavnMirrorRetry(query: String): List<YouTubeSong> {
+        // Try mirror 1 (jiosaavn-api.vercel.app) with retry
         repeat(3) { attempt ->
-            val res = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
-            if (res.isNotEmpty()) {
-                Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${res.size} results (attempt ${attempt + 1})")
-                return res
+            val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
+            if (mirror1.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn MIRROR OK for '$query' (attempt ${attempt + 1}) -> ${mirror1.size} results")
+                return mirror1
             }
             Log.w(TAG, "JioSaavn MIRROR empty for '$query' (attempt ${attempt + 1})")
-            if (attempt < 2) kotlinx.coroutines.delay(500L * (attempt + 1))
+            if (attempt < 2) kotlinx.coroutines.delay(1000L * (attempt + 1))
         }
-        Log.e(TAG, "JioSaavn BOTH primary and mirror FAILED for '$query'")
-        return emptyList()
+        Log.e(TAG, "JioSaavn MIRROR FAILED for '$query' after 3 attempts")
+
+        // Fallback to Deezer API for 30s previews (better than empty results)
+        return searchDeezer(query)
+    }
+
+    private suspend fun searchDeezer(query: String): List<YouTubeSong> {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val url = "https://api.deezer.com/search?q=${URLEncoder.encode(query, "UTF-8")}"
+            val response = withContext(Dispatchers.IO) { URL(url).readText() }
+            val json = JSONObject(response)
+            val data = json.optJSONArray("data") ?: return emptyList()
+            
+            for (i in 0 until data.length()) {
+                val track = data.optJSONObject(i) ?: continue
+                val id = track.optString("id", "")
+                val title = track.optString("title", "Unknown")
+                val artist = track.optJSONObject("artist")?.optString("name", "Unknown Artist") ?: "Unknown Artist"
+                val duration = track.optInt("duration", 0) * 1000L
+                val thumbnail = track.optJSONObject("album")?.optString("cover_medium", "") ?: ""
+                val previewUrl = track.optString("preview", "")
+                
+                if (id.isNotBlank() && previewUrl.isNotBlank()) {
+                    songs.add(
+                        YouTubeSong(
+                            id = "dz_$id",
+                            title = title,
+                            artist = artist,
+                            duration = duration,
+                            thumbnailUrl = thumbnail,
+                            audioUrl = previewUrl
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Deezer search failed: ${e.message}")
+        }
+        return songs
     }
 
     private suspend fun searchJioSaavnPrimary(query: String): List<YouTubeSong> {
@@ -899,7 +912,7 @@ class YouTubeRepository {
             // Pace the burst of curated queries so we don't get rate-limited
             // (HTTP 429) by saavn.sumit.co — a burst was causing the catalog to
             // come back empty/partial and made Desi Hits appear "broken".
-            if (completed > 0) kotlinx.coroutines.delay(500)
+            if (completed > 0) kotlinx.coroutines.delay(2000)
 
             var results: List<YouTubeSong> = emptyList()
             repeat(2) { attempt ->
