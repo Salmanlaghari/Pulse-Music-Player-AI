@@ -42,13 +42,12 @@ object AdManager {
     private const val REWARDED_SLEEP_TIMER_ID = "ca-app-pub-8178045957849630/1313961528"
     private const val NATIVE_PLAYLIST_ID = "ca-app-pub-8178045957849630/6837750948"
 
-    // ⚠️ PLACEHOLDER AD UNIT (TEST ID) ⚠️
-    // This uses Google's official TEST rewarded ad unit so the Watch & Unlock
-    // flow can be exercised end-to-end in development. BEFORE SHIPPING PUBLICLY,
-    // replace it with a real production AdMob rewarded ad unit you create in the
-    // AdMob console (account tied to pub-8178045957849630). See the PR
-    // description for details. Do not ship with a test ID in production.
-    private const val REWARDED_AUDIO_TOOLS_ID = "ca-app-pub-3940256099942544/5224354917"
+    // Rewarded ad unit for Audio Tools (Watch & Unlock flow).
+    // Uses Google's test ID in DEBUG builds for safe development/testing.
+    // In RELEASE builds, uses the production ID to comply with AdMob policies.
+    private val REWARDED_AUDIO_TOOLS_ID =
+        if (BuildConfig.DEBUG) "ca-app-pub-3940256099942544/5224354917" // Test ID
+        else "ca-app-pub-8178045957849630/1965386577" // Production ID (Ad-Free Hour slot)
 
     // Ad instances
     private var appOpenAd: AppOpenAd? = null

@@ -101,7 +101,6 @@ class AudioStudioProcessor(private val context: Context) {
             "${MediaStore.Audio.Media.DATA} LIKE ?"
         }
 
-        try {
             context.contentResolver.query(
                 collectionAudio,
                 projectionAudio,
