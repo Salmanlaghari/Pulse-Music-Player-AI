@@ -35,9 +35,9 @@ class AudioScanner(private val context: Context) {
             val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
             val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -45,32 +45,29 @@ class AudioScanner(private val context: Context) {
                 val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
                 val album = cursor.getString(albumColumn) ?: "Unknown Album"
                 val duration = cursor.getLong(durationColumn)
-                val path = cursor.getString(dataColumn) ?: ""
+                val path = if (dataColumn >= 0) cursor.getString(dataColumn) ?: "" else ""
                 val dateAdded = cursor.getLong(dateAddedColumn)
-                val albumId = cursor.getLong(albumIdColumn)
+                val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else 0L
 
-                // Check if the physical file actually exists before listing it
-                if (path.isNotEmpty() && File(path).exists()) {
-                    val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
-                    // Album Art URI standard construction:
-                    val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
-                    val albumArtUri = ContentUris.withAppendedId(sArtworkUri, albumId)
+                // Album Art URI standard construction:
+                val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
+                val albumArtUri = if (albumId > 0L) ContentUris.withAppendedId(sArtworkUri, albumId) else null
 
-                    songList.add(
-                        Song(
-                            id = id,
-                            title = title,
-                            artist = artist,
-                            album = album,
-                            duration = duration,
-                            path = path,
-                            uri = songUri,
-                            dateAdded = dateAdded,
-                            artUri = albumArtUri
-                        )
+                songList.add(
+                    Song(
+                        id = id,
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        duration = duration,
+                        path = path,
+                        uri = songUri,
+                        dateAdded = dateAdded,
+                        artUri = albumArtUri
                     )
-                }
+                )
             }
         }
         return songList

@@ -111,7 +111,7 @@ class AudioStudioProcessor(private val context: Context) {
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val pathCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
@@ -119,18 +119,18 @@ class AudioStudioProcessor(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val name = cursor.getString(nameCol)
-                    val path = cursor.getString(pathCol)
+                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(sizeCol)
                     val duration = cursor.getLong(durationCol)
                     val dateAdded = cursor.getLong(dateCol)
                     val uri = ContentUris.withAppendedId(collectionAudio, id)
 
-                    val ext = name.substringAfterLast('.', "mp3")
+                    val ext = name?.substringAfterLast('.', "mp3") ?: "mp3"
 
                     list.add(
                         ExportedFile(
                             id = id,
-                            name = name,
+                            name = name ?: "Unknown",
                             path = path,
                             uriString = uri.toString(),
                             size = size,
@@ -181,7 +181,7 @@ class AudioStudioProcessor(private val context: Context) {
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                val pathCol = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
@@ -189,7 +189,7 @@ class AudioStudioProcessor(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val name = cursor.getString(nameCol)
-                    val path = cursor.getString(pathCol)
+                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(sizeCol)
                     val duration = cursor.getLong(durationCol)
                     val dateAdded = cursor.getLong(dateCol)
@@ -198,7 +198,7 @@ class AudioStudioProcessor(private val context: Context) {
                     list.add(
                         ExportedFile(
                             id = id,
-                            name = name,
+                            name = name ?: "Unknown",
                             path = path,
                             uriString = uri.toString(),
                             size = size,
@@ -1346,7 +1346,8 @@ class AudioStudioProcessor(private val context: Context) {
             resolver.query(itemUri, projection, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
-                    val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA))
+                    val pathCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE))
                     val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION))
                     val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED))
@@ -1434,7 +1435,8 @@ class AudioStudioProcessor(private val context: Context) {
             resolver.query(itemUri, projection, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
-                    val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
+                    val pathCol = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
+                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
                     val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION))
                     val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
