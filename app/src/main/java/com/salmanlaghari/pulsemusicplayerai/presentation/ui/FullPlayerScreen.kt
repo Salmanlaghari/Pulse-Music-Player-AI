@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,11 +85,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import android.app.Activity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -408,82 +411,120 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Premium Album Art with neon glow
+                    // Premium Album Art with beat-reactive circle visualizer
                     Box(
                         modifier = Modifier
-                            .size(180.dp)
-                            .scale(playPauseScale)
-                            .shadow(
-                                elevation = 24.dp,
-                                shape = RoundedCornerShape(90.dp),
-                                clip = false,
-                                ambientColor = NeonPurpleGlow,
-                                spotColor = NeonPurpleGlow
-                            )
-                            .shadow(
-                                elevation = 12.dp,
-                                shape = RoundedCornerShape(90.dp),
-                                clip = false,
-                                ambientColor = NeonCyanGlow,
-                                spotColor = NeonCyanGlow
-                            )
-                            .border(
-                                BorderStroke(
-                                    2.dp,
-                                    Brush.sweepGradient(
-                                        colors = listOf(
-                                            NeonCyan,
-                                            NeonPurple,
-                                            NeonPink,
-                                            NeonCyan
-                                        )
-                                    )
-                                ),
-                                shape = RoundedCornerShape(90.dp)
-                            )
-                            .clip(RoundedCornerShape(90.dp)),
+                            .size(220.dp)
+                            .scale(playPauseScale),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (showVisualizer) {
-                            VisualizerCanvas(
-                                preset = currentPreset,
-                                isPlaying = isPlaying,
-                                sensitivity = sensitivityScale,
-                                speed = speed,
-                                primaryColor = MaterialTheme.colorScheme.primary,
-                                secondaryColor = MaterialTheme.colorScheme.secondary,
-                                tertiaryColor = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.fillMaxSize()
+                        // Beat-reactive expanding rings
+                        if (isPlaying) {
+                            val infiniteTransition = rememberInfiniteTransition(label = "beatRings")
+                            val beatPhase by infiniteTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1200, easing = LinearEasing)
+                                ),
+                                label = "beatPhase"
                             )
-                        } else {
-                            Card(
-                                modifier = Modifier.fillMaxSize(),
-                                shape = RoundedCornerShape(90.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 24.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            brush = Brush.sweepGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.primary,
-                                                    MaterialTheme.colorScheme.secondary,
-                                                    MaterialTheme.colorScheme.primary
-                                                )
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    SongArtwork(
-                                        song = currentSong,
-                                        modifier = Modifier
-                                            .fillMaxSize(0.96f)
-                                            .clip(RoundedCornerShape(86.dp))
-                                            .rotate(resolvedRotation),
-                                        iconSize = 66.dp
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val cx = size.width / 2f
+                                val cy = size.height / 2f
+                                val maxRadius = size.width * 0.55f
+                                val rings = 4
+                                for (i in 0 until rings) {
+                                    val phase = (beatPhase + i.toFloat() / rings) % 1f
+                                    val radius = 70f + phase * maxRadius
+                                    val alpha = (1f - phase) * 0.35f
+                                    drawCircle(
+                                        color = if (i % 2 == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                        radius = radius,
+                                        center = Offset(cx, cy),
+                                        style = Stroke(width = 2f + (1f - phase) * 4f),
+                                        alpha = alpha
                                     )
+                                }
+                            }
+                        }
+
+                        // Album art container
+                        Box(
+                            modifier = Modifier
+                                .size(180.dp)
+                                .shadow(
+                                    elevation = 24.dp,
+                                    shape = RoundedCornerShape(90.dp),
+                                    clip = false,
+                                    ambientColor = NeonPurpleGlow,
+                                    spotColor = NeonPurpleGlow
+                                )
+                                .shadow(
+                                    elevation = 12.dp,
+                                    shape = RoundedCornerShape(90.dp),
+                                    clip = false,
+                                    ambientColor = NeonCyanGlow,
+                                    spotColor = NeonCyanGlow
+                                )
+                                .border(
+                                    BorderStroke(
+                                        2.dp,
+                                        Brush.sweepGradient(
+                                            colors = listOf(
+                                                NeonCyan,
+                                                NeonPurple,
+                                                NeonPink,
+                                                NeonCyan
+                                            )
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(90.dp)
+                                )
+                                .clip(RoundedCornerShape(90.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (showVisualizer) {
+                                VisualizerCanvas(
+                                    preset = currentPreset,
+                                    isPlaying = isPlaying,
+                                    sensitivity = sensitivityScale,
+                                    speed = speed,
+                                    primaryColor = MaterialTheme.colorScheme.primary,
+                                    secondaryColor = MaterialTheme.colorScheme.secondary,
+                                    tertiaryColor = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Card(
+                                    modifier = Modifier.fillMaxSize(),
+                                    shape = RoundedCornerShape(90.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 24.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                brush = Brush.sweepGradient(
+                                                    colors = listOf(
+                                                        MaterialTheme.colorScheme.primary,
+                                                        MaterialTheme.colorScheme.secondary,
+                                                        MaterialTheme.colorScheme.primary
+                                                    )
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        SongArtwork(
+                                            song = currentSong,
+                                            modifier = Modifier
+                                                .fillMaxSize(0.96f)
+                                                .clip(RoundedCornerShape(86.dp))
+                                                .rotate(resolvedRotation),
+                                            iconSize = 66.dp
+                                        )
+                                    }
                                 }
                             }
                         }

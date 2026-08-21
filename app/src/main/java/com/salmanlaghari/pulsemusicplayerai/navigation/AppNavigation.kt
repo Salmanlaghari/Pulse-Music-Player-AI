@@ -94,11 +94,11 @@ fun AppNavigation(
     )
 
     // Only show bottom navigation and mini player on main screens (not splash/sub-screens)
+    // AudioTools is excluded so the studio tools get a full-screen workspace without MiniPlayer.
     val showNavigationAndPlayer = currentRoute in listOf(
         Screen.Home.route,
         Screen.Library.route,
         Screen.YouTube.route,
-        Screen.AudioTools.route,
         Screen.Settings.route
     )
 
