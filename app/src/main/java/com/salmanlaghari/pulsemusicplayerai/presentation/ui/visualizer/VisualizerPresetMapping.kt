@@ -48,13 +48,13 @@ private val PRESET_MAP: Map<VisualizerPreset, VideoVisualizerPreset> = mapOf(
 
     VisualizerPreset.SOFT_PULSE to VideoVisualizerPreset.PULSE_LINE,
     VisualizerPreset.BREATHING_GLOW to VideoVisualizerPreset.PULSE_RING,
-    VisualizerPreset.GRADIENT_SHIFT to VideoVisualizerPreset.AURORA_X,
-    VisualizerPreset.COLOR_WAVE to VideoVisualizerPreset.PLASMA_WAVE,
+    VisualizerPreset.GRADIENT_SHIFT to VideoVisualizerPreset.RAINBOW_RING,
+    VisualizerPreset.COLOR_WAVE to VideoVisualizerPreset.MULTI_WAVE,
     VisualizerPreset.SLOW_FADE to VideoVisualizerPreset.SMOOTH_WAVE,
-    VisualizerPreset.DREAM_FLOW to VideoVisualizerPreset.AURORA_FLOW,
+    VisualizerPreset.DREAM_FLOW to VideoVisualizerPreset.SMOOTH_WAVE,
     VisualizerPreset.CALM_RIPPLE to VideoVisualizerPreset.FILLED_WAVE,
     VisualizerPreset.NIGHT_SKY to VideoVisualizerPreset.STEP_WAVE,
-    VisualizerPreset.AURORA to VideoVisualizerPreset.AURORA_FLOW,
+    VisualizerPreset.AURORA to VideoVisualizerPreset.SMOOTH_WAVE,
     VisualizerPreset.DEEP_SPACE to VideoVisualizerPreset.STARFIELD
 )
 
