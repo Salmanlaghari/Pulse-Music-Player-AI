@@ -43,6 +43,9 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -75,8 +78,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.BorderStroke
+import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.graphics.Path
 import kotlin.math.cos
 import kotlin.math.sin
@@ -1451,15 +1477,6 @@ fun VideoStudioScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-<<<<<<< ours
-                HorizontalChipRow(
-                    options = buildList {
-                        add(ChipOption(label = "Preset", selected = preset == VisualizerPreset.CIRCULAR_BARS, onClick = { }))
-                        addAll(VideoAspectRatio.values().map { ChipOption(label = it.displayName, selected = aspectRatio == it, onClick = { aspectRatio = it }) })
-                        addAll(VideoResolution.values().map { ChipOption(label = it.displayName, selected = resolution == it, onClick = { resolution = it }) })
-                        add(ChipOption(label = "$fps fps", selected = true, onClick = { }))
-                        addAll(VideoBackgroundStyle.values().map { ChipOption(label = it.displayName, selected = bgStyle == it && bgImageUri == null, onClick = { bgStyle = it; bgImageUri = null }) })
-=======
                     // ---- ADVANCED SETTINGS ----
                     CollapsibleSection(title = "ADVANCED SETTINGS", expanded = expandedAdvanced, onToggle = { expandedAdvanced = !expandedAdvanced }) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1495,7 +1512,6 @@ fun VideoStudioScreen(
                             Text(if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Slider(value = trimEndMs.toFloat(), onValueChange = { trimEndMs = it.toLong() }, valueRange = 0f..durationMs.toFloat(), colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
                         }
->>>>>>> theirs
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
