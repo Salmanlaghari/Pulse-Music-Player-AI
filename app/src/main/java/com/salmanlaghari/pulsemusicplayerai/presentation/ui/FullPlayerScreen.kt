@@ -420,6 +420,8 @@ fun FullPlayerScreen(
                     ) {
                         // Beat-reactive expanding rings
                         if (isPlaying) {
+                            val primaryColor = MaterialTheme.colorScheme.primary
+                            val tertiaryColor = MaterialTheme.colorScheme.tertiary
                             val infiniteTransition = rememberInfiniteTransition(label = "beatRings")
                             val beatPhase by infiniteTransition.animateFloat(
                                 initialValue = 0f,
@@ -439,7 +441,7 @@ fun FullPlayerScreen(
                                     val radius = 70f + phase * maxRadius
                                     val alpha = (1f - phase) * 0.35f
                                     drawCircle(
-                                        color = if (i % 2 == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                        color = if (i % 2 == 0) primaryColor else tertiaryColor,
                                         radius = radius,
                                         center = Offset(cx, cy),
                                         style = Stroke(width = 2f + (1f - phase) * 4f),
