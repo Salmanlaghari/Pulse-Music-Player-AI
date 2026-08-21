@@ -78,6 +78,30 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.BorderStroke
+import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
+import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
+import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
+import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.Path
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 
 // ==========================================
 // PROFESSIONAL MP3 → MP4 STUDIO DATA MODELS
