@@ -17,13 +17,9 @@ object CrashLogger {
 
     private var lastCrashFile: File? = null
 
-    fun getLogFile(context: Context): File {
-        val externalDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            context.getExternalFilesDir(null)
-        } else {
-            context.getExternalFilesDir(null)
-        }
-        return File(externalDir, FILE_NAME)
+    fun getLogFile(context: Context?): File {
+        val dir = context?.getExternalFilesDir(null) ?: context?.filesDir ?: File("/tmp")
+        return File(dir, FILE_NAME)
     }
 
     fun logException(throwable: Throwable, tag: String = "Crash") {

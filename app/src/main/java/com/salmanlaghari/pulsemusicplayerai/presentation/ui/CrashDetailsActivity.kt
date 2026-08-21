@@ -2,11 +2,11 @@ package com.salmanlaghari.pulsemusicplayerai.presentation.ui
 
 import android.os.Bundle
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import com.salmanlaghari.pulsemusicplayerai.R
 import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 
-class CrashDetailsActivity : AppCompatActivity() {
+class CrashDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         supportActionBar?.hide()
