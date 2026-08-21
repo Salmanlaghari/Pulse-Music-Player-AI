@@ -77,6 +77,93 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import android.net.Uri
+import android.app.Activity
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.toVideoPreset
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
+import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -93,6 +180,596 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
+import androidx.compose.ui.graphics.Path
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
+
+// ==========================================
+// PROFESSIONAL MP3 → MP4 STUDIO DATA MODELS
+// ==========================================
+
+enum class StudioVisualizerPreset(val displayName: String, val description: String, val mappedPreset: VisualizerPreset) {
+    NEON_CIRCLE("Neon Circle", "Glowing neon ring pulsing with bass", VisualizerPreset.CIRCULAR_RADIAL_BARS),
+    RADIAL_SPECTRUM("Radial Spectrum", "Circular frequency bars radiating outward", VisualizerPreset.CIRCULAR_RADIAL_BARS),
+    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.LIGHTNING_BOLT),
+    GALAXY_PULSE("Galaxy Pulse", "Rotating galaxy ring with bass-reactive pulse", VisualizerPreset.GALAXY_SPIN),
+    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.CYBER_WAVE),
+    SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from baseline", VisualizerPreset.VERTICAL_BARS),
+    PARTICLE_RING("Particle Ring", "Particles orbiting centre on elliptical paths", VisualizerPreset.CLOCKWISE_SPIN),
+    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.INFINITY_LOOP),
+    AURORA_PULSE("Aurora Pulse", "Organic aurora waves with reactive glow", VisualizerPreset.AURORA),
+    FUTURE_SPECTRUM("Future Spectrum", "Advanced circular telemetry pulse indicator", VisualizerPreset.EXPANDING_CIRCLES)
+}
+
+data class LiveBackgroundPreset(
+    val id: String,
+    val displayName: String,
+    val category: String,
+    val gradient: List<Color>,
+    val isPremium: Boolean = false,
+    val resolutionLabel: String = "SD"
+)
+
+data class EffectType(
+    val id: String,
+    val displayName: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val description: String
+)
+
+data class ColorTheme(
+    val id: String,
+    val displayName: String,
+    val primary: Color,
+    val secondary: Color,
+    val tertiary: Color,
+    val gradient: List<Color>
+)
+
+data class QuickPreset(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val visualizer: StudioVisualizerPreset,
+    val background: LiveBackgroundPreset,
+    val effect: EffectType? = null,
+    val theme: ColorTheme
+)
+
+// Professional MP3 → MP4 Studio Data Instances
+private val STUDIO_VISUALIZERS = StudioVisualizerPreset.values()
+private val LIVE_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("neon_galaxy", "Neon Galaxy", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("purple_galaxy", "Purple Galaxy", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF2979FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("cyber_city", "Cyber City", "LIVE", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF0B0D14))),
+    LiveBackgroundPreset("space_tunnel", "Space Tunnel", "LIVE", listOf(Color(0xFF05060A), Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("aurora", "Aurora", "LIVE", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("particle_universe", "Particle Universe", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFFFF2BD6), Color(0xFF05060A))),
+    LiveBackgroundPreset("cosmic_dust", "Cosmic Dust", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("neon_waves", "Neon Waves", "LIVE", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("energy_flow", "Energy Flow", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFFFF00A8), Color(0xFF05060A))),
+    LiveBackgroundPreset("light_tunnel", "Light Tunnel", "LIVE", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFFFFFFFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("cyber_grid", "Cyber Grid", "LIVE", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF0B0D14))),
+    LiveBackgroundPreset("star_field", "Star Field", "LIVE", listOf(Color(0xFF05060A), Color(0xFFFFFFFF), Color(0xFF7C4DFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("abstract_liquid", "Abstract Liquid", "LIVE", listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFFFF2BD6), Color(0xFF7C4DFF))),
+    LiveBackgroundPreset("purple_smoke", "Purple Smoke", "LIVE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF10131D), Color(0xFF05060A))),
+    LiveBackgroundPreset("blue_smoke", "Blue Smoke", "LIVE", listOf(Color(0xFF05060A), Color(0xFF2979FF), Color(0xFF10131D), Color(0xFF05060A))),
+    LiveBackgroundPreset("rainbow_energy", "Rainbow Energy", "LIVE", listOf(Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFFFF00A8))),
+    LiveBackgroundPreset("digital_matrix", "Digital Matrix", "LIVE", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF0B0D14), Color(0xFF00E5FF))),
+    LiveBackgroundPreset("music_stage", "Music Stage", "LIVE", listOf(Color(0xFF10131D), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF10131D))),
+    LiveBackgroundPreset("futuristic_tunnel", "Futuristic Tunnel", "LIVE", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("cosmic_explosion", "Cosmic Explosion", "LIVE", listOf(Color(0xFF05060A), Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF05060A)))
+)
+private val CINEMATIC_4K_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("4k_galaxy", "4K Galaxy", "4K", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "4K"),
+    LiveBackgroundPreset("4k_neon", "4K Neon", "4K", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "4K"),
+    LiveBackgroundPreset("4k_cyber", "4K Cyber", "4K", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF0B0D14)), isPremium = true, resolutionLabel = "4K"),
+    LiveBackgroundPreset("4k_aurora", "4K Aurora", "4K", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "4K"),
+    LiveBackgroundPreset("4k_space", "4K Space", "4K", listOf(Color(0xFF05060A), Color(0xFF2979FF), Color(0xFF7C4DFF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "4K")
+)
+private val CINEMATIC_8K_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("8k_space", "8K Space", "8K", listOf(Color(0xFF05060A), Color(0xFF2979FF), Color(0xFF7C4DFF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "8K"),
+    LiveBackgroundPreset("8k_galaxy", "8K Galaxy", "8K", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "8K"),
+    LiveBackgroundPreset("8k_cosmic", "8K Cosmic", "8K", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "8K"),
+    LiveBackgroundPreset("8k_abstract", "8K Abstract", "8K", listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFFFF2BD6), Color(0xFF7C4DFF)), isPremium = true, resolutionLabel = "8K"),
+    LiveBackgroundPreset("8k_neon_energy", "8K Neon Energy", "8K", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "8K"),
+    LiveBackgroundPreset("8k_futuristic", "8K Futuristic", "8K", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF05060A)), isPremium = true, resolutionLabel = "8K")
+)
+private val ABSTRACT_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("abstract_1", "Abstract Flow", "ABSTRACT", listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFFFF2BD6), Color(0xFF7C4DFF))),
+    LiveBackgroundPreset("abstract_2", "Liquid Metal", "ABSTRACT", listOf(Color(0xFF10131D), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF10131D))),
+    LiveBackgroundPreset("abstract_3", "Neon Silk", "ABSTRACT", listOf(Color(0xFF05060A), Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("abstract_4", "Chrome Wave", "ABSTRACT", listOf(Color(0xFF181C2A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF181C2A)))
+)
+private val SPACE_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("space_1", "Deep Space", "SPACE", listOf(Color(0xFF05060A), Color(0xFF2979FF), Color(0xFF7C4DFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("space_2", "Nebula", "SPACE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFFFF2BD6), Color(0xFF05060A))),
+    LiveBackgroundPreset("space_3", "Star Cluster", "SPACE", listOf(Color(0xFF05060A), Color(0xFFFFFFFF), Color(0xFF7C4DFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("space_4", "Black Hole", "SPACE", listOf(Color(0xFF05060A), Color(0xFF000000), Color(0xFF7C4DFF), Color(0xFF05060A)))
+)
+private val NEON_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("neon_1", "Neon City", "NEON", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF0B0D14))),
+    LiveBackgroundPreset("neon_2", "Neon Streets", "NEON", listOf(Color(0xFF05060A), Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("neon_3", "Neon Rain", "NEON", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF05060A))),
+    LiveBackgroundPreset("neon_4", "Neon Grid", "NEON", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF0B0D14)))
+)
+private val FUTURE_BACKGROUNDS = listOf(
+    LiveBackgroundPreset("future_1", "Future Tech", "FUTURE", listOf(Color(0xFF0B0D14), Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF0B0D14))),
+    LiveBackgroundPreset("future_2", "Cyber Future", "FUTURE", listOf(Color(0xFF05060A), Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFF05060A))),
+    LiveBackgroundPreset("future_3", "Digital Future", "FUTURE", listOf(Color(0xFF10131D), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF10131D))),
+    LiveBackgroundPreset("future_4", "AI Core", "FUTURE", listOf(Color(0xFF05060A), Color(0xFF00E5FF), Color(0xFFFFFFFF), Color(0xFF05060A)))
+)
+
+private val STUDIO_EFFECTS = listOf(
+    EffectType("glow", "Glow", Icons.Default.GraphicEq, "Add neon glow to visualizer"),
+    EffectType("bloom", "Bloom", Icons.Default.Speed, "Soft bloom light effect"),
+    EffectType("particles", "Particles", Icons.Default.Star, "Floating particle system"),
+    EffectType("starfield", "Starfield", Icons.Default.Star, "Animated star background"),
+    EffectType("light_rays", "Light Rays", Icons.Default.SwapHoriz, "Volumetric light rays"),
+    EffectType("lens_flare", "Lens Flare", Icons.Default.Speed, "Cinematic lens flare"),
+    EffectType("smoke", "Smoke", Icons.Default.GraphicEq, "Volumetric smoke overlay"),
+    EffectType("sparks", "Sparks", Icons.Default.Star, "Electric spark particles"),
+    EffectType("eq_glow", "Equalizer Glow", Icons.Default.GraphicEq, "Glow bars reacting to audio"),
+    EffectType("vignette", "Vignette", Icons.Default.ScreenLockPortrait, "Dark edges focus effect"),
+    EffectType("film_grain", "Film Grain", Icons.Default.Timer, "Classic film grain texture"),
+    EffectType("motion_blur", "Motion Blur", Icons.Default.Speed, "Directional motion blur"),
+    EffectType("rgb_shift", "RGB Shift", Icons.Default.SwapHoriz, "Chromatic aberration"),
+    EffectType("neon_edge", "Neon Edge", Icons.Default.GraphicEq, "Neon edge glow detection")
+)
+
+private val STUDIO_COLOR_THEMES = listOf(
+    ColorTheme("cyber_purple", "Cyber Purple", Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFFFF2BD6), listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF), Color(0xFFFF2BD6))),
+    ColorTheme("electric_blue", "Electric Blue", Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF7C4DFF), listOf(Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF7C4DFF))),
+    ColorTheme("neon_pink", "Neon Pink", Color(0xFFFF2BD6), Color(0xFF7C4DFF), Color(0xFF00E5FF), listOf(Color(0xFFFF2BD6), Color(0xFF7C4DFF), Color(0xFF00E5FF))),
+    ColorTheme("magenta_dream", "Magenta Dream", Color(0xFFFF00A8), Color(0xFF7C4DFF), Color(0xFFFF2BD6), listOf(Color(0xFFFF00A8), Color(0xFF7C4DFF), Color(0xFFFF2BD6))),
+    ColorTheme("aurora", "Aurora", Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF00E5FF), listOf(Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFF00E5FF))),
+    ColorTheme("rainbow", "Rainbow", Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF7C4DFF), listOf(Color(0xFFFF2BD6), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFFFF00A8))),
+    ColorTheme("midnight", "Midnight", Color(0xFF7C4DFF), Color(0xFF2979FF), Color(0xFF7C4DFF), listOf(Color(0xFF7C4DFF), Color(0xFF2979FF), Color(0xFF7C4DFF))),
+    ColorTheme("solar_flare", "Solar Flare", Color(0xFFFF2BD6), Color(0xFFFF00A8), Color(0xFFFF2BD6), listOf(Color(0xFFFF2BD6), Color(0xFFFF00A8), Color(0xFFFF2BD6))),
+    ColorTheme("ocean", "Ocean", Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF7C4DFF), listOf(Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF7C4DFF))),
+    ColorTheme("fire_energy", "Fire Energy", Color(0xFFFF2BD6), Color(0xFFFF00A8), Color(0xFFFF2BD6), listOf(Color(0xFFFF2BD6), Color(0xFFFF00A8), Color(0xFFFF2BD6)))
+)
+
+private val QUICK_PRESETS = listOf(
+    QuickPreset("cyber_night", "Cyber Night", "Visualizer + Cyber Background + Purple Glow", StudioVisualizerPreset.CYBER_WAVE, LIVE_BACKGROUNDS.find { it.id == "cyber_city" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
+    QuickPreset("galaxy_dream", "Galaxy Dream", "Circular Visualizer + Galaxy + Stars", StudioVisualizerPreset.GALAXY_PULSE, LIVE_BACKGROUNDS.find { it.id == "neon_galaxy" }!!, STUDIO_EFFECTS.find { it.id == "starfield" }!!, STUDIO_COLOR_THEMES.find { it.id == "electric_blue" }!!),
+    QuickPreset("neon_pulse", "Neon Pulse", "Neon Ring + Neon Waves + Glow", StudioVisualizerPreset.NEON_CIRCLE, LIVE_BACKGROUNDS.find { it.id == "neon_waves" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "neon_pink" }!!),
+    QuickPreset("aurora", "Aurora", "Aurora Background + Radial Visualizer", StudioVisualizerPreset.AURORA_PULSE, LIVE_BACKGROUNDS.find { it.id == "aurora" }!!, STUDIO_EFFECTS.find { it.id == "particles" }!!, STUDIO_COLOR_THEMES.find { it.id == "aurora" }!!),
+    QuickPreset("future_energy", "Future Energy", "Energy Ring + Futuristic Background + Light Rays", StudioVisualizerPreset.ENERGY_RING, LIVE_BACKGROUNDS.find { it.id == "futuristic_tunnel" }!!, STUDIO_EFFECTS.find { it.id == "light_rays" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
+    QuickPreset("cinema", "Cinema", "Minimal Visualizer + Cinematic Background", StudioVisualizerPreset.SPECTRUM_BARS, LIVE_BACKGROUNDS.find { it.id == "space_tunnel" }!!, STUDIO_EFFECTS.find { it.id == "vignette" }!!, STUDIO_COLOR_THEMES.find { it.id == "midnight" }!!)
+)
+
+// ==========================================
+// PROFESSIONAL MP3 → MP4 STUDIO COMPONENTS
+// ==========================================
+
+@Composable
+private fun CollapsibleSection(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        if (expanded) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun VisualizerCard(
+    preset: StudioVisualizerPreset,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(72.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = if (selected) listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                            else listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.GraphicEq,
+                    contentDescription = null,
+                    tint = if (selected) Color.White else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preset.displayName,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 12.sp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = preset.description,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundPreviewCard(
+    preset: LiveBackgroundPreset,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(90.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(colors = preset.gradient))
+            )
+            if (preset.isPremium) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text("4K", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = preset.displayName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = Color.White
+                )
+                Text(
+                    text = preset.resolutionLabel,
+                    fontSize = 9.sp,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EffectChip(
+    effect: EffectType,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(36.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = effect.icon,
+                contentDescription = null,
+                tint = if (selected) Color.White else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = effect.displayName,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThemeChip(
+    theme: ColorTheme,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(40.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(colors = theme.gradient))
+            )
+            Text(
+                text = theme.displayName,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun PresetCard(
+    preset: QuickPreset,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Brush.linearGradient(colors = preset.theme.gradient)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Movie,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preset.displayName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = preset.description,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormatSelector(
+    selected: VideoAspectRatio,
+    onSelect: (VideoAspectRatio) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        VideoAspectRatio.values().forEach { ratio ->
+            val isSelected = selected == ratio
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clickable { onSelect(ratio) },
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = ratio.displayName,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QualitySelector(
+    selected: VideoResolution,
+    onSelect: (VideoResolution) -> Unit,
+    premiumStore: PremiumUnlockStore,
+    onRequestUnlock: (String, String, () -> Unit) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        VideoResolution.values().forEach { res ->
+            val isLockedPremium = res == VideoResolution.FHD_1080 &&
+                    !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
+            val isSelected = selected == res && !isLockedPremium
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clickable {
+                        if (isLockedPremium) {
+                            onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") { onSelect(VideoResolution.FHD_1080) }
+                        } else {
+                            onSelect(res)
+                        }
+                    },
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = res.displayName,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                        if (isLockedPremium) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // --- 1. AUDIO CONVERTER SCREEN ---
 
@@ -512,11 +1189,21 @@ fun VideoStudioScreen(
         glow = glow,
         backgroundTrackResName = bgTrackResName,
         backgroundTrackVolume = bgTrackVolume,
-        // Pair the selected track with its distinct animated mood background.
         backgroundMood = BuiltInBackgroundTracks.resolve(bgTrackResName)?.mood,
         watermarkEnabled = watermarkOn,
         outputName = outputFileName
     )
+
+    var expandedVisualizer by remember { mutableStateOf(true) }
+    var expandedBackground by remember { mutableStateOf(false) }
+    var expandedEffects by remember { mutableStateOf(false) }
+    var expandedTheme by remember { mutableStateOf(false) }
+    var expandedPresets by remember { mutableStateOf(false) }
+    var expandedFormat by remember { mutableStateOf(false) }
+    var expandedQuality by remember { mutableStateOf(false) }
+    var expandedAdvanced by remember { mutableStateOf(false) }
+    var selectedBgCategory by remember { mutableStateOf("LIVE") }
+    var selectedBackgroundId by remember { mutableStateOf<String?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -591,11 +1278,17 @@ fun VideoStudioScreen(
             IconButton(onClick = onNavigateBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(type.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("MP3 → MP4 Studio", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text("Create Your Music Video", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            IconButton(onClick = { /* TODO: Settings */ }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+            }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (sourceUri == null) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -615,27 +1308,77 @@ fun VideoStudioScreen(
         } else {
             Column(modifier = Modifier.weight(1f)) {
 
-                // ---------------- LIVE PREVIEW (fixed, stable) ----------------
+                // ---------------- LIVE PREVIEW (aspect-ratio-safe) ----------------
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(280.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.Black),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        LiveVisualizerPreview(
-                            config = config,
-                            spectrum = spectrum,
-                            positionMs = positionMs + trimStartMs,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    BoxWithConstraints {
+                        val previewHeight = when (aspectRatio) {
+                            VideoAspectRatio.RATIO_16_9 -> (maxWidth * 9 / 16).coerceAtMost(280.dp)
+                            VideoAspectRatio.RATIO_9_16 -> (maxWidth * 16 / 9).coerceAtMost(280.dp)
+                            VideoAspectRatio.RATIO_1_1 -> maxWidth.coerceAtMost(280.dp)
+                        }
+                        Box(modifier = Modifier.fillMaxWidth().height(previewHeight)) {
+                            LiveVisualizerPreview(
+                                config = config,
+                                spectrum = spectrum,
+                                positionMs = positionMs + trimStartMs,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // ---------------- TRANSPORT CONTROLS ----------------
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (isPreviewPlaying) {
+                                exoPlayer.pause()
+                                isPreviewPlaying = false
+                            } else {
+                                exoPlayer.play()
+                                isPreviewPlaying = true
+                            }
+                        },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPreviewPlaying) "Pause preview" else "Play preview",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Text(formatTime(positionMs), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Slider(
+                        value = positionMs.toFloat(),
+                        onValueChange = {
+                            positionMs = it.toLong()
+                            exoPlayer.seekTo(it.toLong())
+                        },
+                        valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(formatTime(durationMs), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 // ---------------- SCROLLABLE SETTINGS ----------------
-                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
 
                     if (importError != null) {
                         Text(
@@ -663,313 +1406,196 @@ fun VideoStudioScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Transport controls: these drive the real player, and the preview
-                    // follows the real playback position.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                if (isPreviewPlaying) {
-                                    exoPlayer.pause()
-                                    isPreviewPlaying = false
-                                } else {
-                                    exoPlayer.play()
-                                    isPreviewPlaying = true
-                                }
-                            },
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPreviewPlaying) "Pause preview" else "Play preview",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(38.dp)
-                            )
-                        }
-                        Text(formatTime(positionMs), fontSize = 11.sp)
-                        Slider(
-                            value = positionMs.toFloat(),
-                            onValueChange = {
-                                positionMs = it.toLong()
-                                exoPlayer.seekTo(it.toLong())
-                            },
-                            valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                        Text(formatTime(durationMs), fontSize = 11.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Visualizer preset picker (horizontal scroll, large cards)
-                    VisualizerStudioProPicker(
-                        selected = preset,
-                        onSelect = { preset = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Aspect Ratio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalChipRow(
-                        options = VideoAspectRatio.values().map { ar ->
-                            ChipOption(
-                                label = ar.displayName,
-                                selected = aspectRatio == ar,
-                                onClick = { aspectRatio = ar }
-                            )
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Resolution  •  ${config.videoWidth}x${config.videoHeight}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalChipRow(
-                        options = VideoResolution.values().map { res ->
-                            val isLockedPremium = res == VideoResolution.FHD_1080 &&
-                                    !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
-                            ChipOption(
-                                label = res.displayName,
-                                selected = resolution == res && !isLockedPremium,
-                                locked = isLockedPremium,
-                                onClick = {
-                                    if (isLockedPremium) {
-                                        onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") {
-                                            resolution = VideoResolution.FHD_1080
-                                        }
-                                    } else {
-                                        resolution = res
-                                    }
-                                }
-                            )
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalChipRow(
-                        options = listOf(24, 30, 60).map { f ->
-                            ChipOption(
-                                label = "$f fps",
-                                selected = fps == f,
-                                onClick = { fps = f; viewModel.analyzeForPreview(sourceUri, f) }
-                            )
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Background", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalChipRow(
-                        options = VideoBackgroundStyle.values().map { st ->
-                            ChipOption(
-                                label = st.displayName,
-                                selected = bgStyle == st && bgImageUri == null,
-                                onClick = { bgStyle = st; bgImageUri = null }
-                            )
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { imagePickerLauncher.launch("image/*") },
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Text(if (bgImageUri == null) "Pick Background Image" else "Change Image", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        if (bgImageUri != null) {
-                            Button(
-                                onClick = { bgImageUri = null },
-                                modifier = Modifier.height(44.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
-                            ) {
-                                Text("Clear", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-
-                    if (bgImageUri != null) {
+                    // ---- LIVE VISUALIZER ----
+                    CollapsibleSection(title = "LIVE VISUALIZER", expanded = expandedVisualizer, onToggle = { expandedVisualizer = !expandedVisualizer }) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Image Fit", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalChipRow(
-                            options = BackgroundFit.values().map { f ->
-                                ChipOption(
-                                    label = f.displayName,
-                                    selected = bgFit == f,
-                                    onClick = { bgFit = f }
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(STUDIO_VISUALIZERS) { viz ->
+                                VisualizerCard(
+                                    preset = viz,
+                                    selected = preset.toVideoPreset() == viz.mappedPreset.toVideoPreset(),
+                                    onClick = { preset = viz.mappedPreset }
                                 )
                             }
-                        )
-                        Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Slider(
-                            value = bgDim,
-                            onValueChange = { bgDim = it },
-                            valueRange = 0f..0.9f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Show Title / Artist Overlay", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        androidx.compose.material3.Switch(checked = showText, onCheckedChange = { showText = it })
-                    }
-                    if (showText) {
-                        OutlinedTextField(
-                            value = titleText,
-                            onValueChange = { titleText = it },
-                            label = { Text("Title text") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = artistText,
-                            onValueChange = { artistText = it },
-                            label = { Text("Artist text") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Background Music (built-in)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Layer an owned, royalty-free loop under your audio. Default: your audio only.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            val selected = bgTrackResName == null
-                            Card(
-                                modifier = Modifier.height(40.dp).clickable {
-                                    bgTrackResName = null
-                                    bgTrackVolume = 0.35f
-                                },
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                    Text("Source only", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                }
-                            }
-                        }
-                        items(BuiltInBackgroundTracks.ALL) { track ->
-                            val selected = bgTrackResName == track.id
-                            Card(
-                                modifier = Modifier.height(40.dp).clickable {
-                                    bgTrackResName = track.id
-                                    bgTrackVolume = track.suggestedVolume
-                                },
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                    Text(track.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                }
-                            }
-                        }
-                    }
-                    if (bgTrackResName != null) {
+
+                    // ---- ANIMATION BACKGROUNDS ----
+                    CollapsibleSection(title = "ANIMATION BACKGROUNDS", expanded = expandedBackground, onToggle = { expandedBackground = !expandedBackground }) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Background Volume (${(bgTrackVolume * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Slider(
-                            value = bgTrackVolume,
-                            onValueChange = { bgTrackVolume = it },
-                            valueRange = 0f..0.8f,
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("LIVE", "4K", "8K", "ABSTRACT", "SPACE", "NEON", "FUTURE")) { cat ->
+                                val isSelected = selectedBgCategory == cat
+                                Card(
+                                    modifier = Modifier.height(32.dp).clickable { selectedBgCategory = cat },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                        Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val backgroundsForCategory = when (selectedBgCategory) {
+                            "4K" -> CINEMATIC_4K_BACKGROUNDS
+                            "8K" -> CINEMATIC_8K_BACKGROUNDS
+                            "ABSTRACT" -> ABSTRACT_BACKGROUNDS
+                            "SPACE" -> SPACE_BACKGROUNDS
+                            "NEON" -> NEON_BACKGROUNDS
+                            "FUTURE" -> FUTURE_BACKGROUNDS
+                            else -> LIVE_BACKGROUNDS
+                        }
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(backgroundsForCategory) { bg ->
+                                BackgroundPreviewCard(
+                                    preset = bg,
+                                    selected = selectedBackgroundId == bg.id,
+                                    onClick = { selectedBackgroundId = bg.id }
+                                )
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
-                    }
-                    Text(
-                        "Burns the Pulse logo into the exported video (default ON). Turn off for a clean export.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                    Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = vizScale,
-                        onValueChange = { vizScale = it },
-                        valueRange = 0.4f..1.6f,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-
-                    Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = vizPosY,
-                        onValueChange = { vizPosY = it },
-                        valueRange = 0.15f..0.9f,
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-
-                    if (durationMs > 0) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Slider(
-                            value = trimStartMs.toFloat(),
-                            onValueChange = { trimStartMs = it.toLong() },
-                            valueRange = 0f..durationMs.toFloat(),
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
-                        Text(
-                            if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Slider(
-                            value = trimEndMs.toFloat(),
-                            onValueChange = { trimEndMs = it.toLong() },
-                            valueRange = 0f..durationMs.toFloat(),
-                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                        )
+                    // ---- VIDEO EFFECTS ----
+                    CollapsibleSection(title = "VIDEO EFFECTS", expanded = expandedEffects, onToggle = { expandedEffects = !expandedEffects }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 100.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(STUDIO_EFFECTS) { effect ->
+                                EffectChip(effect = effect, selected = false, onClick = { })
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ---- COLOR THEME ----
+                    CollapsibleSection(title = "COLOR THEME", expanded = expandedTheme, onToggle = { expandedTheme = !expandedTheme }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 110.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(STUDIO_COLOR_THEMES) { theme ->
+                                ThemeChip(theme = theme, selected = false, onClick = { })
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ---- QUICK PRESETS ----
+                    CollapsibleSection(title = "QUICK PRESETS", expanded = expandedPresets, onToggle = { expandedPresets = !expandedPresets }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            QUICK_PRESETS.forEach { preset ->
+                                PresetCard(preset = preset, selected = false, onClick = { })
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ---- VIDEO FORMAT ----
+                    CollapsibleSection(title = "VIDEO FORMAT", expanded = expandedFormat, onToggle = { expandedFormat = !expandedFormat }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FormatSelector(selected = aspectRatio, onSelect = { aspectRatio = it })
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ---- EXPORT QUALITY ----
+                    CollapsibleSection(title = "EXPORT QUALITY", expanded = expandedQuality, onToggle = { expandedQuality = !expandedQuality }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        QualitySelector(selected = resolution, onSelect = { resolution = it }, premiumStore = premiumStore, onRequestUnlock = onRequestUnlock)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Frame Rate", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(24, 30, 60).forEach { f ->
+                                val isSelected = fps == f
+                                Card(
+                                    modifier = Modifier.height(36.dp).clickable { fps = f; viewModel.analyzeForPreview(sourceUri, f) },
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                        Text("$f fps", fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ---- ADVANCED SETTINGS ----
+                    CollapsibleSection(title = "ADVANCED SETTINGS", expanded = expandedAdvanced, onToggle = { expandedAdvanced = !expandedAdvanced }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Show Title / Artist Overlay", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            androidx.compose.material3.Switch(checked = showText, onCheckedChange = { showText = it })
+                        }
+                        if (showText) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(value = titleText, onValueChange = { titleText = it }, label = { Text("Title text") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(value = artistText, onValueChange = { artistText = it }, label = { Text("Artist text") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Glow Effect", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Visualizer Scale (${String.format(java.util.Locale.getDefault(), "%.2f", vizScale)}x)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(value = vizScale, onValueChange = { vizScale = it }, valueRange = 0.4f..1.6f, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                        Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(value = vizPosY, onValueChange = { vizPosY = it }, valueRange = 0.15f..0.9f, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                        if (durationMs > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Trim Start (${formatTime(trimStartMs)})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Slider(value = trimStartMs.toFloat(), onValueChange = { trimStartMs = it.toLong() }, valueRange = 0f..durationMs.toFloat(), colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                            Text(if (trimEndMs > trimStartMs) "Trim End (${formatTime(trimEndMs)})" else "Trim End (end of track)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Slider(value = trimEndMs.toFloat(), onValueChange = { trimEndMs = it.toLong() }, valueRange = 0f..durationMs.toFloat(), colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                // ---------------- BOTTOM ACTION AREA ----------------
-                Spacer(modifier = Modifier.height(12.dp))
-
-                HorizontalChipRow(
-                    options = buildList {
-                        add(ChipOption(label = "Preset", selected = preset == VisualizerPreset.CIRCULAR_RADIAL_BARS, onClick = { }))
-                        addAll(VideoAspectRatio.values().map { ChipOption(label = it.displayName, selected = aspectRatio == it, onClick = { aspectRatio = it }) })
-                        addAll(VideoResolution.values().map { ChipOption(label = it.displayName, selected = resolution == it, onClick = { resolution = it }) })
-                        add(ChipOption(label = "$fps fps", selected = true, onClick = { }))
-                        addAll(VideoBackgroundStyle.values().map { ChipOption(label = it.displayName, selected = bgStyle == it && bgImageUri == null, onClick = { bgStyle = it; bgImageUri = null }) })
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Action buttons
+                // ---------------- ACTION BUTTONS ----------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -978,11 +1604,11 @@ fun VideoStudioScreen(
                         onClick = {
                             viewModel.analyzeForPreview(sourceUri, fps)
                         },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
-                        Text("Apply", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Apply", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
                     }
                     Button(
                         onClick = {
@@ -994,30 +1620,30 @@ fun VideoStudioScreen(
                                 isPreviewPlaying = true
                             }
                         },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isPreviewPlaying) "Pause" else "Preview", fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isPreviewPlaying) "Pause" else "Preview", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
                     }
                     Button(
                         onClick = { showSaveDialog = true },
                         enabled = spectrum != null && !isAnalyzing,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1.2f).height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export", fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Export MP4", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(onClick = { viewModel.clearSelection() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("Import another audio file", color = MaterialTheme.colorScheme.primary)
+                    Text("Import another audio file", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
