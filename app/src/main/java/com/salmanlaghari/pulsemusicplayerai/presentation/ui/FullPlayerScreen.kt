@@ -930,194 +930,200 @@ fun FullPlayerScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 16.dp
             ) {
-                Column(
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(0.85f)
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     // Header Area
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Visualizer Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        IconButton(onClick = { showVisualizerMenu = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Search field
-                    OutlinedTextField(
-                        value = visualizerSearchQuery,
-                        onValueChange = { visualizerSearchQuery = it },
-                        placeholder = { Text("Search 50+ presets...", fontSize = 14.sp) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        trailingIcon = {
-                            if (visualizerSearchQuery.isNotEmpty()) {
-                                IconButton(onClick = { visualizerSearchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
-                                }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Visualizer Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
                             }
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Categories Horizontal Slider Row
-                    val categories = listOf("All", "Radial", "Bars", "Particles", "Ambient", "Fluid", "Symmetric", "3D")
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(categories) { category ->
-                            val isSelected = selectedCategoryTab == category
-                            Card(
-                                modifier = Modifier
-                                    .height(36.dp)
-                                    .clickable { selectedCategoryTab = category },
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                )
-                            ) {
-                                Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                    Text(category, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
-                                }
+                            IconButton(onClick = { showVisualizerMenu = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    // Recently Used presets panel
-                    if (recentlyUsedVisualizers.isNotEmpty()) {
-                        Text("Recently Used", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // Search field
+                        OutlinedTextField(
+                            value = visualizerSearchQuery,
+                            onValueChange = { visualizerSearchQuery = it },
+                            placeholder = { Text("Search 50+ presets...", fontSize = 14.sp) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                            trailingIcon = {
+                                if (visualizerSearchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { visualizerSearchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Categories Horizontal Slider Row
+                        val categories = listOf("All", "Radial", "Bars", "Particles", "Ambient", "Fluid", "Symmetric", "3D")
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(recentlyUsedVisualizers) { preset ->
+                            items(categories) { category ->
+                                val isSelected = selectedCategoryTab == category
                                 Card(
                                     modifier = Modifier
-                                        .height(44.dp)
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            selectVisualizer(preset)
-                                            showVisualizerMenu = false
-                                            showVisualizer = true
-                                        },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                        .height(36.dp)
+                                        .clickable { selectedCategoryTab = category },
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    )
                                 ) {
-                                    Row(modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(preset.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                        Text(category, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
                         }
+                    }
+
+                    item {
                         Spacer(modifier = Modifier.height(16.dp))
+
+                        // Recently Used presets panel
+                        if (recentlyUsedVisualizers.isNotEmpty()) {
+                            Text("Recently Used", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(recentlyUsedVisualizers) { preset ->
+                                    Card(
+                                        modifier = Modifier
+                                            .height(44.dp)
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                selectVisualizer(preset)
+                                                showVisualizerMenu = false
+                                                showVisualizer = true
+                                            },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                    ) {
+                                        Row(modifier = Modifier.fillMaxHeight().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(preset.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    item {
+                        // Main Presets listing list
+                        Text("Select Preset", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
 
                     // Main Presets listing list
-                    Text("Select Preset", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     val filteredPresets = VisualizerPreset.values().filter { preset ->
                         val matchesSearch = preset.displayName.contains(visualizerSearchQuery, ignoreCase = true) || preset.description.contains(visualizerSearchQuery, ignoreCase = true)
                         val matchesCategory = selectedCategoryTab == "All" || preset.category == selectedCategoryTab
                         matchesSearch && matchesCategory
                     }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(filteredPresets) { preset ->
-                            val isSelected = currentPreset == preset
-                            val isFav = favoriteVisualizers.contains(preset)
+                    items(filteredPresets) { preset ->
+                        val isSelected = currentPreset == preset
+                        val isFav = favoriteVisualizers.contains(preset)
 
-                            Card(
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectVisualizer(preset)
+                                    showVisualizerMenu = false
+                                    showVisualizer = true
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(72.dp)
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        selectVisualizer(preset)
-                                        showVisualizerMenu = false
-                                        showVisualizer = true
-                                    },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                ),
-                                border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                        // Preset Mini Preview Circle Thumbnail
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.GraphicEq,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Column {
-                                            Text(preset.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(preset.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        }
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    // Preset Mini Preview Circle Thumbnail
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.GraphicEq,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        // Favorite button inside bottom sheet
-                                        IconButton(
-                                            onClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                favoriteVisualizers = if (isFav) favoriteVisualizers - preset else favoriteVisualizers + preset
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                                contentDescription = "Favorite",
-                                                tint = if (isFav) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                                modifier = Modifier.size(20.dp)
-                                            )
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column {
+                                        Text(preset.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(preset.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Favorite button inside bottom sheet
+                                    IconButton(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            favoriteVisualizers = if (isFav) favoriteVisualizers - preset else favoriteVisualizers + preset
                                         }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            contentDescription = "Favorite",
+                                            tint = if (isFav) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
                             }

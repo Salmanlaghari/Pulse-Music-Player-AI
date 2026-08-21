@@ -383,83 +383,83 @@ fun AudioToolsScreen() {
                 containerColor = CardNavy,
                 tonalElevation = 16.dp
             ) {
-                Column(
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(0.85f)
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Movie, contentDescription = null, tint = CyanGlow, modifier = Modifier.size(28.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Video Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
-                        }
-                        IconButton(onClick = { showVideoStudioSheet = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    // Header Area
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Movie, contentDescription = null, tint = CyanGlow, modifier = Modifier.size(28.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Video Studio Pro", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            }
+                            IconButton(onClick = { showVideoStudioSheet = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Select a professional video rendering template to convert your audio track:", fontSize = 12.sp, color = TextDim)
-                    Spacer(modifier = Modifier.height(16.dp))
+                    item {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Select a professional video rendering template to convert your audio track:", fontSize = 12.sp, color = TextDim)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(VideoStudioType.values()) { type ->
-                            GlassmorphicCard(
+                    items(VideoStudioType.values()) { type ->
+                        GlassmorphicCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(76.dp)
+                                .clickable {
+                                    selectedVideoType = type
+                                    showVideoStudioSheet = false
+                                    currentScreen = StudioScreen.VIDEO_STUDIO
+                                },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(76.dp)
-                                    .clickable {
-                                        selectedVideoType = type
-                                        showVideoStudioSheet = false
-                                        currentScreen = StudioScreen.VIDEO_STUDIO
-                                    },
-                                shape = RoundedCornerShape(12.dp)
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(color = PurpleAccent.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(color = PurpleAccent.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Movie,
-                                            contentDescription = null,
-                                            tint = CyanGlow,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(type.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(type.description, fontSize = 11.sp, color = TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-
                                     Icon(
-                                        imageVector = Icons.Default.ChevronRight,
+                                        imageVector = Icons.Default.Movie,
                                         contentDescription = null,
                                         tint = CyanGlow,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(type.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(type.description, fontSize = 11.sp, color = TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = CyanGlow,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
