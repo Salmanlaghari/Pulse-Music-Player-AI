@@ -77,114 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import android.net.Uri
-import android.app.Activity
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.toVideoPreset
-import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumUnlockStore
-import com.salmanlaghari.pulsemusicplayerai.data.premium.PremiumFeature
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.CompareArrows
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.ScreenLockPortrait
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.BorderStroke
-import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
-import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
-import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
-import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
-import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
-import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
-import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
-import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
-import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
-import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerPreset
-import androidx.compose.ui.graphics.Path
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 // ==========================================
 // PROFESSIONAL MP3 → MP4 STUDIO DATA MODELS
@@ -193,12 +86,12 @@ import kotlin.random.Random
 enum class StudioVisualizerPreset(val displayName: String, val description: String, val mappedPreset: VisualizerPreset) {
     NEON_CIRCLE("Neon Circle", "Glowing neon ring pulsing with bass", VisualizerPreset.CIRCULAR_RADIAL_BARS),
     RADIAL_SPECTRUM("Radial Spectrum", "Circular frequency bars radiating outward", VisualizerPreset.CIRCULAR_RADIAL_BARS),
-    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.LIGHTNING_BOLT),
+    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.VORTEX),
     GALAXY_PULSE("Galaxy Pulse", "Rotating galaxy ring with bass-reactive pulse", VisualizerPreset.GALAXY_SPIN),
-    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.CYBER_WAVE),
+    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.STEP_BARS),
     SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from baseline", VisualizerPreset.VERTICAL_BARS),
     PARTICLE_RING("Particle Ring", "Particles orbiting centre on elliptical paths", VisualizerPreset.CLOCKWISE_SPIN),
-    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.INFINITY_LOOP),
+    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.MANDALA_ROTATE),
     AURORA_PULSE("Aurora Pulse", "Organic aurora waves with reactive glow", VisualizerPreset.AURORA),
     FUTURE_SPECTRUM("Future Spectrum", "Advanced circular telemetry pulse indicator", VisualizerPreset.EXPANDING_CIRCLES)
 }
