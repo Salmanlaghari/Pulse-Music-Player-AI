@@ -54,6 +54,7 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsFeedba
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsPrivacyScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsTermsScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.settings.SettingsCrashLogScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.LoadingOverlay
 import com.salmanlaghari.pulsemusicplayerai.presentation.splash.SplashScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.EqualizerScreen
@@ -266,7 +267,8 @@ fun AppNavigation(
                     onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                     onNavigateToPrivacy = { navController.navigate(Screen.SettingsPrivacy.route) },
                     onNavigateToTerms = { navController.navigate(Screen.SettingsTerms.route) },
-                    onNavigateToFeedback = { navController.navigate(Screen.SettingsFeedback.route) }
+                    onNavigateToFeedback = { navController.navigate(Screen.SettingsFeedback.route) },
+                    onNavigateToCrashLog = { navController.navigate(Screen.SettingsCrashLog.route) }
                 )
             }
             composable(Screen.SettingsAbout.route) {
@@ -280,6 +282,9 @@ fun AppNavigation(
             }
             composable(Screen.SettingsFeedback.route) {
                 SettingsFeedbackScreen(onNavigateBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsCrashLog.route) {
+                SettingsCrashLogScreen(onNavigateBack = { navController.popBackStack() })
             }
 
             // Playback routes

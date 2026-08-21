@@ -12,6 +12,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.AudioFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,12 +56,24 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
 
     fun loadRecentExports() {
         viewModelScope.launch {
-            _recentExports.value = processor.fetchRecentExports()
+            try {
+                CrashLogger.logMessage("Loading recent exports...", "AudioStudioViewModel")
+                _recentExports.value = processor.fetchRecentExports()
+                CrashLogger.logMessage("Recent exports loaded: ${_recentExports.value.size} items", "AudioStudioViewModel")
+            } catch (e: Exception) {
+                CrashLogger.logException(e, "AudioStudioViewModel.loadRecentExports")
+                _recentExports.value = emptyList()
+            }
         }
     }
 
     fun selectFiles(uris: List<Uri>) {
-        _selectedFiles.value = uris
+        try {
+            CrashLogger.logMessage("selectFiles: ${uris.size} uris=$uris", "AudioStudioViewModel")
+            _selectedFiles.value = uris
+        } catch (e: Exception) {
+            CrashLogger.logException(e, "AudioStudioViewModel.selectFiles")
+        }
     }
 
     fun clearSelection() {

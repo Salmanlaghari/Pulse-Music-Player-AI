@@ -33,6 +33,12 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-8178045957849630~3776473332" />
 
+        <!-- Crash diagnostic details screen -->
+        <activity
+            android:name=".presentation.ui.CrashDetailsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PulseMusicPlayerAI" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

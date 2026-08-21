@@ -14,6 +14,7 @@ sealed class Screen(val route: String) {
     object SettingsPrivacy : Screen("settings_privacy")
     object SettingsTerms : Screen("settings_terms")
     object SettingsFeedback : Screen("settings_feedback")
+    object SettingsCrashLog : Screen("settings_crash_log")
 
     // Playback navigation entries
     object FullPlayer : Screen("full_player")
