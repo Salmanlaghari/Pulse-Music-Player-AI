@@ -115,12 +115,12 @@ import kotlin.random.Random
 enum class StudioVisualizerPreset(val displayName: String, val description: String, val mappedPreset: VisualizerPreset) {
     NEON_CIRCLE("Neon Circle", "Glowing neon ring pulsing with bass", VisualizerPreset.CIRCULAR_RADIAL_BARS),
     RADIAL_SPECTRUM("Radial Spectrum", "Circular frequency bars radiating outward", VisualizerPreset.CIRCULAR_RADIAL_BARS),
-    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.LIGHTNING_BOLT),
+    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.VORTEX),
     GALAXY_PULSE("Galaxy Pulse", "Rotating galaxy ring with bass-reactive pulse", VisualizerPreset.GALAXY_SPIN),
-    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.CYBER_WAVE),
+    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.STEP_BARS),
     SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from baseline", VisualizerPreset.VERTICAL_BARS),
     PARTICLE_RING("Particle Ring", "Particles orbiting centre on elliptical paths", VisualizerPreset.CLOCKWISE_SPIN),
-    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.INFINITY_LOOP),
+    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.MANDALA_ROTATE),
     AURORA_PULSE("Aurora Pulse", "Organic aurora waves with reactive glow", VisualizerPreset.AURORA),
     FUTURE_SPECTRUM("Future Spectrum", "Advanced circular telemetry pulse indicator", VisualizerPreset.EXPANDING_CIRCLES)
 }
@@ -1049,12 +1049,12 @@ fun VideoStudioScreen(
     var preset by remember {
         mutableStateOf(
             when (type) {
-                VideoStudioType.WAVEFORM -> VisualizerPreset.FLUID_WAVE
-                VideoStudioType.SPECTRUM -> VisualizerPreset.LINEAR_BARS
-                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_BARS
-                VideoStudioType.NEON -> VisualizerPreset.NEON_BARS
-                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_RING
-                else -> VisualizerPreset.CIRCULAR_BARS
+                VideoStudioType.WAVEFORM -> VisualizerPreset.DREAM_FLOW
+                VideoStudioType.SPECTRUM -> VisualizerPreset.VERTICAL_BARS
+                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_RADIAL_BARS
+                VideoStudioType.NEON -> VisualizerPreset.GLOW_BARS
+                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_SPIN
+                else -> VisualizerPreset.CIRCULAR_RADIAL_BARS
             }
         )
     }

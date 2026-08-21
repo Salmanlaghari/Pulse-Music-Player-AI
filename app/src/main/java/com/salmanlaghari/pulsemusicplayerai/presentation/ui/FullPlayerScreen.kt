@@ -140,15 +140,15 @@ fun FullPlayerScreen(
 
     // Visualizer control states
     var showVisualizer by remember { mutableStateOf(false) }
-    var currentPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_BARS) }
+    var currentPreset by remember { mutableStateOf(VisualizerPreset.CIRCULAR_RADIAL_BARS) }
     var sensitivityScale by remember { mutableStateOf(1.0f) }
     var isOrientationLocked by remember { mutableStateOf(false) }
     var isImmersiveFullscreen by remember { mutableStateOf(false) }
 
     // Visualizer bottom sheet menu states
     var showVisualizerMenu by remember { mutableStateOf(false) }
-    var favoriteVisualizers by remember { mutableStateOf(setOf(VisualizerPreset.CIRCULAR_BARS, VisualizerPreset.LINEAR_BARS)) }
-    var recentlyUsedVisualizers by remember { mutableStateOf(listOf(VisualizerPreset.CIRCULAR_BARS, VisualizerPreset.LINEAR_BARS, VisualizerPreset.PARTICLE_ORB)) }
+    var favoriteVisualizers by remember { mutableStateOf(setOf(VisualizerPreset.CIRCULAR_RADIAL_BARS, VisualizerPreset.VERTICAL_BARS)) }
+    var recentlyUsedVisualizers by remember { mutableStateOf(listOf(VisualizerPreset.CIRCULAR_RADIAL_BARS, VisualizerPreset.VERTICAL_BARS, VisualizerPreset.FLYING_PARTICLES)) }
     var visualizerSearchQuery by remember { mutableStateOf("") }
     var selectedCategoryTab by remember { mutableStateOf("All") }
 
