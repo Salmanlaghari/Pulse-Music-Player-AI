@@ -10,6 +10,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.Artist
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Folder
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
+import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -115,8 +116,9 @@ class MusicViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Fetch list from repository
+                CrashLogger.logMessage("loadMusicData: starting library scan", "MusicViewModel")
                 val songsList = musicRepository.getAllSongs(forceRefresh = true)
+                CrashLogger.logMessage("loadMusicData: scan returned ${songsList.size} songs", "MusicViewModel")
                 _allSongs.value = songsList
                 playbackConnectionManager.setAllSongsReference(songsList)
 
@@ -125,10 +127,6 @@ class MusicViewModel(
                 _folders.value = musicRepository.getFolders()
                 _recentlyAdded.value = musicRepository.getRecentlyAdded()
 
-                // Apply favorites ONCE synchronously (use .first() — NOT .collect{}).
-                // IMPORTANT: favoriteIdsFlow is an infinite cold Flow from DataStore.
-                // Calling .collect{} here would suspend forever and the finally block
-                // would never run, leaving the loading overlay stuck on screen.
                 try {
                     val favIds = musicRepository.favoriteIdsFlow.first()
                     val updatedSongs = songsList.map { song ->
@@ -139,41 +137,40 @@ class MusicViewModel(
                     _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
                     _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
                 } catch (fe: Exception) {
+                    CrashLogger.logException(fe, "MusicViewModel.favorites")
                     android.util.Log.w("MusicVM", "Initial favorites apply failed: " + fe.message)
                 }
             } catch (e: Exception) {
+                CrashLogger.logException(e, "MusicViewModel.loadMusicData")
                 android.util.Log.e("MusicVM", "loadMusicData failed", e)
             } finally {
-                // CRITICAL: this MUST run. Set loading false BEFORE launching the
-                // infinite favorites collector below, otherwise the overlay never hides.
                 _isLoading.value = false
+                _isPermissionGranted.value = true
             }
+        }
+    }
 
-            // Listen to dynamic favorites updates in a SEPARATE background coroutine.
-            // This runs forever (as intended) but does NOT block the loading state.
-            launch {
-                try {
-                    musicRepository.favoriteIdsFlow.collect { favIds ->
-                        val currentSongs = _allSongs.value
-                        if (currentSongs.isEmpty()) return@collect
-                        val updatedSongs = currentSongs.map { song ->
-                            song.copy(isFavorite = favIds.contains(song.id.toString()))
-                        }
-                        _allSongs.value = updatedSongs
-                        playbackConnectionManager.setAllSongsReference(updatedSongs)
-                        _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
-                        _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
+    init {
+        viewModelScope.launch {
+            try {
+                CrashLogger.logMessage("MusicViewModel init: starting favorites collector", "MusicViewModel")
+                musicRepository.favoriteIdsFlow.collect { favIds ->
+                    val currentSongs = _allSongs.value
+                    if (currentSongs.isEmpty()) return@collect
+                    val updatedSongs = currentSongs.map { song ->
+                        song.copy(isFavorite = favIds.contains(song.id.toString()))
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("MusicVM", "Favorites collector ended: " + e.message)
+                    _allSongs.value = updatedSongs
+                    playbackConnectionManager.setAllSongsReference(updatedSongs)
+                    _recentlyAdded.value = updatedSongs.sortedByDescending { it.dateAdded }
+                    _favoriteSongs.value = updatedSongs.filter { favIds.contains(it.id.toString()) }
                 }
+            } catch (e: Exception) {
+                CrashLogger.logException(e, "MusicViewModel.favoritesCollector")
+                android.util.Log.e("MusicVM", "Favorites collector ended: " + e.message)
             }
         }
 
-        // SAFETY TIMEOUT: If data loading somehow hangs (e.g. MediaStore very slow
-        // on a device with thousands of files, or a repository deadlock), force
-        // the loading overlay off after 20 seconds so the user can always access
-        // the app. This is a last-resort guard against a permanently stuck screen.
         viewModelScope.launch {
             kotlinx.coroutines.delay(20_000)
             if (_isLoading.value) {

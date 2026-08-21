@@ -24,6 +24,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
+import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -102,6 +103,7 @@ class AudioStudioProcessor(private val context: Context) {
         }
 
         try {
+            CrashLogger.logMessage("fetchRecentExports: querying audio exports from=$musicFolder", "AudioStudioProcessor")
             context.contentResolver.query(
                 collectionAudio,
                 projectionAudio,
@@ -116,33 +118,43 @@ class AudioStudioProcessor(private val context: Context) {
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
+                CrashLogger.logMessage("fetchRecentExports: audio cursor columns id=$idCol name=$nameCol path=$pathCol size=$sizeCol duration=$durationCol date=$dateCol count=${cursor.count}", "AudioStudioProcessor")
+
                 while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol)
-                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
-                    val size = cursor.getLong(sizeCol)
-                    val duration = cursor.getLong(durationCol)
-                    val dateAdded = cursor.getLong(dateCol)
-                    val uri = ContentUris.withAppendedId(collectionAudio, id)
+                    try {
+                        val id = cursor.getLong(idCol)
+                        val name = cursor.getString(nameCol)
+                        val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
+                        val size = cursor.getLong(sizeCol)
+                        val duration = cursor.getLong(durationCol)
+                        val dateAdded = cursor.getLong(dateCol)
+                        val uri = ContentUris.withAppendedId(collectionAudio, id)
 
-                    val ext = name?.substringAfterLast('.', "mp3") ?: "mp3"
+                        val ext = name?.substringAfterLast('.', "mp3") ?: "mp3"
 
-                    list.add(
-                        ExportedFile(
-                            id = id,
-                            name = name ?: "Unknown",
-                            path = path,
-                            uriString = uri.toString(),
-                            size = size,
-                            duration = if (duration > 0) duration else 15000L,
-                            format = ext.uppercase(),
-                            dateAdded = dateAdded * 1000L
+                        list.add(
+                            ExportedFile(
+                                id = id,
+                                name = name ?: "Unknown",
+                                path = path,
+                                uriString = uri.toString(),
+                                size = size,
+                                duration = if (duration > 0) duration else 15000L,
+                                format = ext.uppercase(),
+                                dateAdded = dateAdded * 1000L
+                            )
                         )
-                    )
+                    } catch (rowEx: Exception) {
+                        CrashLogger.logException(rowEx, "AudioStudioProcessor.audioRow")
+                        Log.e("AudioStudioProcessor", "Audio row error: ${rowEx.message}", rowEx)
+                    }
                 }
+            } ?: run {
+                CrashLogger.logMessage("fetchRecentExports: audio query returned null cursor", "AudioStudioProcessor")
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
+            CrashLogger.logException(e, "AudioStudioProcessor.audioQuery")
+            Log.e("AudioStudioProcessor", "Audio query failed: ${e.message}", e)
         }
 
         // 2. Fetch Videos (MP4 Exporter results)
@@ -168,8 +180,9 @@ class AudioStudioProcessor(private val context: Context) {
         }
 
         try {
+            CrashLogger.logMessage("fetchRecentExports: querying video exports from=$musicFolder", "AudioStudioProcessor")
             val resolver = context.contentResolver ?: run {
-                Log.e("AudioStudioProcessor", "ContentResolver is null — cannot query MediaStore")
+                CrashLogger.logMessage("fetchRecentExports: contentResolver is null", "AudioStudioProcessor")
                 return@withContext emptyList()
             }
             resolver.query(
@@ -186,31 +199,41 @@ class AudioStudioProcessor(private val context: Context) {
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
 
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol)
-                    val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
-                    val size = cursor.getLong(sizeCol)
-                    val duration = cursor.getLong(durationCol)
-                    val dateAdded = cursor.getLong(dateCol)
-                    val uri = ContentUris.withAppendedId(collectionVideo, id)
+                CrashLogger.logMessage("fetchRecentExports: video cursor columns id=$idCol name=$nameCol path=$pathCol size=$sizeCol duration=$durationCol date=$dateCol count=${cursor.count}", "AudioStudioProcessor")
 
-                    list.add(
-                        ExportedFile(
-                            id = id,
-                            name = name ?: "Unknown",
-                            path = path,
-                            uriString = uri.toString(),
-                            size = size,
-                            duration = if (duration > 0) duration else 30000L,
-                            format = "MP4",
-                            dateAdded = dateAdded * 1000L
+                while (cursor.moveToNext()) {
+                    try {
+                        val id = cursor.getLong(idCol)
+                        val name = cursor.getString(nameCol)
+                        val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
+                        val size = cursor.getLong(sizeCol)
+                        val duration = cursor.getLong(durationCol)
+                        val dateAdded = cursor.getLong(dateCol)
+                        val uri = ContentUris.withAppendedId(collectionVideo, id)
+
+                        list.add(
+                            ExportedFile(
+                                id = id,
+                                name = name ?: "Unknown",
+                                path = path,
+                                uriString = uri.toString(),
+                                size = size,
+                                duration = if (duration > 0) duration else 30000L,
+                                format = "MP4",
+                                dateAdded = dateAdded * 1000L
+                            )
                         )
-                    )
+                    } catch (rowEx: Exception) {
+                        CrashLogger.logException(rowEx, "AudioStudioProcessor.videoRow")
+                        Log.e("AudioStudioProcessor", "Video row error: ${rowEx.message}", rowEx)
+                    }
                 }
+            } ?: run {
+                CrashLogger.logMessage("fetchRecentExports: video query returned null cursor", "AudioStudioProcessor")
             }
         } catch (e: Exception) {
-            Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
+            CrashLogger.logException(e, "AudioStudioProcessor.videoQuery")
+            Log.e("AudioStudioProcessor", "Video query failed: ${e.message}", e)
         }
 
         list.sortByDescending { it.dateAdded }
@@ -1293,6 +1316,8 @@ class AudioStudioProcessor(private val context: Context) {
             "$outputName.$extension"
         }
 
+        CrashLogger.logMessage("copyLocalFileToMediaStore: name=$finalFileName mime=$mimeType size=${tempFile.length()}", "AudioStudioProcessor")
+
         val contentValues = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, finalFileName)
             put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
@@ -1314,7 +1339,12 @@ class AudioStudioProcessor(private val context: Context) {
 
         var itemUri: Uri? = null
         try {
-            itemUri = resolver.insert(collection, contentValues) ?: return null
+            itemUri = resolver.insert(collection, contentValues) ?: run {
+                CrashLogger.logMessage("copyLocalFileToMediaStore: resolver.insert returned null for audio", "AudioStudioProcessor")
+                return null
+            }
+            CrashLogger.logMessage("copyLocalFileToMediaStore: inserted audio uri=$itemUri", "AudioStudioProcessor")
+
             resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
                 FileOutputStream(pfd.fileDescriptor).use { fos ->
                     val fileInputStream = FileInputStream(tempFile)
@@ -1352,6 +1382,8 @@ class AudioStudioProcessor(private val context: Context) {
                     val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION))
                     val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED))
 
+                    CrashLogger.logMessage("copyLocalFileToMediaStore: audio confirmed id=$id size=$size duration=$duration", "AudioStudioProcessor")
+
                     return ExportedFile(
                         id = id,
                         name = finalFileName,
@@ -1362,9 +1394,14 @@ class AudioStudioProcessor(private val context: Context) {
                         format = extension.uppercase(),
                         dateAdded = dateAdded * 1000L
                     )
+                } else {
+                    CrashLogger.logMessage("copyLocalFileToMediaStore: audio query returned empty cursor", "AudioStudioProcessor")
                 }
+            } ?: run {
+                CrashLogger.logMessage("copyLocalFileToMediaStore: audio query returned null cursor", "AudioStudioProcessor")
             }
         } catch (e: Exception) {
+            CrashLogger.logException(e, "AudioStudioProcessor.copyAudio")
             Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
@@ -1381,6 +1418,8 @@ class AudioStudioProcessor(private val context: Context) {
         } else {
             "$outputName.$extension"
         }
+
+        CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: name=$finalFileName size=${tempFile.length()}", "AudioStudioProcessor")
 
         val contentValues = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, finalFileName)
@@ -1403,7 +1442,12 @@ class AudioStudioProcessor(private val context: Context) {
 
         var itemUri: Uri? = null
         try {
-            itemUri = resolver.insert(collection, contentValues) ?: return null
+            itemUri = resolver.insert(collection, contentValues) ?: run {
+                CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: resolver.insert returned null", "AudioStudioProcessor")
+                return null
+            }
+            CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: inserted uri=$itemUri", "AudioStudioProcessor")
+
             resolver.openFileDescriptor(itemUri, "w")?.use { pfd ->
                 FileOutputStream(pfd.fileDescriptor).use { fos ->
                     val fileInputStream = FileInputStream(tempFile)
@@ -1441,6 +1485,8 @@ class AudioStudioProcessor(private val context: Context) {
                     val duration = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION))
                     val dateAdded = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
 
+                    CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: confirmed id=$id size=$size duration=$duration", "AudioStudioProcessor")
+
                     return ExportedFile(
                         id = id,
                         name = finalFileName,
@@ -1451,9 +1497,14 @@ class AudioStudioProcessor(private val context: Context) {
                         format = extension.uppercase(),
                         dateAdded = dateAdded * 1000L
                     )
+                } else {
+                    CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: query returned empty cursor", "AudioStudioProcessor")
                 }
+            } ?: run {
+                CrashLogger.logMessage("copyLocalFileToMediaStoreVideo: query returned null cursor", "AudioStudioProcessor")
             }
         } catch (e: Exception) {
+            CrashLogger.logException(e, "AudioStudioProcessor.copyVideo")
             Log.e("AudioStudioProcessor", "Audio Studio operation failed: "+e.message, e)
             if (itemUri != null) {
                 resolver.delete(itemUri, null, null)
@@ -1492,12 +1543,15 @@ class AudioStudioProcessor(private val context: Context) {
         endUs: Long = Long.MAX_VALUE,
         onProgress: (Int) -> Unit = {}
     ): PcmAudio? {
+        CrashLogger.logMessage("decodeToPcm: uri=$uri startUs=$startUs endUs=$endUs", "AudioStudioProcessor")
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
             if (pfd == null) {
-                Log.e("AudioStudioProcessor", "decodeToPcm: openFileDescriptor returned null for $uri")
+                val msg = "decodeToPcm: openFileDescriptor returned null for $uri"
+                CrashLogger.logMessage(msg, "AudioStudioProcessor")
+                Log.e("AudioStudioProcessor", msg)
                 return null
             }
             extractor.setDataSource(pfd.fileDescriptor)
@@ -1513,7 +1567,10 @@ class AudioStudioProcessor(private val context: Context) {
                     break
                 }
             }
-            if (trackIndex < 0 || format == null) return null
+            if (trackIndex < 0 || format == null) {
+                CrashLogger.logMessage("decodeToPcm: no audio track found in $uri", "AudioStudioProcessor")
+                return null
+            }
 
             extractor.selectTrack(trackIndex)
             val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
@@ -1526,6 +1583,8 @@ class AudioStudioProcessor(private val context: Context) {
             val trackDurationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
                 format.getLong(MediaFormat.KEY_DURATION)
             } else 0L
+
+            CrashLogger.logMessage("decodeToPcm: track=$trackIndex mime=$mime sampleRate=$sampleRate channels=$channelCount durationUs=$trackDurationUs", "AudioStudioProcessor")
 
             val rangeEndUs = if (endUs == Long.MAX_VALUE) Long.MAX_VALUE else endUs
             val rangeUs = when {
@@ -1585,9 +1644,14 @@ class AudioStudioProcessor(private val context: Context) {
             }
 
             onProgress(100)
-            if (out.size() == 0) return null
+            if (out.size() == 0) {
+                CrashLogger.logMessage("decodeToPcm: decoded 0 bytes for $uri", "AudioStudioProcessor")
+                return null
+            }
+            CrashLogger.logMessage("decodeToPcm: success bytes=${out.size()} rate=$sampleRate channels=$channelCount", "AudioStudioProcessor")
             return PcmAudio(out.toByteArray(), sampleRate, channelCount)
         } catch (e: Exception) {
+            CrashLogger.logException(e, "AudioStudioProcessor.decodeToPcm")
             Log.e("AudioStudioProcessor", "PCM decode failed: " + e.message, e)
             return null
         } finally {

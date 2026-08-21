@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -57,7 +58,8 @@ fun SettingsScreen(
     onNavigateToAbout: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
     onNavigateToTerms: () -> Unit,
-    onNavigateToFeedback: () -> Unit
+    onNavigateToFeedback: () -> Unit,
+    onNavigateToCrashLog: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val context = LocalContext.current
@@ -218,6 +220,12 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Column {
+                    SettingsClickableItem(
+                        title = "🐛 View Crash Log",
+                        subtitle = "View in-app crash diagnostics",
+                        icon = Icons.Default.BugReport,
+                        onClick = onNavigateToCrashLog
+                    )
                     SettingsClickableItem(
                         title = "About",
                         subtitle = "Get app details and credits",

@@ -4,7 +4,9 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
+import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 import java.io.File
 
 class AudioScanner(private val context: Context) {
@@ -25,50 +27,64 @@ class AudioScanner(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID
         )
 
-        // Only load music files of duration > 5000ms (5 seconds) to filter out ringtones, system noises, or short clips
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 5000"
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
-        contentResolver.query(uri, projection, selection, null, sortOrder)?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
-            val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-            val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
+        try {
+            CrashLogger.logMessage("Starting MediaStore audio scan", "AudioScanner")
+            contentResolver.query(uri, projection, selection, null, sortOrder)?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val title = cursor.getString(titleColumn) ?: "Unknown Song"
-                val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
-                val album = cursor.getString(albumColumn) ?: "Unknown Album"
-                val duration = cursor.getLong(durationColumn)
-                val path = if (dataColumn >= 0) cursor.getString(dataColumn) ?: "" else ""
-                val dateAdded = cursor.getLong(dateAddedColumn)
-                val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else 0L
+                CrashLogger.logMessage("Cursor columns: id=$idColumn title=$titleColumn artist=$artistColumn album=$albumColumn duration=$durationColumn data=$dataColumn dateAdded=$dateAddedColumn albumId=$albumIdColumn", "AudioScanner")
 
-                val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                while (cursor.moveToNext()) {
+                    try {
+                        val id = cursor.getLong(idColumn)
+                        val title = cursor.getString(titleColumn) ?: "Unknown Song"
+                        val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
+                        val album = cursor.getString(albumColumn) ?: "Unknown Album"
+                        val duration = cursor.getLong(durationColumn)
+                        val path = if (dataColumn >= 0) cursor.getString(dataColumn) ?: "" else ""
+                        val dateAdded = cursor.getLong(dateAddedColumn)
+                        val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else 0L
 
-                // Album Art URI standard construction:
-                val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
-                val albumArtUri = if (albumId > 0L) ContentUris.withAppendedId(sArtworkUri, albumId) else null
+                        val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
-                songList.add(
-                    Song(
-                        id = id,
-                        title = title,
-                        artist = artist,
-                        album = album,
-                        duration = duration,
-                        path = path,
-                        uri = songUri,
-                        dateAdded = dateAdded,
-                        artUri = albumArtUri
-                    )
-                )
+                        val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
+                        val albumArtUri = if (albumId > 0L) ContentUris.withAppendedId(sArtworkUri, albumId) else null
+
+                        songList.add(
+                            Song(
+                                id = id,
+                                title = title,
+                                artist = artist,
+                                album = album,
+                                duration = duration,
+                                path = path,
+                                uri = songUri,
+                                dateAdded = dateAdded,
+                                artUri = albumArtUri
+                            )
+                        )
+                    } catch (rowEx: Exception) {
+                        CrashLogger.logException(rowEx, "AudioScanner.row")
+                        Log.e("AudioScanner", "Row error: ${rowEx.message}", rowEx)
+                    }
+                }
+                CrashLogger.logMessage("Scan complete. Songs found: ${songList.size}", "AudioScanner")
+            } ?: run {
+                CrashLogger.logMessage("MediaStore query returned null cursor", "AudioScanner")
             }
+        } catch (e: Exception) {
+            CrashLogger.logException(e, "AudioScanner.scanLocalAudio")
+            Log.e("AudioScanner", "Scan failed: ${e.message}", e)
         }
         return songList
     }
