@@ -9,7 +9,7 @@ import com.salmanlaghari.pulsemusicplayerai.utils.CrashLogger
 class CrashDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        supportActionBar?.hide()
+        actionBar?.hide()
 
         val textView = TextView(this).apply {
             setTextColor(0xFFFF4444.toInt())
