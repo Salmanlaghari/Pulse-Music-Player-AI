@@ -63,163 +63,161 @@ fun VisualizerCanvas(
         val minDim = minOf(width, height)
 
         when (preset) {
-            VisualizerPreset.CIRCULAR_BARS -> {
+            VisualizerPreset.CIRCULAR_RADIAL_BARS -> {
                 drawCircularBars(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.CONCENTRIC_RINGS -> {
+            VisualizerPreset.CONCENTRIC -> {
                 drawConcentricRings(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.LINEAR_BARS -> {
-                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            VisualizerPreset.RADIAL_WAVE -> {
+                drawConcentricRings(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.PARTICLE_ORB -> {
-                drawParticleOrb(phase, sensitivity, primaryColor, secondaryColor, tertiaryColor, centerX, centerY, minDim)
+            VisualizerPreset.SPIRAL_PULSE -> {
+                drawSpiralGalaxy(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.STARFIELD -> {
-                drawStarfield(stars, isPlaying, speed, sensitivity, primaryColor, width, height, centerX, centerY)
+            VisualizerPreset.ROTATING_RINGS -> {
+                drawCircularBars(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.FLUID_WAVE -> {
-                drawFluidWave(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
+            VisualizerPreset.CLOCKWISE_SPIN -> {
+                drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.ISOMETRIC_GRID -> {
-                drawIsometricGrid(phase, sensitivity, primaryColor, secondaryColor, tertiaryColor, centerX, centerY, minDim)
+            VisualizerPreset.COUNTER_SPIN -> {
+                drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.FLOATING_BUBBLES -> {
-                drawFloatingBubbles(bubbles, isPlaying, speed, phase, sensitivity, primaryColor, width, height)
+            VisualizerPreset.PULSING_CORE -> {
+                drawPulsingCore(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.KALEIDOSCOPE -> {
-                drawKaleidoscope(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.EXPANDING_CIRCLES -> {
+                drawFuturePulse(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.GALAXY_SPIN -> {
+                drawGalaxyRing(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
             VisualizerPreset.DOUBLE_HELIX -> {
                 drawDoubleHelix(phase, sensitivity, primaryColor, tertiaryColor, width, centerY)
             }
-            VisualizerPreset.TUNNEL_WARP -> {
-                drawTunnelWarp(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.ORBITING_DOTS -> {
+                drawOrbitingDots(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.HEARTBEAT_PULSAR -> {
-                drawHeartbeatPulsar(phase, sensitivity, primaryColor, centerX, centerY, width)
-            }
-            VisualizerPreset.FLAME_SPECTRUM -> {
-                drawFlameSpectrum(phase, sensitivity, width, height)
-            }
-            VisualizerPreset.MATRIX_RAIN -> {
-                drawMatrixRain(matrixColumns, isPlaying, speed, phase, sensitivity, width, height)
-            }
-            VisualizerPreset.SOUND_RIBBON -> {
-                drawSoundRibbon(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
-            }
-
-            // --- New 37 Flagship Presets for Session 6 ---
-            VisualizerPreset.NEON_BARS -> {
-                drawNeonBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
-            }
-            VisualizerPreset.GALAXY_RING -> {
-                drawGalaxyRing(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.AURORA_FLOW -> {
-                drawAuroraFlow(phase, sensitivity, primaryColor, tertiaryColor, width, height)
-            }
-            VisualizerPreset.FIRE_SPECTRUM -> {
-                drawFireSpectrum(fireParticles, isPlaying, speed, phase, sensitivity, primaryColor, secondaryColor, width, height)
-            }
-            VisualizerPreset.WATER_WAVES -> {
-                drawWaterWaves(phase, sensitivity, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.PLASMA_WAVE -> {
-                drawPlasmaWave(phase, sensitivity, primaryColor, tertiaryColor, width, height)
-            }
-            VisualizerPreset.FREQUENCY_LINES -> {
-                drawFrequencyLines(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
-            }
-            VisualizerPreset.COLOR_BURST -> {
-                drawColorBurst(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.SPIRAL_GALAXY -> {
-                drawSpiralGalaxy(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.RAINBOW_RING -> {
-                drawRainbowRing(phase, sensitivity, centerX, centerY, minDim)
-            }
-            VisualizerPreset.LASER_BEAMS -> {
-                drawLaserBeams(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, width, height)
-            }
-            VisualizerPreset.CRYSTAL_MESH -> {
-                drawCrystalMesh(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.SMOKE_TRAILS -> {
-                drawSmokeTrails(phase, sensitivity, tertiaryColor, width, height)
-            }
-            VisualizerPreset.CYBER_GRID -> {
-                drawCyberGrid(phase, sensitivity, secondaryColor, width, height)
-            }
-            VisualizerPreset.INFINITY_LOOP -> {
-                drawInfinityLoop(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.RETRO_GRID -> {
-                drawRetroGrid(phase, sensitivity, primaryColor, width, height)
-            }
-            VisualizerPreset.LIGHTNING_BOLT -> {
-                drawLightningBolt(phase, sensitivity, tertiaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.ORBITAL_RINGS -> {
+            VisualizerPreset.SOLAR_SYSTEM -> {
                 drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.MIRROR_SYMMETRY -> {
-                drawMirrorSymmetry(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
+            VisualizerPreset.VORTEX -> {
+                drawTunnelWarp(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.HEXAGON_MESH -> {
-                drawHexagonMesh(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.MANDALA_ROTATE -> {
+                drawKaleidoscope(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.ENERGY_SHIELD -> {
-                drawEnergyShield(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+
+            // ---------- BARS ----------
+            VisualizerPreset.VERTICAL_BARS -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.DIAMOND_GLOW -> {
-                drawDiamondGlow(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+            VisualizerPreset.HORIZONTAL_BARS -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.METEOR_SHOWER -> {
-                drawMeteorShower(meteors, isPlaying, speed, phase, sensitivity, primaryColor, width, height)
+            VisualizerPreset.MIRROR_BARS -> {
+                drawMirrorBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.SNOWFALL -> {
-                drawSnowfall(phase, sensitivity, width, height)
+            VisualizerPreset.CENTERED_BARS -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.FIREWORKS -> {
-                drawFireworks(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY)
-            }
-            VisualizerPreset.OCEAN_TIDES -> {
-                drawOceanTides(phase, sensitivity, secondaryColor, width, height)
-            }
-            VisualizerPreset.SPECTRUM_X -> {
+            VisualizerPreset.SIDE_BARS -> {
                 drawSpectrumX(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
             }
-            VisualizerPreset.ULTRA_BASS -> {
-                drawUltraBass(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.WAVE_BARS -> {
+                drawFluidWave(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
             }
-            VisualizerPreset.AURORA_X -> {
-                drawAuroraX(phase, sensitivity, primaryColor, tertiaryColor, width, height)
-            }
-            VisualizerPreset.GLASS_RING -> {
-                drawGlassRing(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.PLASMA_X -> {
-                drawPlasmaX(phase, sensitivity, tertiaryColor, centerX, centerY, minDim)
-            }
-            VisualizerPreset.CYBER_WAVE -> {
+            VisualizerPreset.STEP_BARS -> {
                 drawCyberWave(phase, sensitivity, primaryColor, width, height)
             }
-            VisualizerPreset.INFINITY_BARS -> {
+            VisualizerPreset.RAINBOW_BARS -> {
+                drawRainbowBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            }
+            VisualizerPreset.GLOW_BARS -> {
+                drawNeonBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            }
+            VisualizerPreset.BARS_3D -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            }
+            VisualizerPreset.STACKED_BARS -> {
                 drawInfinityBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.FUTURE_PULSE -> {
-                drawFuturePulse(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.BOUNCING_BARS -> {
+                drawPeakBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.DIGITAL_STORM -> {
-                drawDigitalStorm(phase, sensitivity, primaryColor, width, height)
+            VisualizerPreset.EQUALIZER_CLASSIC -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.PRISM -> {
-                drawPrism(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            VisualizerPreset.SPECTRUM_FLAT -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
             }
-            VisualizerPreset.QUANTUM -> {
-                drawQuantum(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+            VisualizerPreset.PEAK_METER -> {
+                drawPeakBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            }
+
+            // ---------- PARTICLES ----------
+            VisualizerPreset.DOTS_PULSE -> {
+                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+            }
+            VisualizerPreset.FLYING_PARTICLES -> {
+                drawParticleOrb(phase, sensitivity, primaryColor, secondaryColor, tertiaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.RAIN_DROPS -> {
+                drawMeteorShower(meteors, isPlaying, speed, phase, sensitivity, primaryColor, width, height)
+            }
+            VisualizerPreset.CONFETTI -> {
+                drawFireworks(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY)
+            }
+            VisualizerPreset.SPARKLES -> {
+                drawColorBurst(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.NEBULA_FLOW -> {
+                drawGalaxyCloud(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.STAR_FIELD -> {
+                drawStarfield(stars, isPlaying, speed, sensitivity, primaryColor, width, height, centerX, centerY)
+            }
+            VisualizerPreset.SMOKE_RINGS -> {
+                drawSmokeTrails(phase, sensitivity, tertiaryColor, width, height)
+            }
+            VisualizerPreset.FIRE_SPARKS -> {
+                drawFireworks(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY)
+            }
+            VisualizerPreset.SNOW_FALL -> {
+                drawSnowfall(phase, sensitivity, width, height)
+            }
+
+            // ---------- AMBIENT ----------
+            VisualizerPreset.SOFT_PULSE -> {
+                drawPulsingCore(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.BREATHING_GLOW -> {
+                drawPulsingCore(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.GRADIENT_SHIFT -> {
+                drawAuroraX(phase, sensitivity, primaryColor, tertiaryColor, width, height)
+            }
+            VisualizerPreset.COLOR_WAVE -> {
+                drawPlasmaWave(phase, sensitivity, primaryColor, tertiaryColor, width, height)
+            }
+            VisualizerPreset.SLOW_FADE -> {
+                drawFluidWave(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
+            }
+            VisualizerPreset.DREAM_FLOW -> {
+                drawAuroraFlow(phase, sensitivity, primaryColor, tertiaryColor, width, height)
+            }
+            VisualizerPreset.CALM_RIPPLE -> {
+                drawWaterWaves(phase, sensitivity, secondaryColor, centerX, centerY, minDim)
+            }
+            VisualizerPreset.NIGHT_SKY -> {
+                drawMatrixRain(matrixColumns, isPlaying, speed, phase, sensitivity, width, height)
+            }
+            VisualizerPreset.AURORA -> {
+                drawAuroraFlow(phase, sensitivity, primaryColor, tertiaryColor, width, height)
+            }
+            VisualizerPreset.DEEP_SPACE -> {
+                drawStarfield(stars, isPlaying, speed, sensitivity, primaryColor, width, height, centerX, centerY)
             }
         }
     }
@@ -991,6 +989,95 @@ private fun DrawScope.drawQuantum(phase: Float, sensitivity: Float, pCol: Color,
         val px = cx + (dist * cos(rad)).toFloat()
         val py = cy + (dist * sin(rad)).toFloat()
         drawCircle(color = if (i % 2 == 0) pCol else tCol, radius = 5f, center = Offset(px, py))
+    }
+}
+
+private fun DrawScope.drawPulsingCore(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val baseRadius = minDim * 0.15f
+    val pulse = sin(phase * 2f).absoluteValue * sensitivity
+    val radius = baseRadius * (1f + pulse * 0.5f)
+    drawCircle(
+        brush = Brush.radialGradient(colors = listOf(pCol.copy(alpha = 0.9f), pCol.copy(alpha = 0.0f)), center = Offset(cx, cy), radius = radius),
+        radius = radius, center = Offset(cx, cy)
+    )
+    drawCircle(color = sCol, radius = radius * 0.3f, center = Offset(cx, cy))
+}
+
+private fun DrawScope.drawOrbitingDots(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val count = 30
+    val orbitRadius = minDim * 0.3f
+    for (i in 0 until count) {
+        val angle = (i.toFloat() / count) * 360f + phase * 20f
+        val rad = Math.toRadians(angle.toDouble())
+        val px = cx + (orbitRadius * cos(rad)).toFloat()
+        val py = cy + (orbitRadius * sin(rad)).toFloat()
+        drawCircle(color = if (i % 2 == 0) pCol else sCol, radius = 4f + sin(phase + i).absoluteValue * 4f, center = Offset(px, py))
+    }
+}
+
+private fun DrawScope.drawMirrorBars(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, width: Float, height: Float) {
+    val barCount = 20
+    val barWidth = width / (barCount * 2f)
+    val maxBarHeight = height * 0.35f * sensitivity
+    val centerY = height / 2f
+    for (i in 0 until barCount) {
+        val factor = sin(phase + i * 0.3f).absoluteValue
+        val barHeight = 10f + factor * maxBarHeight
+        val x = (width / 2f) + (i * barWidth)
+        drawRoundRect(brush = Brush.verticalGradient(listOf(pCol, sCol)), topLeft = Offset(x, centerY - barHeight), size = Size(barWidth, barHeight), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f))
+        drawRoundRect(brush = Brush.verticalGradient(listOf(pCol, sCol)), topLeft = Offset(x, centerY), size = Size(barWidth, barHeight), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f))
+    }
+}
+
+private fun DrawScope.drawRainbowBars(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, width: Float, height: Float) {
+    val barCount = 30
+    val barWidth = width / (barCount * 1.5f)
+    val spacing = barWidth * 0.5f
+    val startX = (width - (barCount * (barWidth + spacing) - spacing)) / 2f
+    val maxBarHeight = height * 0.5f * sensitivity
+    for (i in 0 until barCount) {
+        val factor = sin(phase + i * 0.25f).absoluteValue
+        val barHeight = 15f + factor * maxBarHeight
+        val x = startX + i * (barWidth + spacing)
+        val y = height - barHeight - 40f
+        val hue = (i * 12f + phase * 50f) % 360f
+        drawRoundRect(
+            brush = Brush.horizontalGradient(colors = listOf(Color.hsv(hue, 1f, 1f), Color.hsv((hue + 60f) % 360f, 1f, 1f))),
+            topLeft = Offset(x, y), size = Size(barWidth, barHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f)
+        )
+    }
+}
+
+private fun DrawScope.drawPeakBars(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, width: Float, height: Float) {
+    val barCount = 30
+    val barWidth = width / (barCount * 1.5f)
+    val spacing = barWidth * 0.5f
+    val startX = (width - (barCount * (barWidth + spacing) - spacing)) / 2f
+    val maxBarHeight = height * 0.5f * sensitivity
+    for (i in 0 until barCount) {
+        val factor = sin(phase + i * 0.25f).absoluteValue
+        val barHeight = 15f + factor * maxBarHeight
+        val x = startX + i * (barWidth + spacing)
+        val y = height - barHeight - 40f
+        drawRoundRect(
+            brush = Brush.verticalGradient(colors = listOf(pCol, sCol)),
+            topLeft = Offset(x, y), size = Size(barWidth, barHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f)
+        )
+        drawRect(color = Color.White, topLeft = Offset(x, y), size = Size(barWidth, 4f))
+    }
+}
+
+private fun DrawScope.drawGalaxyCloud(phase: Float, sensitivity: Float, pCol: Color, tCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val count = 60
+    for (i in 0 until count) {
+        val angle = (i.toFloat() / count) * 360f + phase * 10f
+        val rad = Math.toRadians(angle.toDouble())
+        val dist = minDim * 0.25f * sin(phase * 1.5f + i * 0.2f).absoluteValue * sensitivity
+        val px = cx + (dist * cos(rad)).toFloat()
+        val py = cy + (dist * sin(rad)).toFloat()
+        drawCircle(color = if (i % 3 == 0) pCol else tCol, radius = 3f + sin(phase + i).absoluteValue * 5f, center = Offset(px, py))
     }
 }
 

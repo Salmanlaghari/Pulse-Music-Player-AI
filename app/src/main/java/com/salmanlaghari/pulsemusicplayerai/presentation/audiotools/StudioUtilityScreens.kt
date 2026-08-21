@@ -450,12 +450,12 @@ fun VideoStudioScreen(
     var preset by remember {
         mutableStateOf(
             when (type) {
-                VideoStudioType.WAVEFORM -> VisualizerPreset.FLUID_WAVE
-                VideoStudioType.SPECTRUM -> VisualizerPreset.LINEAR_BARS
-                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_BARS
-                VideoStudioType.NEON -> VisualizerPreset.NEON_BARS
-                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_RING
-                else -> VisualizerPreset.CIRCULAR_BARS
+                VideoStudioType.WAVEFORM -> VisualizerPreset.DREAM_FLOW
+                VideoStudioType.SPECTRUM -> VisualizerPreset.VERTICAL_BARS
+                VideoStudioType.CIRCULAR -> VisualizerPreset.CIRCULAR_RADIAL_BARS
+                VideoStudioType.NEON -> VisualizerPreset.GLOW_BARS
+                VideoStudioType.ALBUM_ART -> VisualizerPreset.GALAXY_SPIN
+                else -> VisualizerPreset.CIRCULAR_RADIAL_BARS
             }
         )
     }
@@ -959,7 +959,7 @@ fun VideoStudioScreen(
 
                 HorizontalChipRow(
                     options = buildList {
-                        add(ChipOption(label = "Preset", selected = preset == VisualizerPreset.CIRCULAR_BARS, onClick = { }))
+                        add(ChipOption(label = "Preset", selected = preset == VisualizerPreset.CIRCULAR_RADIAL_BARS, onClick = { }))
                         addAll(VideoAspectRatio.values().map { ChipOption(label = it.displayName, selected = aspectRatio == it, onClick = { aspectRatio = it }) })
                         addAll(VideoResolution.values().map { ChipOption(label = it.displayName, selected = resolution == it, onClick = { resolution = it }) })
                         add(ChipOption(label = "$fps fps", selected = true, onClick = { }))
