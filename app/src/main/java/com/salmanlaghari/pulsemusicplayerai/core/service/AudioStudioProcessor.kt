@@ -118,19 +118,19 @@ class AudioStudioProcessor(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol) ?: continue
+                    val name = cursor.getString(nameCol)
                     val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(sizeCol)
                     val duration = cursor.getLong(durationCol)
                     val dateAdded = cursor.getLong(dateCol)
                     val uri = ContentUris.withAppendedId(collectionAudio, id)
 
-                    val ext = name.substringAfterLast('.', "mp3")
+                    val ext = name?.substringAfterLast('.', "mp3") ?: "mp3"
 
                     list.add(
                         ExportedFile(
                             id = id,
-                            name = name,
+                            name = name ?: "Unknown",
                             path = path,
                             uriString = uri.toString(),
                             size = size,
@@ -188,7 +188,7 @@ class AudioStudioProcessor(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol) ?: continue
+                    val name = cursor.getString(nameCol)
                     val path = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
                     val size = cursor.getLong(sizeCol)
                     val duration = cursor.getLong(durationCol)
@@ -198,7 +198,7 @@ class AudioStudioProcessor(private val context: Context) {
                     list.add(
                         ExportedFile(
                             id = id,
-                            name = name,
+                            name = name ?: "Unknown",
                             path = path,
                             uriString = uri.toString(),
                             size = size,
