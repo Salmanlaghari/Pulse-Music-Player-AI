@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <!-- Pulse emblem used as the watermark glyph: a rounded badge with an
+         equalizer motif. Rendered at high resolution at export time so it stays
+         crisp at 1080p. -->
+    <path
+        android:pathData="M16,16h168a16,16 0 0 1 16,16v136a16,16 0 0 1 -16,16h-168a16,16 0 0 1 -16,-16v-136a16,16 0 0 1 16,-16z"
+        android:fillColor="#7C3AED"/>
+    <path
+        android:pathData="M16,16h168a16,16 0 0 1 16,16v136a16,16 0 0 1 -16,16h-168a16,16 0 0 1 -16,-16v-136a16,16 0 0 1 16,-16z"
+        android:fillColor="#3B82F6"
+        android:fillAlpha="0.35"/>
+    <group android:translateY="0">
+        <path android:pathData="M48,118h14v40h-14z" android:fillColor="#FFFFFF"/>
+        <path android:pathData="M82,86h14v72h-14z" android:fillColor="#FFFFFF"/>
+        <path android:pathData="M116,102h14v56h-14z" android:fillColor="#FFFFFF"/>
+        <path android:pathData="M150,64h14v94h-14z" android:fillColor="#FFFFFF"/>
+    </group>
+</vector>
