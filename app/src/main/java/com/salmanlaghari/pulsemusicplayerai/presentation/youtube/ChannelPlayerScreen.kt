@@ -90,8 +90,9 @@ fun ChannelPlayerScreen(
                     colors = listOf(BaseDeepNavy, BaseNavyBlue, BaseNavyBlue)
                 )
             )
-    ) {
+            ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            .verticalAlignment = Alignment.CenterVertically
             // Top bar
             Box(
                 modifier = Modifier
