@@ -101,6 +101,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Check
@@ -1094,6 +1095,13 @@ fun VideoStudioScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<String?>(null) }
 
+    // Selection state for the four export sections — declared before [config]
+    // so the single source-of-truth config below can read the current values.
+    /** ARGB colour ints of the chosen ANIMATION BACKGROUND gradient (null = none). */
+    var bgGradient by remember { mutableStateOf<List<Int>?>(null) }
+    var selectedEffectId by remember { mutableStateOf<String?>(null) }
+    var selectedThemeId by remember { mutableStateOf<String?>(null) }
+
     val selectedTheme = STUDIO_COLOR_THEMES.firstOrNull { it.id == selectedThemeId }
     val config = VisualizerVideoConfig(
         preset = preset.toVideoPreset(),
@@ -1134,10 +1142,6 @@ fun VideoStudioScreen(
     var expandedAdvanced by remember { mutableStateOf(false) }
     var selectedBgCategory by remember { mutableStateOf("LIVE") }
     var selectedBackgroundId by remember { mutableStateOf<String?>(null) }
-    /** ARGB colour ints of the chosen ANIMATION BACKGROUND gradient (null = none). */
-    var bgGradient by remember { mutableStateOf<List<Int>?>(null) }
-    var selectedEffectId by remember { mutableStateOf<String?>(null) }
-    var selectedThemeId by remember { mutableStateOf<String?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1148,12 +1152,13 @@ fun VideoStudioScreen(
         }
     }
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             // A custom photo from device storage becomes the static background and
-            // takes precedence over any preset gradient (no READ_MEDIA_IMAGES
-            // permission needed — the picker grants scoped URI access).
+            // takes precedence over any preset gradient. GetContent("image/*")
+            // uses the system picker with scoped URI access, so no
+            // READ_MEDIA_IMAGES permission is required on Android 13+.
             bgImageUri = uri.toString()
             bgStyle = VideoBackgroundStyle.DARK_GRADIENT
             bgGradient = null
@@ -1450,7 +1455,7 @@ fun VideoStudioScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(
-                                    onClick = { imagePickerLauncher.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) },
+                                    onClick = { imagePickerLauncher.launch("image/"*") },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
