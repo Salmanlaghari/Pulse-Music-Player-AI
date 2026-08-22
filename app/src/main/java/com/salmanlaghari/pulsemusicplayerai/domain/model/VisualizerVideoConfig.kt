@@ -196,8 +196,37 @@ data class VisualizerVideoConfig(
     val themePrimary: Int? = null,
     val themeSecondary: Int? = null,
     val themeTertiary: Int? = null,
-    /** Scale multiplier applied to the visualizer geometry (0.4f..1.6f). */
+    /**
+     * Scale multiplier applied to the visualizer geometry (0.4f..1.6f). The
+     * visualizer crop editor lets the user nudge this independently of the
+     * horizontal/vertical offsets below, so the crop box can be resized while
+     * the position stays pinned.
+     */
     val visualizerScale: Float = 1.0f,
+    /**
+     * Horizontal crop multiplier (0.4f..1.6f). Independent of the vertical one
+     * so the crop box can be made wider without affecting its height.
+     */
+    val visualizerScaleX: Float = 1.0f,
+    /**
+     * Vertical crop multiplier (0.4f..1.6f). Independent of the horizontal one
+     * so the crop box can be made taller without affecting its width.
+     */
+    val visualizerScaleY: Float = 1.0f,
+    /**
+     * Horizontal offset of the visualizer centre from the frame centre
+     * (-1f = far left, 0f = centred, 1f = far right). Driven by the Move
+     * Left / Right / Center controls in the crop editor.
+     */
+    val visualizerOffsetX: Float = 0.0f,
+    /**
+     * Vertical offset of the visualizer centre from the frame centre
+     * (-1f = top, 0f = centred, 1f = bottom). Driven by the Move Up / Down /
+     * Center controls in the crop editor.
+     */
+    val visualizerOffsetY: Float = 0.0f,
+    /** Rotation of the visualizer in degrees (0f..360f). */
+    val visualizerRotation: Float = 0.0f,
     /** Vertical anchor of the visualizer inside the frame (0f = top, 1f = bottom). */
     val visualizerPositionY: Float = 0.6f,
     val glow: Boolean = true,

@@ -104,7 +104,7 @@ class VisualizerFrameRenderer(
         frameTimeUs: Long = 0L
     ) {
         if (!backgroundBitmapDrawn) {
-            drawBackground(canvas, width, height)
+            drawBackground(canvas, width, height, frameTimeUs)
         } else if (config.backgroundDim > 0f) {
             dimPaint.color = Color.argb((config.backgroundDim * 255).toInt().coerceIn(0, 255), 0, 0, 0)
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
@@ -119,9 +119,24 @@ class VisualizerFrameRenderer(
             drawAnimatedBackground(canvas, width, height, frameTimeUs, mood)
         }
 
-        val cx = width / 2f
-        val cy = height * config.visualizerPositionY
+        val cx = width / 2f + width * config.visualizerOffsetX
+        val cy = height * config.visualizerPositionY + height * config.visualizerOffsetY
         val scale = config.visualizerScale.coerceIn(0.4f, 1.6f)
+        val scaleX = config.visualizerScaleX.coerceIn(0.4f, 1.6f)
+        val scaleY = config.visualizerScaleY.coerceIn(0.4f, 1.6f)
+        val rotation = config.visualizerRotation.coerceIn(0f, 360f)
+
+        // Crop/position editor: save state, apply the per-axis scale + offset +
+        // rotation, dispatch the same preset drawing routine, then restore.
+        // Every control in the VISUALIZER CROP & POSITION editor lands here, so
+        // the preview and the exported MP4 both reflect the user's edits.
+        val saved = canvas.save()
+        if (rotation != 0f || scaleX != 1f || scaleY != 1f || config.visualizerOffsetX != 0f || config.visualizerOffsetY != 0f) {
+            canvas.translate(cx, cy)
+            canvas.rotate(rotation)
+            canvas.scale(scaleX, scaleY)
+            canvas.translate(-cx, -cy)
+        }
 
         // Smooth the spectrum once so every preset reacts with natural,
         // jitter-free motion (flagship polish applied library-wide).
@@ -199,6 +214,7 @@ class VisualizerFrameRenderer(
             VideoVisualizerPreset.EQUALIZER_DOTS -> drawMinimal(canvas, width, height, magnitudes, scale, MinimalMode.EQUALIZER)
             VideoVisualizerPreset.TICK_SPECTRUM -> drawMinimal(canvas, width, height, magnitudes, scale, MinimalMode.TICK)
         }
+        canvas.restoreToCount(saved)
 
         if (config.showText) drawText(canvas, width, height)
 
@@ -342,21 +358,43 @@ class VisualizerFrameRenderer(
         fill.clearShadowLayer()
     }
 
-    private fun drawBackground(canvas: Canvas, width: Int, height: Int) {
+    private fun drawBackground(canvas: Canvas, width: Int, height: Int, frameTimeUs: Long) {
         // A gradient background chosen in the ANIMATION BACKGROUNDS section
-        // always wins over the flat style: it is drawn as a multi-stop linear
-        // gradient so selecting a different background genuinely changes the frame.
+        // always wins over the flat style. It is drawn as a SLOWLY ANIMATED
+        // multi-stop linear gradient sweep (angle + stops drift with time) so
+        // selecting a different background genuinely changes the frame AND the
+        // motion — Neon Galaxy, Purple Galaxy, and every other preset animate
+        // with their own colours in both the live preview and the export.
         val grad = config.backgroundGradient
         if (!grad.isNullOrEmpty()) {
+            val t = (frameTimeUs / 1_000_000f) % 12f
             val colors = if (grad.size == 1) intArrayOf(grad[0], grad[0]) else grad.toIntArray()
+            val angle = (t / 12f) * 360f
+            val rad = Math.toRadians(angle.toDouble()).toFloat()
+            val dx = kotlin.math.cos(rad); val dy = kotlin.math.sin(rad)
             val shader = LinearGradient(
-                0f, 0f, width.toFloat(), height.toFloat(),
+                width / 2f - dx * width, height / 2f - dy * height,
+                width / 2f + dx * width, height / 2f + dy * height,
                 colors, null, Shader.TileMode.CLAMP
             )
             overlayPaint.shader = shader
             overlayPaint.alpha = 255
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
             overlayPaint.shader = null
+
+            // Drifting particle field tinted by the chosen gradient so the
+            // ANIMATION BACKGROUNDS presets read as animated, not flat.
+            val count = 40
+            val pr = min(width, height) * 0.006f
+            for (i in 0 until count) {
+                val px = (kotlin.math.sin(t * 0.6f + phaseA[i % phaseA.size]) * 0.5f + 0.5f) * width
+                val py = (kotlin.math.cos(t * 0.5f + phaseB[i % phaseB.size]) * 0.5f + 0.5f) * height
+                val alpha = (0.08f + 0.16f * (kotlin.math.sin(t + phaseA[i % phaseA.size]) * 0.5f + 0.5f))
+                fill.color = withAlpha(colors[i % colors.size], alpha.coerceIn(0f, 0.28f))
+                fill.clearShadowLayer()
+                canvas.drawCircle(px, py, pr * (0.6f + 0.8f * (i % 5) / 5f), fill)
+            }
+            fill.clearShadowLayer()
             return
         }
         when (config.backgroundStyle) {
