@@ -149,7 +149,7 @@ fun QuickAccessRow(onNavigateToYouTube: () -> Unit, onNavigateToFavorites: () ->
 fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
     GlassmorphicCard(onClick = item.onClick, modifier = modifier.height(80.dp).shadow(8.dp, RoundedCornerShape(18.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow), shape = RoundedCornerShape(18.dp), containerColor = NeonGlass) {
         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 16.dp), Alignment.CenterVertically, Arrangement.spacedBy(12.dp)) {
-            Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(NeonPurple.copy(alpha = 0.4f), NeonCyan.copy(alpha = 0.25f))), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(item.icon, fontSize = 20.sp) }
+            Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(brush = Brush.linearGradient(listOf(NeonPurple.copy(alpha = 0.4f), NeonCyan.copy(alpha = 0.25f))), shape = RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(item.icon, fontSize = 20.sp) }
             Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
