@@ -67,6 +67,7 @@ enum class VisualizerPreset(val displayName: String, val category: String, val d
         val EXTREME_SPECTRUM_X = SIDE_BARS
         val LINEAR_BARS = VERTICAL_BARS
         val DUAL_ENDED_BARS = SIDE_BARS
+        val THICK_BARS = BARS_3D
         val PEAK_BARS = PEAK_METER
 
         val RAINBOW_RING = CIRCULAR_RADIAL_BARS
