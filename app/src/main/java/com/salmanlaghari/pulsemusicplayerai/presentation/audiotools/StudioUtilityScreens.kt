@@ -1085,8 +1085,8 @@ fun VideoStudioScreen(
     // Built-in background music (layered UNDER the source audio).
     var bgTrackResName by remember { mutableStateOf<String?>(null) }
     var bgTrackVolume by remember { mutableStateOf(0.35f) }
-    // Pulse logo watermark burned into the exported video (default ON).
-    var watermarkOn by remember { mutableStateOf(true) }
+    // The Pulse logo watermark is now permanently burned into every exported
+    // MP4 — there is no longer a user toggle, so no state is needed here.
     var trimStartMs by remember { mutableStateOf(0L) }
     var trimEndMs by remember { mutableStateOf(0L) }
     var outputFileName by remember { mutableStateOf("Pulse_${type.name}_Video") }
@@ -1143,7 +1143,6 @@ fun VideoStudioScreen(
         themePrimary = selectedTheme?.primary?.value?.toInt(),
         themeSecondary = selectedTheme?.secondary?.value?.toInt(),
         themeTertiary = selectedTheme?.tertiary?.value?.toInt(),
-        watermarkEnabled = watermarkOn,
         outputName = outputFileName
     )
 
@@ -1722,11 +1721,6 @@ fun VideoStudioScreen(
                                 androidx.compose.material3.Switch(checked = glow, onCheckedChange = { glow = it })
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Pulse Watermark", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                androidx.compose.material3.Switch(checked = watermarkOn, onCheckedChange = { watermarkOn = it })
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
                             Text("Visualizer Vertical Position (${(vizPosY * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Slider(value = vizPosY, onValueChange = { vizPosY = it }, valueRange = 0.15f..0.9f, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
                             if (durationMs > 0) {
@@ -1830,19 +1824,10 @@ fun VideoStudioScreen(
                         exoPlayer.pause()
                         isPreviewPlaying = false
                         val exportConfig = config.copy(outputName = outputFileName)
-                        // Watermark logic:
-                        //  - WITHOUT Watermark -> show an ad first, THEN export.
-                        //  - WITH Watermark    -> export directly, NO ad shown.
-                        if (watermarkOn) {
-                            if (sourceUri != null) {
-                                viewModel.exportVisualizerVideo(sourceUri, exportConfig)
-                            }
-                        } else {
-                            AdManager.showInterstitialVideoExport(activity) {
-                                if (sourceUri != null) {
-                                    viewModel.exportVisualizerVideo(sourceUri, exportConfig)
-                                }
-                            }
+                        // The Pulse watermark is now permanently burned into every
+                        // exported MP4 (no toggle), so export directly.
+                        if (sourceUri != null) {
+                            viewModel.exportVisualizerVideo(sourceUri, exportConfig)
                         }
                     }
                 ) {

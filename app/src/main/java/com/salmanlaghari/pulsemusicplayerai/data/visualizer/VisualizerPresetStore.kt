@@ -27,13 +27,21 @@ import kotlinx.coroutines.Job
  *
  * Both are exposed as [Flow]s so the picker Composable recomposes instantly
  * when the user hearted / picked a preset.
+ *
+ * NOTE on ordering: [recentlyUsed] is stored as a single delimiter-joined
+ * string (RECENT_KEY) rather than a [stringSetPreferencesKey]. DataStore Set
+ * collections do NOT guarantee iteration order, so a Set could not reliably
+ * reproduce "newest first". The delimited string preserves insertion order
+ * across process restarts, and [recentlyUsedOrdered] parses it back in that
+ * exact order (capped at [MAX_RECENT]).
  */
 class VisualizerPresetStore(private val context: android.content.Context) {
 
     private companion object {
         private val FAVORITES_KEY = stringSetPreferencesKey("viz_favorites")
-        private val RECENT_KEY = stringSetPreferencesKey("viz_recently_used")
+        private val RECENT_KEY = stringPreferencesKey("viz_recently_used")
         private const val MAX_RECENT = 12
+        private const val RECENT_DELIMITER = "\u0001"
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
@@ -42,10 +50,16 @@ class VisualizerPresetStore(private val context: android.content.Context) {
     val favorites: Flow<Set<String>> = context.dataStore.data.map { it[FAVORITES_KEY] ?: emptySet() }
 
     /** Recently-used preset display names, newest first (capped at [MAX_RECENT]). */
-    val recentlyUsed: Flow<Set<String>> = context.dataStore.data.map { it[RECENT_KEY] ?: emptySet() }
+    val recentlyUsed: Flow<Set<String>> =
+        context.dataStore.data.map { prefs ->
+            prefs[RECENT_KEY]?.split(RECENT_DELIMITER)?.toSet() ?: emptySet()
+        }
 
     /** Ordered, newest-first list of recently used presets (for the Recent row). */
-    val recentlyUsedOrdered: Flow<List<String>> = recentlyUsed.map { it.toList() }
+    val recentlyUsedOrdered: Flow<List<String>> =
+        context.dataStore.data.map { prefs ->
+            prefs[RECENT_KEY]?.split(RECENT_DELIMITER)?.filter { it.isNotBlank() } ?: emptyList()
+        }
 
     private val _favoritesState = MutableStateFlow<Set<String>>(emptySet())
     val favoritesState: Flow<Set<String>> = _favoritesState.asStateFlow()
@@ -73,11 +87,14 @@ class VisualizerPresetStore(private val context: android.content.Context) {
     /** Record that the user just selected [preset] (newest first, capped). */
     suspend fun recordRecent(preset: VisualizerPreset) {
         context.dataStore.edit { prefs ->
-            val current = (prefs[RECENT_KEY] ?: emptySet()).toMutableList()
+            val current = prefs[RECENT_KEY]
+                ?.split(RECENT_DELIMITER)
+                ?.filter { it.isNotBlank() }
+                ?.toMutableList() ?: mutableListOf()
             current.removeAll { it == preset.displayName }
             current.add(0, preset.displayName)
             if (current.size > MAX_RECENT) current.subList(MAX_RECENT, current.size).clear()
-            prefs[RECENT_KEY] = current.toSet()
+            prefs[RECENT_KEY] = current.joinToString(RECENT_DELIMITER)
         }
     }
 }
