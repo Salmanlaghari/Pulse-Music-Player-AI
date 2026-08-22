@@ -805,21 +805,32 @@ fun FullPlayerScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Music Controller Actions Row — rebuilt with explicit dp sizes
+                    // Music Controller Actions Row — responsive, so it never
+                    // overflows on narrow phone screens. Each control gets an
+                    // equal [weight(1f)] slot within the available width; the
+                    // icons inside keep their readable fixed size, and the
+                    // central Play/Pause is the largest primary button. On a
+                    // 320dp phone the row shrinks to fit instead of clipping.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.toggleShuffle()
-                        }) {
+                        // Shuffle — equal-weight slot as Prev/Next.
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.toggleShuffle()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = "Shuffle",
                                 tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                             )
                         }
 
@@ -828,7 +839,9 @@ fun FullPlayerScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToPrevious()
                             },
-                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
@@ -840,6 +853,7 @@ fun FullPlayerScreen(
 
                         Box(
                             modifier = Modifier
+                                .weight(1f)
                                 .size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
                                 .shadow(12.dp, CircleShape)
                                 .clip(CircleShape)
@@ -863,7 +877,9 @@ fun FullPlayerScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.skipToNext()
                             },
-                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
@@ -873,10 +889,16 @@ fun FullPlayerScreen(
                             )
                         }
 
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.toggleRepeatMode()
-                        }) {
+                        // Repeat — equal-weight slot as Prev/Next.
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.toggleRepeatMode()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
+                        ) {
                             val repeatIcon = when (repeatMode) {
                                 Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
                                 else -> Icons.Default.Repeat
@@ -889,7 +911,7 @@ fun FullPlayerScreen(
                                 imageVector = repeatIcon,
                                 contentDescription = "Repeat Settings",
                                 tint = repeatColor,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
                             )
                         }
                     }
