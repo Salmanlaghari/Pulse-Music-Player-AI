@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.salmanlaghari.pulsemusicplayerai.app-mergeReleaseResources-2:/values-v23/values-v23.xml",
+            "map": [
+                {
+                    "source": "/workspace/fabbb288-6c6d-4298-a0e2-93258e85cc1d/sessions/agent_97dccda1-1c14-462b-b480-e2a33e6e577e/gradle-home/caches/8.8/transforms/8e136c83e33c5948fce6812d0c6c0c9b/transformed/work-runtime-2.7.0/res/values-v23/values-v23.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,121",
+                        "endColumns": "65,62",
+                        "endOffsets": "116,179"
+                    }
+                }
+            ]
+        }
+    ]
+}

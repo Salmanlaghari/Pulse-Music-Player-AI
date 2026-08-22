@@ -1,0 +1,20 @@
+HTTP/1.1 200 OK
+Age: 0
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Cache-Control: no-transform,public,max-age=86400
+Cf-Cache-Status: DYNAMIC
+Cf-Ray: a2f08ecbbb4cb755-MIA
+Connection: close
+Content-Disposition: attachment
+Content-Security-Policy: default-src 'none'
+Content-Type: application/octet-stream
+Date: Sat, 22 Aug 2026 08:37:50 GMT
+Etag: W/"2d56d8f-6aa1e4d0"
+Last-Modified: Thu, 11 Jul 2024 21:29:10 GMT
+Server: cloudflare
+Vary: Accept-Encoding,Origin
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Identity-Content-Length: 1328
+X-Xss-Protection: 0
+
