@@ -1223,10 +1223,9 @@ fun VideoStudioScreen(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("MP3 → MP4 Studio", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text("Create Your Music Video", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-            }
+            // NOTE: The "MP3 → MP4 Studio" title was removed — the top of this
+            // screen now shows ONLY the locked video preview, with no text,
+            // no title, and no other objects there.
             IconButton(onClick = { /* TODO: Settings */ }) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
             }
@@ -1660,6 +1659,12 @@ fun VideoStudioScreen(
                 }
 
                 // ---------------- ACTION BUTTONS ----------------
+                // All three buttons share ONE consistent size (48.dp tall, equal
+                // weight) so they line up as a single professional row. Each
+                // button's text is forced onto a single line and centered inside
+                // the button — previously the Preview/Export icons+text overflowed
+                // the 44.dp button and the label rendered below the button face.
+                val actionBtnHeight = 48.dp
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1668,11 +1673,12 @@ fun VideoStudioScreen(
                         onClick = {
                             viewModel.analyzeForPreview(sourceUri, fps)
                         },
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        modifier = Modifier.weight(1f).height(actionBtnHeight),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Text("Apply", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                        Text("Apply", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Button(
                         onClick = {
@@ -1684,24 +1690,30 @@ fun VideoStudioScreen(
                                 isPreviewPlaying = true
                             }
                         },
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        modifier = Modifier.weight(1f).height(actionBtnHeight),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Icon(if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (isPreviewPlaying) "Pause" else "Preview", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                            Icon(if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isPreviewPlaying) "Pause" else "Preview", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     Button(
                         onClick = { showSaveDialog = true },
                         enabled = spectrum != null && !isAnalyzing,
-                        modifier = Modifier.weight(1.2f).height(44.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        modifier = Modifier.weight(1f).height(actionBtnHeight),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Export MP4", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export MP4", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
 
@@ -1733,9 +1745,19 @@ fun VideoStudioScreen(
                         showSaveDialog = false
                         exoPlayer.pause()
                         isPreviewPlaying = false
-                        AdManager.showInterstitialVideoExport(activity) {
+                        val exportConfig = config.copy(outputName = outputFileName)
+                        // Watermark logic:
+                        //  - WITHOUT Watermark -> show an ad first, THEN export.
+                        //  - WITH Watermark    -> export directly, NO ad shown.
+                        if (watermarkOn) {
                             if (sourceUri != null) {
-                                viewModel.exportVisualizerVideo(sourceUri, config.copy(outputName = outputFileName))
+                                viewModel.exportVisualizerVideo(sourceUri, exportConfig)
+                            }
+                        } else {
+                            AdManager.showInterstitialVideoExport(activity) {
+                                if (sourceUri != null) {
+                                    viewModel.exportVisualizerVideo(sourceUri, exportConfig)
+                                }
                             }
                         }
                     }

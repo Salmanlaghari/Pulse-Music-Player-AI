@@ -805,16 +805,23 @@ class YouTubeRepository {
     suspend fun refreshSongAudio(song: YouTubeSong): YouTubeSong = withContext(Dispatchers.IO) {
         val rawId = song.id.removePrefix("js_").removePrefix("dh_")
         if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            // Primary path: resolve a fresh stream URL for the stored JioSaavn id.
             val freshUrl = refreshJioSaavnUrl(rawId)
             if (freshUrl != null) {
                 return@withContext song.copy(audioUrl = freshUrl)
             }
+
             // Fallback: this specific id may have expired or been removed.
             // Re-search by title to obtain a fresh, playable JioSaavn id and
             // resolve its stream URL. This keeps Desi Hits/JioSaavn playback
             // alive even when an individual cached id stops working.
+            //
+            // NOTE: searchJioSaavn returns songs whose audioUrl is often empty
+            // (the mirror serves the URL only via the /song?id= endpoint), so we
+            // must NOT filter on audioUrl.isNotBlank() here — the candidate id
+            // is all we need; the URL is resolved below via refreshJioSaavnUrl.
             try {
-                val candidate = searchJioSaavn(song.title).firstOrNull { it.audioUrl.isNotBlank() }
+                val candidate = searchJioSaavn(song.title).firstOrNull { it.id.isNotBlank() }
                 if (candidate != null) {
                     val candidateRaw = candidate.id.removePrefix("js_")
                     val fallbackUrl = refreshJioSaavnUrl(candidateRaw)
