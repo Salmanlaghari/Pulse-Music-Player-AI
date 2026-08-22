@@ -413,7 +413,7 @@ fun AudioToolsScreen() {
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    items(VideoStudioType.values()) { type ->
+                    items(VideoStudioType.values(), key = { it.name }) { type ->
                         GlassmorphicCard(
                             modifier = Modifier
                                 .fillMaxWidth()

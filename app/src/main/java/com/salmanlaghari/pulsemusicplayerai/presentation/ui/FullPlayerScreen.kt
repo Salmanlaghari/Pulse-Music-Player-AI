@@ -983,12 +983,12 @@ fun FullPlayerScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Categories Horizontal Slider Row
-                        val categories = listOf("All", "Radial", "Bars", "Particles", "Ambient", "Fluid", "Symmetric", "3D")
+                        val categories = remember { listOf("All") + VisualizerPreset.values().map { it.category }.distinct() }
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(categories) { category ->
+                            items(categories, key = { it }) { category ->
                                 val isSelected = selectedCategoryTab == category
                                 Card(
                                     modifier = Modifier
@@ -1018,7 +1018,7 @@ fun FullPlayerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                items(recentlyUsedVisualizers) { preset ->
+                                items(recentlyUsedVisualizers, key = { it.name }) { preset ->
                                     Card(
                                         modifier = Modifier
                                             .height(44.dp)
@@ -1057,7 +1057,7 @@ fun FullPlayerScreen(
                         matchesSearch && matchesCategory
                     }
 
-                    items(filteredPresets) { preset ->
+                    items(filteredPresets, key = { it.name }) { preset ->
                         val isSelected = currentPreset == preset
                         val isFav = favoriteVisualizers.contains(preset)
 
