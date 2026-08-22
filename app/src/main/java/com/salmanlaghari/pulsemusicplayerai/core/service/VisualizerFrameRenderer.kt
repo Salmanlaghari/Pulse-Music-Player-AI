@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundFit
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BackgroundMood
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoEffect
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoVisualizerPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
 import kotlin.math.abs
@@ -50,6 +51,7 @@ class VisualizerFrameRenderer(
     }
     private val dimPaint = Paint()
     private val watermarkPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     // Cached background shader (rebuilt only when the style or frame size changes)
     // so we don't allocate a new Gradient object on every rendered frame.
@@ -200,6 +202,13 @@ class VisualizerFrameRenderer(
 
         if (config.showText) drawText(canvas, width, height)
 
+        // Apply the user-selected VIDEO EFFECT as a distinct overlay on top of
+        // the rendered frame (and the matching live preview). A different effect
+        // genuinely changes the exported video.
+        if (config.effect != VideoEffect.NONE) {
+            applyEffect(canvas, width, height, frameTimeUs)
+        }
+
         if (watermark != null && config.watermarkEnabled) drawWatermark(canvas, width, height, frameTimeUs)
     }
 
@@ -266,13 +275,13 @@ class VisualizerFrameRenderer(
         )
     }
 
-    private fun setFill(color: Int, alpha: Float = 1f, glow: Boolean, glowColor: Int = config.accentColor, glowRadius: Float = 16f) {
+    private fun setFill(color: Int, alpha: Float = 1f, glow: Boolean, glowColor: Int = config.effectiveAccent, glowRadius: Float = 16f) {
         fill.style = Paint.Style.FILL
         fill.color = withAlpha(color, alpha)
         if (glow && config.glow) fill.setShadowLayer(glowRadius, 0f, 0f, glowColor) else fill.clearShadowLayer()
     }
 
-    private fun setStroke(color: Int, alpha: Float = 1f, width: Float, glow: Boolean, glowColor: Int = config.accentColor, glowRadius: Float = 14f) {
+    private fun setStroke(color: Int, alpha: Float = 1f, width: Float, glow: Boolean, glowColor: Int = config.effectiveAccent, glowRadius: Float = 14f) {
         stroke.style = Paint.Style.STROKE
         stroke.color = withAlpha(color, alpha)
         stroke.strokeWidth = width
@@ -280,14 +289,14 @@ class VisualizerFrameRenderer(
     }
 
     private fun barColor(palette: BarsPalette, m: Float, idx: Int, count: Int): Int = when (palette) {
-        BarsPalette.NORMAL -> lerp(config.secondaryColor, config.accentColor, m)
+        BarsPalette.NORMAL -> lerp(config.effectiveSecondary, config.effectiveAccent, m)
         BarsPalette.NEON -> lerp(0xFF00E5FF.toInt(), 0xFFFF00E5.toInt(), m)
         BarsPalette.FLAME -> lerp(0xFFFF2200.toInt(), 0xFFFFE000.toInt(), m)
         BarsPalette.RAINBOW -> hsv(idx.toFloat() / count * 320f, 0.85f, 1f)
-        BarsPalette.GLOW -> withAlpha(config.accentColor, 0.5f + m * 0.5f)
-        BarsPalette.PEAK -> lerp(config.secondaryColor, 0xFFFFFFFF.toInt(), m * 0.6f)
-        BarsPalette.LINEAR -> lerp(config.secondaryColor, config.accentColor, m)
-        BarsPalette.THICK -> withAlpha(config.accentColor, 0.6f + m * 0.4f)
+        BarsPalette.GLOW -> withAlpha(config.effectiveAccent, 0.5f + m * 0.5f)
+        BarsPalette.PEAK -> lerp(config.effectiveSecondary, 0xFFFFFFFF.toInt(), m * 0.6f)
+        BarsPalette.LINEAR -> lerp(config.effectiveSecondary, config.effectiveAccent, m)
+        BarsPalette.THICK -> withAlpha(config.effectiveAccent, 0.6f + m * 0.4f)
     }
 
     /**
@@ -334,6 +343,22 @@ class VisualizerFrameRenderer(
     }
 
     private fun drawBackground(canvas: Canvas, width: Int, height: Int) {
+        // A gradient background chosen in the ANIMATION BACKGROUNDS section
+        // always wins over the flat style: it is drawn as a multi-stop linear
+        // gradient so selecting a different background genuinely changes the frame.
+        val grad = config.backgroundGradient
+        if (!grad.isNullOrEmpty()) {
+            val colors = if (grad.size == 1) intArrayOf(grad[0], grad[0]) else grad.toIntArray()
+            val shader = LinearGradient(
+                0f, 0f, width.toFloat(), height.toFloat(),
+                colors, null, Shader.TileMode.CLAMP
+            )
+            overlayPaint.shader = shader
+            overlayPaint.alpha = 255
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
+            overlayPaint.shader = null
+            return
+        }
         when (config.backgroundStyle) {
             VideoBackgroundStyle.SOLID_BLACK -> canvas.drawColor(Color.BLACK)
             VideoBackgroundStyle.DARK_GRADIENT -> {
@@ -355,7 +380,7 @@ class VisualizerFrameRenderer(
                 if (key != cachedBgKey || cachedBgShader == null) {
                     cachedBgShader = RadialGradient(
                         width / 2f, height / 2f, width.coerceAtLeast(height).toFloat() / 1.4f,
-                        intArrayOf((config.accentColor and 0x00FFFFFF) or 0x55000000, Color.TRANSPARENT),
+                        intArrayOf((config.effectiveAccent and 0x00FFFFFF) or 0x55000000, Color.TRANSPARENT),
                         floatArrayOf(0f, 1f),
                         Shader.TileMode.CLAMP
                     )
@@ -367,6 +392,216 @@ class VisualizerFrameRenderer(
                 fill.shader = null
             }
         }
+    }
+
+    // ===================================================================
+    // VIDEO EFFECTS (overlay post-process applied to the whole frame)
+    // ===================================================================
+
+    /**
+     * Dispatches the user-selected effect. Every branch draws a genuinely
+     * different overlay so the export reacts to the VIDEO EFFECTS selection.
+     */
+    private fun applyEffect(canvas: Canvas, width: Int, height: Int, frameTimeUs: Long) {
+        overlayPaint.alpha = 255
+        overlayPaint.style = Paint.Style.FILL
+        overlayPaint.shader = null
+        overlayPaint.clearShadowLayer()
+        val t = (frameTimeUs / 1_000_000f)
+        when (config.effect) {
+            VideoEffect.NONE -> { /* handled by caller */ }
+            VideoEffect.GLOW -> glowOverlay(canvas, width, height, 0.22f)
+            VideoEffect.BLOOM -> glowOverlay(canvas, width, height, 0.40f)
+            VideoEffect.EQ_GLOW -> glowOverlay(canvas, width, height, 0.30f)
+            VideoEffect.NEON_EDGE -> neonEdgeOverlay(canvas, width, height)
+            VideoEffect.VIGNETTE -> vignetteOverlay(canvas, width, height, 0.55f)
+            VideoEffect.FILM_GRAIN -> filmGrainOverlay(canvas, width, height, t)
+            VideoEffect.MOTION_BLUR -> motionBlurOverlay(canvas, width, height)
+            VideoEffect.RGB_SHIFT -> rgbShiftOverlay(canvas, width, height)
+            VideoEffect.PARTICLES -> particleOverlay(canvas, width, height, t, false)
+            VideoEffect.STARFIELD -> particleOverlay(canvas, width, height, t, true)
+            VideoEffect.SPARKS -> sparksOverlay(canvas, width, height, t)
+            VideoEffect.SMOKE -> smokeOverlay(canvas, width, height, t)
+            VideoEffect.LIGHT_RAYS -> lightRaysOverlay(canvas, width, height, t)
+            VideoEffect.LENS_FLARE -> lensFlareOverlay(canvas, width, height, t)
+        }
+    }
+
+    /** Soft additive bloom/glow pool around the visualiser colour. */
+    private fun glowOverlay(canvas: Canvas, width: Int, height: Int, strength: Float) {
+        val accent = config.effectiveAccent
+        overlayPaint.clearShadowLayer()
+        val rg = RadialGradient(
+            width / 2f, height * config.visualizerPositionY,
+            width.coerceAtLeast(height) * 0.9f,
+            intArrayOf(withAlpha(accent, strength), Color.TRANSPARENT),
+            floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+        )
+        overlayPaint.shader = rg
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
+        overlayPaint.shader = null
+    }
+
+    /** Bright neon edge vignette that frames the frame in the accent colour. */
+    private fun neonEdgeOverlay(canvas: Canvas, width: Int, height: Int) {
+        val accent = config.effectiveAccent
+        val thickness = min(width, height) * 0.10f
+        overlayPaint.style = Paint.Style.STROKE
+        overlayPaint.strokeWidth = thickness
+        overlayPaint.shader = null
+        overlayPaint.color = withAlpha(accent, 0.35f)
+        overlayPaint.setShadowLayer(thickness * 0.6f, 0f, 0f, accent)
+        canvas.drawRect(
+            thickness / 2f, thickness / 2f,
+            width - thickness / 2f, height - thickness / 2f, overlayPaint
+        )
+        overlayPaint.clearShadowLayer()
+        overlayPaint.style = Paint.Style.FILL
+    }
+
+    /** Darken the edges of the frame. */
+    private fun vignetteOverlay(canvas: Canvas, width: Int, height: Int, strength: Float) {
+        val rg = RadialGradient(
+            width / 2f, height / 2f, min(width, height) * 0.35f,
+            intArrayOf(Color.TRANSPARENT, withAlpha(0xFF000000.toInt(), strength)),
+            floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+        )
+        overlayPaint.shader = rg
+        overlayPaint.alpha = 255
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
+        overlayPaint.shader = null
+    }
+
+    /** Deterministic film-grain noise speckle. */
+    private fun filmGrainOverlay(canvas: Canvas, width: Int, height: Int, t: Float) {
+        overlayPaint.shader = null
+        val seed = (t * 24f).toInt()
+        var s = seed * 2654435761L
+        val count = (width * height / 9000).coerceAtLeast(400)
+        for (i in 0 until count) {
+            s = (s * 1103515245L + 12345L) and 0x7fffffffL
+            val x = (s % width)
+            s = (s * 1103515245L + 12345L) and 0x7fffffffL
+            val y = (s % height)
+            s = (s * 1103515245L + 12345L) and 0x7fffffffL
+            val a = ((s % 90) + 20).toInt()
+            overlayPaint.color = (a shl 24) or 0x00FFFFFF
+            canvas.drawPoint(x.toFloat(), y.toFloat(), overlayPaint)
+        }
+    }
+
+    /** Cheap directional motion-blur feel: a faint darkening wash. */
+    private fun motionBlurOverlay(canvas: Canvas, width: Int, height: Int) {
+        overlayPaint.shader = null
+        overlayPaint.color = withAlpha(0xFF05060F.toInt(), 0.18f)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
+    }
+
+    /** Approximate chromatic aberration: offset red/blue translucent washes. */
+    private fun rgbShiftOverlay(canvas: Canvas, width: Int, height: Int) {
+        overlayPaint.shader = null
+        val shift = min(width, height) * 0.012f
+        overlayPaint.color = withAlpha(0xFFFF0000.toInt(), 0.10f)
+        canvas.drawRect(-shift, 0f, width - shift, height.toFloat(), overlayPaint)
+        overlayPaint.color = withAlpha(0xFF0000FF.toInt(), 0.10f)
+        canvas.drawRect(shift, 0f, width + shift, height.toFloat(), overlayPaint)
+    }
+
+    /** Floating particle field (or white starfield when [stars] is true). */
+    private fun particleOverlay(canvas: Canvas, width: Int, height: Int, t: Float, stars: Boolean) {
+        overlayPaint.shader = null
+        overlayPaint.clearShadowLayer()
+        val count = 70
+        val base = if (stars) 0xFFFFFFFF.toInt() else config.effectiveSecondary
+        val pr = min(width, height) * (if (stars) 0.004f else 0.006f)
+        for (i in 0 until count) {
+            val px = (kotlin.math.sin(t * 0.5f + phaseA[i % phaseA.size]) * 0.5f + 0.5f) * width
+            val py = ((kotlin.math.cos(t * 0.4f + phaseB[i % phaseB.size]) * 0.5f + 0.5f) + t * 0.05f) % 1f * height
+            val a = (0.25f + 0.5f * (kotlin.math.sin(t + phaseA[i % phaseA.size]) * 0.5f + 0.5f))
+            overlayPaint.color = withAlpha(base, if (stars) a.coerceIn(0.1f, 0.8f) else a.coerceIn(0.1f, 0.4f))
+            canvas.drawCircle(px, py, pr * (0.6f + 0.8f * (i % 5) / 5f), overlayPaint)
+        }
+    }
+
+    /** Electric spark lines radiating from the centre. */
+    private fun sparksOverlay(canvas: Canvas, width: Int, height: Int, t: Float) {
+        overlayPaint.shader = null
+        overlayPaint.clearShadowLayer()
+        val cx = width / 2f
+        val cy = height * config.visualizerPositionY
+        val n = 14
+        for (i in 0 until n) {
+            val ang = (i.toFloat() / n) * 6.28318f + t * 0.6f
+            val r0 = min(width, height) * 0.10f
+            val r1 = min(width, height) * (0.28f + 0.18f * (kotlin.math.sin(t * 3f + i) * 0.5f + 0.5f))
+            overlayPaint.color = withAlpha(config.effectiveAccent, 0.5f)
+            overlayPaint.strokeWidth = 2f
+            overlayPaint.style = Paint.Style.STROKE
+            canvas.drawLine(
+                cx + kotlin.math.cos(ang) * r0, cy + kotlin.math.sin(ang) * r0,
+                cx + kotlin.math.cos(ang) * r1, cy + kotlin.math.sin(ang) * r1, overlayPaint
+            )
+        }
+        overlayPaint.style = Paint.Style.FILL
+    }
+
+    /** Soft drifting smoke / haze blobs in the secondary colour. */
+    private fun smokeOverlay(canvas: Canvas, width: Int, height: Int, t: Float) {
+        overlayPaint.shader = null
+        overlayPaint.clearShadowLayer()
+        val n = 8
+        for (i in 0 until n) {
+            val cx = (kotlin.math.sin(t * 0.3f + phaseA[i % phaseA.size]) * 0.5f + 0.5f) * width
+            val cy = (kotlin.math.cos(t * 0.25f + phaseB[i % phaseB.size]) * 0.5f + 0.5f) * height
+            val r = min(width, height) * (0.18f + 0.1f * (i % 3))
+            val rg = RadialGradient(cx, cy, r, intArrayOf(withAlpha(config.effectiveSecondary, 0.10f), Color.TRANSPARENT), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP)
+            overlayPaint.shader = rg
+            canvas.drawCircle(cx, cy, r, overlayPaint)
+        }
+        overlayPaint.shader = null
+    }
+
+    /** Rotating volumetric light rays from the centre. */
+    private fun lightRaysOverlay(canvas: Canvas, width: Int, height: Int, t: Float) {
+        overlayPaint.shader = null
+        overlayPaint.clearShadowLayer()
+        val cx = width / 2f
+        val cy = height * config.visualizerPositionY
+        val n = 12
+        val R = min(width, height) * 1.1f
+        for (i in 0 until n) {
+            val ang = (i.toFloat() / n) * 6.28318f + t * 0.25f
+            val half = 0.06f
+            val p1x = cx + kotlin.math.cos(ang - half) * R
+            val p1y = cy + kotlin.math.sin(ang - half) * R
+            val p2x = cx + kotlin.math.cos(ang + half) * R
+            val p2y = cy + kotlin.math.sin(ang + half) * R
+            val tri = android.graphics.Path()
+            tri.moveTo(cx, cy)
+            tri.lineTo(p1x, p1y)
+            tri.lineTo(p2x, p2y)
+            tri.close()
+            overlayPaint.color = withAlpha(config.effectiveAccent, 0.06f)
+            canvas.drawPath(tri, overlayPaint)
+        }
+    }
+
+    /** Bright central flare with a soft halo ring. */
+    private fun lensFlareOverlay(canvas: Canvas, width: Int, height: Int, t: Float) {
+        overlayPaint.shader = null
+        val cx = width * (0.4f + 0.1f * kotlin.math.sin(t * 0.5f))
+        val cy = height * (0.4f + 0.1f * kotlin.math.cos(t * 0.4f))
+        val rg = RadialGradient(cx, cy, min(width, height) * 0.5f,
+            intArrayOf(withAlpha(0xFFFFFFFF.toInt(), 0.35f), withAlpha(config.effectiveAccent, 0.12f), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.2f, 1f), Shader.TileMode.CLAMP)
+        overlayPaint.shader = rg
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlayPaint)
+        overlayPaint.shader = null
+        overlayPaint.style = Paint.Style.STROKE
+        overlayPaint.strokeWidth = 3f
+        overlayPaint.color = withAlpha(0xFFFFFFFF.toInt(), 0.12f)
+        canvas.drawCircle(cx, cy, min(width, height) * 0.12f, overlayPaint)
+        overlayPaint.style = Paint.Style.FILL
     }
 
     // ===================================================================
@@ -451,7 +686,7 @@ class VisualizerFrameRenderer(
                     }
                     canvas.restore()
                 }
-                setFill(config.accentColor, m, glow = true)
+                setFill(config.effectiveAccent, m, glow = true)
                 canvas.drawCircle(width / 2f, posY, barWidth * 1.5f * (0.5f + m), fill)
             }
         }
@@ -468,12 +703,12 @@ class VisualizerFrameRenderer(
         val baseR = width * 0.12f * scale
         when (mode) {
             CircularMode.RING -> {
-                setStroke(config.accentColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true)
                 for (i in 0 until bars) {
                     val angle = (i.toFloat() / bars) * 2f * Math.PI.toFloat()
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val len = baseR + m * width * 0.16f * scale
-                    stroke.color = withAlpha(lerp(config.secondaryColor, config.accentColor, m), 1f)
+                    stroke.color = withAlpha(lerp(config.effectiveSecondary, config.effectiveAccent, m), 1f)
                     canvas.drawLine(
                         cx + cos(angle) * baseR, cy + sin(angle) * baseR,
                         cx + cos(angle) * len, cy + sin(angle) * len, stroke
@@ -481,12 +716,12 @@ class VisualizerFrameRenderer(
                 }
             }
             CircularMode.DOTS -> {
-                setFill(config.accentColor, glow = true)
+                setFill(config.effectiveAccent, glow = true)
                 for (i in 0 until bars) {
                     val angle = (i.toFloat() / bars) * 2f * Math.PI.toFloat()
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val len = baseR + m * width * 0.18f * scale
-                    fill.color = withAlpha(lerp(config.secondaryColor, config.accentColor, m), 1f)
+                    fill.color = withAlpha(lerp(config.effectiveSecondary, config.effectiveAccent, m), 1f)
                     canvas.drawCircle(cx + cos(angle) * len, cy + sin(angle) * len, width * 0.006f * (1f + m * 2f), fill)
                 }
             }
@@ -511,7 +746,7 @@ class VisualizerFrameRenderer(
                     val angle = (i.toFloat() / bars) * 2f * Math.PI.toFloat() + t
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val len = baseR * 1.4f + m * width * 0.22f * scale
-                    setFill(lerp(config.secondaryColor, config.accentColor, m), glow = true)
+                    setFill(lerp(config.effectiveSecondary, config.effectiveAccent, m), glow = true)
                     canvas.drawCircle(cx + cos(angle) * len, cy + sin(angle) * len, width * 0.006f * (1f + m), fill)
                 }
             }
@@ -525,7 +760,7 @@ class VisualizerFrameRenderer(
                         val angle = (a * 2f * Math.PI.toFloat() / arms) + f * 2f * Math.PI.toFloat() * 2f + t
                         val len = baseR * 0.6f + f * width * 0.32f * scale
                         val m = mags[(d * mags.size / dots).coerceIn(0, mags.size - 1)].coerceIn(0f, 1f)
-                        setFill(lerp(config.secondaryColor, config.accentColor, f), m, glow = true)
+                        setFill(lerp(config.effectiveSecondary, config.effectiveAccent, f), m, glow = true)
                         canvas.drawCircle(cx + cos(angle) * len, cy + sin(angle) * len, width * 0.005f * (1f + m), fill)
                     }
                 }
@@ -538,7 +773,7 @@ class VisualizerFrameRenderer(
                     val radiusY = radiusX * tilt * (0.8f + avg(mags, 0, mags.size) * scale)
                     canvas.save()
                     canvas.rotate(r * 30f, cx, cy)
-                    setStroke(if (r % 2 == 0) config.accentColor else config.secondaryColor, 0.8f, width * 0.004f, true)
+                    setStroke(if (r % 2 == 0) config.effectiveAccent else config.effectiveSecondary, 0.8f, width * 0.004f, true)
                     canvas.drawOval(cx - radiusX, cy - radiusY, cx + radiusX, cy + radiusY, stroke)
                     canvas.restore()
                 }
@@ -547,10 +782,10 @@ class VisualizerFrameRenderer(
                 val bass = avg(mags, 0, mags.size / 6).coerceIn(0f, 1f)
                 for (r in 0 until 4) {
                     val radius = baseR * (r + 1) * (1f + bass * 0.4f * scale)
-                    setStroke(config.accentColor, (1f - r * 0.2f), width * 0.006f * (0.6f + bass), true)
+                    setStroke(config.effectiveAccent, (1f - r * 0.2f), width * 0.006f * (0.6f + bass), true)
                     canvas.drawCircle(cx, cy, radius, stroke)
                 }
-                setFill(config.secondaryColor, 1f, glow = true)
+                setFill(config.effectiveSecondary, 1f, glow = true)
                 canvas.drawCircle(cx, cy, baseR * 0.6f * (1f + bass), fill)
             }
             CircularMode.CONCENTRIC -> {
@@ -561,37 +796,37 @@ class VisualizerFrameRenderer(
                     for (i in 0 until count) {
                         val angle = (i.toFloat() / count) * 2f * Math.PI.toFloat()
                         val m = mags[(i * mags.size / count).coerceIn(0, mags.size - 1)].coerceIn(0f, 1f)
-                        setFill(lerp(config.secondaryColor, config.accentColor, m), glow = true)
+                        setFill(lerp(config.effectiveSecondary, config.effectiveAccent, m), glow = true)
                         canvas.drawCircle(cx + cos(angle) * radius, cy + sin(angle) * radius, width * 0.005f * (1f + m), fill)
                     }
                 }
             }
             CircularMode.WHEEL -> {
                 val spokes = 24
-                setStroke(config.accentColor, 1f, width * 0.004f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.004f, true)
                 for (i in 0 until spokes) {
                     val angle = (i.toFloat() / spokes) * 2f * Math.PI.toFloat()
                     val m = mags[i * mags.size / spokes].coerceIn(0f, 1f)
                     val inner = baseR * 0.5f
                     val outer = baseR + m * width * 0.18f * scale
-                    stroke.color = withAlpha(lerp(config.secondaryColor, config.accentColor, m), 1f)
+                    stroke.color = withAlpha(lerp(config.effectiveSecondary, config.effectiveAccent, m), 1f)
                     canvas.drawLine(
                         cx + cos(angle) * inner, cy + sin(angle) * inner,
                         cx + cos(angle) * outer, cy + sin(angle) * outer, stroke
                     )
                 }
-                setStroke(config.accentColor, 0.6f, width * 0.004f, glow = false)
+                setStroke(config.effectiveAccent, 0.6f, width * 0.004f, glow = false)
                 canvas.drawCircle(cx, cy, baseR * 0.5f, stroke)
             }
             CircularMode.TELEMETRY -> {
                 val t = avg(mags, 0, mags.size) * 10f
-                setStroke(config.accentColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true)
                 canvas.drawCircle(cx, cy, baseR * (1f + 0.1f * sin(t)), stroke)
                 for (i in 0 until min(mags.size, 48)) {
                     val angle = (i.toFloat() / min(mags.size, 48)) * 2f * Math.PI.toFloat()
                     val m = mags[i].coerceIn(0f, 1f)
                     val len = baseR * 1.1f + m * width * 0.16f * scale
-                    setFill(lerp(config.secondaryColor, config.accentColor, m), glow = true)
+                    setFill(lerp(config.effectiveSecondary, config.effectiveAccent, m), glow = true)
                     canvas.drawCircle(cx + cos(angle) * len, cy + sin(angle) * len, width * 0.006f, fill)
                 }
             }
@@ -638,26 +873,26 @@ class VisualizerFrameRenderer(
 
         when (mode) {
             WaveMode.SINGLE -> {
-                setStroke(config.accentColor, 1f, width * 0.006f, true, glowRadius = 14f)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true, glowRadius = 14f)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
             }
             WaveMode.DUAL -> {
-                setStroke(config.accentColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
-                setStroke(config.secondaryColor, 0.9f, width * 0.006f, true)
+                setStroke(config.effectiveSecondary, 0.9f, width * 0.006f, true)
                 canvas.drawPath(pathOffset(0f, Math.PI.toFloat(), 1f), stroke)
             }
             WaveMode.MULTI -> {
-                val cols = listOf(config.accentColor, config.secondaryColor, 0xFF00E5FF.toInt(), 0xFFFF00E5.toInt())
+                val cols = listOf(config.effectiveAccent, config.effectiveSecondary, 0xFF00E5FF.toInt(), 0xFFFF00E5.toInt())
                 for (k in cols.indices) {
                     setStroke(cols[k], 0.8f - k * 0.12f, width * 0.004f, true, glowRadius = 10f)
                     canvas.drawPath(pathOffset(0f, k * 1.3f, 0.8f + k * 0.08f), stroke)
                 }
             }
             WaveMode.MIRROR -> {
-                setStroke(config.accentColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
-                setStroke(config.secondaryColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveSecondary, 1f, width * 0.006f, true)
                 val p = Path()
                 for (i in wave.indices) {
                     val x = width - i * step
@@ -673,16 +908,16 @@ class VisualizerFrameRenderer(
                 p.close()
                 fill.shader = LinearGradient(0f, midY - amp, 0f, midY + amp,
                     intArrayOf(
-                        withAlpha(config.accentColor, 0.85f),
-                        withAlpha(lerp(config.accentColor, config.secondaryColor, 0.5f), 0.4f),
-                        withAlpha(config.secondaryColor, 0.08f)
+                        withAlpha(config.effectiveAccent, 0.85f),
+                        withAlpha(lerp(config.effectiveAccent, config.effectiveSecondary, 0.5f), 0.4f),
+                        withAlpha(config.effectiveSecondary, 0.08f)
                     ),
                     floatArrayOf(0f, 0.55f, 1f),
                     Shader.TileMode.CLAMP
                 )
                 canvas.drawPath(p, fill)
                 fill.shader = null
-                setStroke(config.accentColor, 1f, width * 0.005f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.005f, true)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
             }
             WaveMode.RIBBON -> {
@@ -692,14 +927,14 @@ class VisualizerFrameRenderer(
                     val y = midY + sin(i.toFloat() / wave.size * 12.56f + wave[i] * 2f) * amp * 0.8f
                     if (i == 0) p.moveTo(x, y) else p.quadTo(x - step / 2f, y, x, y)
                 }
-                fill.shader = LinearGradient(0f, 0f, width.toFloat(), 0f, config.accentColor, config.secondaryColor, Shader.TileMode.CLAMP)
+                fill.shader = LinearGradient(0f, 0f, width.toFloat(), 0f, config.effectiveAccent, config.effectiveSecondary, Shader.TileMode.CLAMP)
                 fill.alpha = 200
                 canvas.drawPath(p, fill)
                 fill.alpha = 255
                 fill.shader = null
             }
             WaveMode.STEPS -> {
-                setStroke(config.accentColor, 1f, width * 0.008f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.008f, true)
                 for (i in 1 until wave.size) {
                     val x0 = (i - 1) * step
                     val x1 = i * step
@@ -714,21 +949,21 @@ class VisualizerFrameRenderer(
                 p.lineTo(0f, height.toFloat())
                 p.close()
                 fill.shader = LinearGradient(0f, midY - amp, 0f, height.toFloat(),
-                    withAlpha(config.accentColor, 0.6f), withAlpha(config.secondaryColor, 0.05f), Shader.TileMode.CLAMP)
+                    withAlpha(config.effectiveAccent, 0.6f), withAlpha(config.effectiveSecondary, 0.05f), Shader.TileMode.CLAMP)
                 canvas.drawPath(p, fill)
                 fill.shader = null
-                setStroke(config.accentColor, 1f, width * 0.005f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.005f, true)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
             }
             WaveMode.CROSS -> {
-                setStroke(config.accentColor, 1f, width * 0.005f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.005f, true)
                 canvas.drawPath(pathOffset(0f, 0f, 1f), stroke)
-                setStroke(config.secondaryColor, 1f, width * 0.005f, true)
+                setStroke(config.effectiveSecondary, 1f, width * 0.005f, true)
                 canvas.drawPath(pathOffset(0f, Math.PI.toFloat(), -1f), stroke)
             }
             WaveMode.ECHO -> {
                 for (k in 3 downTo 0) {
-                    setStroke(config.accentColor, (0.25f + k * 0.2f), width * 0.005f, k == 0, glowRadius = 10f)
+                    setStroke(config.effectiveAccent, (0.25f + k * 0.2f), width * 0.005f, k == 0, glowRadius = 10f)
                     canvas.drawPath(pathOffset(0f, k * 0.6f, 1f - k * 0.12f), stroke)
                 }
             }
@@ -746,29 +981,29 @@ class VisualizerFrameRenderer(
         val bass = avg(mags, 0, mags.size / 6).coerceIn(0f, 1f)
         when (mode) {
             ParticleMode.BURST -> {
-                setFill(config.accentColor, glow = true)
+                setFill(config.effectiveAccent, glow = true)
                 val count = 48
                 for (i in 0 until count) {
                     val angle = (i.toFloat() / count) * 2f * Math.PI.toFloat() + beat * 2f
                     val dist = width * 0.08f + (0.4f + energy) * width * 0.34f * scale * ((phaseA[i % 64] + beat) % 1f)
                     val x = cx + cos(angle) * dist
                     val y = cy + sin(angle) * dist
-                    fill.color = withAlpha(lerp(config.secondaryColor, config.accentColor, (i.toFloat() / count)), 1f)
+                    fill.color = withAlpha(lerp(config.effectiveSecondary, config.effectiveAccent, (i.toFloat() / count)), 1f)
                     canvas.drawCircle(x, y, width * 0.006f * (1f + energy * 2f), fill)
                 }
             }
             ParticleMode.ORB -> {
                 val orbR = width * 0.12f * (1f + bass * scale)
-                fill.shader = RadialGradient(cx, cy, orbR * 1.6f, withAlpha(config.accentColor, 0.9f), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                fill.shader = RadialGradient(cx, cy, orbR * 1.6f, withAlpha(config.effectiveAccent, 0.9f), Color.TRANSPARENT, Shader.TileMode.CLAMP)
                 canvas.drawCircle(cx, cy, orbR * 1.6f, fill)
                 fill.shader = null
-                setFill(config.secondaryColor, 1f, glow = true)
+                setFill(config.effectiveSecondary, 1f, glow = true)
                 canvas.drawCircle(cx, cy, orbR * (0.6f + bass), fill)
                 val count = 40
                 for (i in 0 until count) {
                     val angle = (i.toFloat() / count) * 2f * Math.PI.toFloat() + beat * 3f
                     val r = orbR * 1.4f + sin(beat * 6f + i) * width * 0.08f * (1f + energy)
-                    setFill(if (i % 3 == 0) config.accentColor else config.secondaryColor, glow = true)
+                    setFill(if (i % 3 == 0) config.effectiveAccent else config.effectiveSecondary, glow = true)
                     canvas.drawCircle(cx + cos(angle) * r, cy + sin(angle) * r, width * 0.005f * (1f + bass), fill)
                 }
             }
@@ -791,7 +1026,7 @@ class VisualizerFrameRenderer(
                     val radius = width * (0.1f + 0.35f * ((phaseB[i % 64] + beat) % 1f)) * scale
                     val x = cx + cos(ang) * radius
                     val y = cy + sin(ang * 1.3f) * radius * 0.7f
-                    setFill(lerp(config.secondaryColor, config.accentColor, (i.toFloat() / count)), 0.8f, glow = true)
+                    setFill(lerp(config.effectiveSecondary, config.effectiveAccent, (i.toFloat() / count)), 0.8f, glow = true)
                     canvas.drawCircle(x, y, width * 0.004f * (1f + energy * 2f), fill)
                 }
             }
@@ -846,7 +1081,7 @@ class VisualizerFrameRenderer(
                     val radius = width * (0.12f + r * 0.1f) * (1f + bass * scale)
                     for (i in 0 until count) {
                         val ang = (i.toFloat() / count) * 6.28f + beat * (2f + r)
-                        setFill(if (i % 2 == 0) config.accentColor else config.secondaryColor,
+                        setFill(if (i % 2 == 0) config.effectiveAccent else config.effectiveSecondary,
                             (0.5f + 0.5f * sin(ang)), glow = true)
                         canvas.drawCircle(cx + cos(ang) * radius, cy + sin(ang) * radius * 0.6f, width * 0.005f, fill)
                     }
@@ -860,7 +1095,7 @@ class VisualizerFrameRenderer(
                         val f = d.toFloat() / dots
                         val ang = (a * 6.28f / arms) + f * 6f + beat * 4f
                         val radius = width * (0.05f + f * 0.4f) * scale
-                        setFill(lerp(config.secondaryColor, config.accentColor, f), 0.9f, glow = true)
+                        setFill(lerp(config.effectiveSecondary, config.effectiveAccent, f), 0.9f, glow = true)
                         canvas.drawCircle(cx + cos(ang) * radius, cy + sin(ang) * radius, width * 0.004f * (1f + f), fill)
                     }
                 }
@@ -894,7 +1129,7 @@ class VisualizerFrameRenderer(
                         if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
                     }
                     p.close()
-                    setStroke(if ((r + c) % 2 == 0) config.accentColor else config.secondaryColor, 0.7f, width * 0.004f, true)
+                    setStroke(if ((r + c) % 2 == 0) config.effectiveAccent else config.effectiveSecondary, 0.7f, width * 0.004f, true)
                     canvas.drawPath(p, stroke)
                 }
             }
@@ -907,11 +1142,11 @@ class VisualizerFrameRenderer(
                     kotlin.Pair(cx + cos(a) * rr, cy + sin(a) * rr)
                 }
                 for (i in pts.indices) for (j in i + 1 until pts.size) {
-                    setStroke(config.accentColor, 0.25f, width * 0.003f, glow = false)
+                    setStroke(config.effectiveAccent, 0.25f, width * 0.003f, glow = false)
                     canvas.drawLine(pts[i].first, pts[i].second, pts[j].first, pts[j].second, stroke)
                 }
                 for (p in pts) {
-                    setFill(config.secondaryColor, 1f, glow = true)
+                    setFill(config.effectiveSecondary, 1f, glow = true)
                     canvas.drawCircle(p.first, p.second, width * 0.01f, fill)
                 }
             }
@@ -927,19 +1162,19 @@ class VisualizerFrameRenderer(
                         moveTo(ix, iy - h); lineTo(ix + s * 1.5f, iy - s * 0.75f - h)
                         lineTo(ix, iy - s * 1.5f - h); lineTo(ix - s * 1.5f, iy - s * 0.75f - h); close()
                     }
-                    setFill(config.accentColor, 0.8f, glow = false)
+                    setFill(config.effectiveAccent, 0.8f, glow = false)
                     canvas.drawPath(top, fill)
                     val left = Path().apply {
                         moveTo(ix - s * 1.5f, iy - s * 0.75f - h); lineTo(ix, iy - h)
                         lineTo(ix, iy); lineTo(ix - s * 1.5f, iy - s * 0.75f); close()
                     }
-                    setFill(config.secondaryColor, 0.6f, glow = false)
+                    setFill(config.effectiveSecondary, 0.6f, glow = false)
                     canvas.drawPath(left, fill)
                     val right = Path().apply {
                         moveTo(ix, iy - h); lineTo(ix + s * 1.5f, iy - s * 0.75f - h)
                         lineTo(ix + s * 1.5f, iy - s * 0.75f); lineTo(ix, iy); close()
                     }
-                    setFill(config.accentColor, 0.45f, glow = false)
+                    setFill(config.effectiveAccent, 0.45f, glow = false)
                     canvas.drawPath(right, fill)
                 }
             }
@@ -955,9 +1190,9 @@ class VisualizerFrameRenderer(
                     val yB = cy - sin(off) * height * 0.22f * scale
                     setStroke(0xFFFFFFFF.toInt(), 0.25f, width * 0.003f, glow = false)
                     canvas.drawLine(nx, yA, nx, yB, stroke)
-                    setFill(config.accentColor, 0.85f, glow = true)
+                    setFill(config.effectiveAccent, 0.85f, glow = true)
                     canvas.drawCircle(nx, yA, width * 0.008f + cos(off) * width * 0.003f, fill)
-                    setFill(config.secondaryColor, 0.85f, glow = true)
+                    setFill(config.effectiveSecondary, 0.85f, glow = true)
                     canvas.drawCircle(nx, yB, width * 0.008f - cos(off) * width * 0.003f, fill)
                 }
             }
@@ -971,9 +1206,9 @@ class VisualizerFrameRenderer(
                     p.moveTo(cx, cy)
                     val w = sin(beat * 2f).coerceIn(0f, 1f) * maxLen
                     p.lineTo(cx + w, cy + sin(beat * 1.5f) * height * 0.1f)
-                    setStroke(config.secondaryColor, 0.7f, width * 0.005f, true)
+                    setStroke(config.effectiveSecondary, 0.7f, width * 0.005f, true)
                     canvas.drawPath(p, stroke)
-                    setFill(config.accentColor, 0.9f, glow = true)
+                    setFill(config.effectiveAccent, 0.9f, glow = true)
                     canvas.drawCircle(cx + w, cy + sin(beat * 1.5f) * height * 0.1f, width * 0.012f, fill)
                     canvas.restore()
                 }
@@ -991,7 +1226,7 @@ class VisualizerFrameRenderer(
                 canvas.drawPath(p, fill)
                 fill.alpha = 255
                 fill.shader = null
-                setStroke(config.accentColor, 1f, width * 0.006f, true)
+                setStroke(config.effectiveAccent, 1f, width * 0.006f, true)
                 canvas.drawPath(p, stroke)
                 for (i in 0..6) {
                     val a = -120f + i * 40f
@@ -1008,7 +1243,7 @@ class VisualizerFrameRenderer(
                     val p = Path().apply {
                         moveTo(cx, cy - sz); lineTo(cx + sz, cy); lineTo(cx, cy + sz); lineTo(cx - sz, cy); close()
                     }
-                    setStroke(if (k % 2 == 0) config.accentColor else config.secondaryColor, 0.8f, width * 0.005f, true)
+                    setStroke(if (k % 2 == 0) config.effectiveAccent else config.effectiveSecondary, 0.8f, width * 0.005f, true)
                     canvas.drawPath(p, stroke)
                 }
             }
@@ -1017,7 +1252,7 @@ class VisualizerFrameRenderer(
                 for (i in 0 until beams) {
                     val ang = (i.toFloat() / beams) * 6.28f + beat * 8f
                     val len = width * (0.6f + energy) * scale
-                    setStroke(if (i % 2 == 0) config.accentColor else config.secondaryColor,
+                    setStroke(if (i % 2 == 0) config.effectiveAccent else config.effectiveSecondary,
                         (0.4f + 0.6f * sin(beat * 5f + i).coerceIn(0f, 1f)), width * 0.004f, true, glowRadius = 18f)
                     canvas.drawLine(cx, cy, cx + cos(ang) * len, cy + sin(ang) * len, stroke)
                 }
@@ -1035,7 +1270,7 @@ class VisualizerFrameRenderer(
                 }
                 canvas.save()
                 canvas.rotate(beat * 30f, cx, cy)
-                setStroke(config.accentColor, 1f, width * 0.007f, true, glowRadius = 16f)
+                setStroke(config.effectiveAccent, 1f, width * 0.007f, true, glowRadius = 16f)
                 canvas.drawPath(p, stroke)
                 canvas.restore()
             }
@@ -1049,7 +1284,7 @@ class VisualizerFrameRenderer(
                         val y = (cy + (l * 2 - 1) * height * 0.12f) + sin(i * 0.4f + beat * 4f + l * 2f) * amp
                         if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
                     }
-                    setStroke(if (l == 0) config.accentColor else config.secondaryColor, 0.9f, width * 0.005f, true)
+                    setStroke(if (l == 0) config.effectiveAccent else config.effectiveSecondary, 0.9f, width * 0.005f, true)
                     canvas.drawPath(p, stroke)
                 }
             }
@@ -1060,7 +1295,7 @@ class VisualizerFrameRenderer(
                     val sz = width * (0.04f + f * 0.45f) * scale
                     canvas.save()
                     canvas.rotate(beat * 30f + i * 12f, cx, cy)
-                    setStroke(lerp(config.secondaryColor, config.accentColor, f), (1f - f) * 0.9f + 0.1f,
+                    setStroke(lerp(config.effectiveSecondary, config.effectiveAccent, f), (1f - f) * 0.9f + 0.1f,
                         width * 0.005f * (0.5f + bass), true)
                     canvas.drawRect(cx - sz, cy - sz, cx + sz, cy + sz, stroke)
                     canvas.restore()
@@ -1083,7 +1318,7 @@ class VisualizerFrameRenderer(
         val posY = (config.visualizerPositionY * height).coerceIn(height * 0.1f, height * 0.9f)
         when (mode) {
             MinimalMode.LINE -> {
-                setStroke(config.accentColor, 1f, width * 0.0025f, glow = false)
+                setStroke(config.effectiveAccent, 1f, width * 0.0025f, glow = false)
                 for (i in 0 until bars) {
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val h = m * height * 0.4f * scale
@@ -1092,7 +1327,7 @@ class VisualizerFrameRenderer(
                 }
             }
             MinimalMode.DOT -> {
-                setFill(config.accentColor, glow = false)
+                setFill(config.effectiveAccent, glow = false)
                 for (i in 0 until bars) {
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val h = m * height * 0.4f * scale
@@ -1102,7 +1337,7 @@ class VisualizerFrameRenderer(
             }
             MinimalMode.PULSE -> {
                 val energy = avg(mags, 0, mags.size).coerceIn(0f, 1f)
-                setStroke(config.accentColor, 1f, width * 0.004f, glow = false)
+                setStroke(config.effectiveAccent, 1f, width * 0.004f, glow = false)
                 val p = Path()
                 for (x in 0..width step 4) {
                     val m = mags[(x * mags.size / width).coerceIn(0, mags.size - 1)].coerceIn(0f, 1f)
@@ -1112,7 +1347,7 @@ class VisualizerFrameRenderer(
                 canvas.drawPath(p, stroke)
             }
             MinimalMode.BARS -> {
-                setFill(config.accentColor, glow = false)
+                setFill(config.effectiveAccent, glow = false)
                 for (i in 0 until bars) {
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val h = m * height * 0.4f * scale
@@ -1121,7 +1356,7 @@ class VisualizerFrameRenderer(
                 }
             }
             MinimalMode.EQUALIZER -> {
-                setFill(config.accentColor, glow = false)
+                setFill(config.effectiveAccent, glow = false)
                 for (i in 0 until bars) {
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val colH = height * 0.45f * scale
@@ -1133,7 +1368,7 @@ class VisualizerFrameRenderer(
                 }
             }
             MinimalMode.TICK -> {
-                setStroke(config.accentColor, 1f, width * 0.002f, glow = false)
+                setStroke(config.effectiveAccent, 1f, width * 0.002f, glow = false)
                 for (i in 0 until bars) {
                     val m = mags[i * mags.size / bars].coerceIn(0f, 1f)
                     val h = m * height * 0.4f * scale
