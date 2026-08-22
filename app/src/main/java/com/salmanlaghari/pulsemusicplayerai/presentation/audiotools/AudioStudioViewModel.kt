@@ -405,7 +405,7 @@ class AudioStudioViewModel(private val context: Context) : ViewModel() {
             }
             for (p in 0 until points) {
                 val t = p.toFloat() / points
-                val s = kotlin.math.sin(t * kotlin.math.PI * 8f + bassPhase) * (0.5f + bass * 0.5f)
+                val s = kotlin.math.sin((t * kotlin.math.PI * 8f + bassPhase).toFloat()) * (0.5f + bass * 0.5f)
                 waves[i][p] = s.coerceIn(-1f, 1f)
             }
         }

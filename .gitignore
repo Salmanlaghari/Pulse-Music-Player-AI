@@ -78,3 +78,6 @@ app/keystore/
 ca-bundle.crt
 ca-system.crt
 ca-cloudflare.crt
+
+# Local Gradle user home (build caches, daemon, downloaded distributions); never commit.
+gradle-home/
