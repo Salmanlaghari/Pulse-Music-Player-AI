@@ -5,6 +5,8 @@ import com.salmanlaghari.pulsemusicplayerai.BuildConfig
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -607,12 +609,16 @@ class YouTubeRepository {
                     }
                     val thumbnail = result.optString("image", "")
                     val durationSec = result.optLong("duration", 0)
+                    val duration = if (durationSec > 0) durationSec else {
+                        val durationStr = result.optString("duration", "0")
+                        parseDurationString(durationStr)
+                    }
                     if (id.isNotBlank()) {
                         songs.add(YouTubeSong(
                             id = "js_$id",
                             title = title,
                             artist = artistName.toString().ifBlank { "Unknown Artist" },
-                            duration = if (durationSec > 0) durationSec else 0,
+                            duration = duration,
                             thumbnailUrl = thumbnail,
                             audioUrl = "" // resolved fresh at playback via the mirror
                         ))
@@ -898,48 +904,29 @@ class YouTubeRepository {
     ): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val allSongs = mutableMapOf<String, YouTubeSong>() // key = JioSaavn ID for dedup
         val totalQueries = SOUTH_ASIAN_QUERIES.size
-        var completed = 0
 
-        Log.d(TAG, "Loading South Asian catalog: $totalQueries queries")
+        Log.d(TAG, "Loading South Asian catalog: $totalQueries queries (parallel)")
 
-        for (query in SOUTH_ASIAN_QUERIES) {
-            // Pace the burst of curated queries so we don't get rate-limited
-            // (HTTP 429) by saavn.sumit.co — a burst was causing the catalog to
-            // come back empty/partial and made Desi Hits appear "broken".
-            if (completed > 0) kotlinx.coroutines.delay(500)
-
-            var results: List<YouTubeSong> = emptyList()
-            repeat(2) { attempt ->
-                try {
-                    results = searchJioSaavn(query)
-                    if (results.isNotEmpty()) return@repeat
-                } catch (e: Exception) {
-                    Log.w(TAG, "Catalog query '$query' attempt $attempt failed: ${e.message}")
-                    if (attempt == 0) kotlinx.coroutines.delay(500)
+        // Run all queries in parallel for fast sync, then deduplicate results.
+        val deferred = SOUTH_ASIAN_QUERIES.map { query ->
+            kotlinx.coroutines.async {
+                runCatching {
+                    searchJioSaavn(query)
+                }.getOrDefault(emptyList()).also { results ->
+                    onProgress?.invoke(SOUTH_ASIAN_QUERIES.size - totalQueries + 1, totalQueries)
                 }
             }
+        }
 
-            for (song in results) {
-                // Deduplicate by the JioSaavn ID part (strip the js_ prefix)
-                val rawId = song.id.removePrefix("js_")
-                if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
-                    // Remap to dh_ prefix so the source badge shows "Desi Hits"
-                    // instead of "JioSaavn". URLs are resolved on-demand at playback
-                    // time via refreshJioSaavnUrl() since CDN URLs expire over time.
-                    allSongs[rawId] = song.copy(
-                        id = "dh_$rawId",
-                        audioUrl = "" // clear cached URL — resolve fresh on play
-                    )
-                }
-            }
+        val results = deferred.awaitAll().flatten()
 
-            completed++
-            onProgress?.invoke(completed, totalQueries)
-
-            // Early exit if we already have 1000+ songs
-            if (allSongs.size >= 1000) {
-                Log.d(TAG, "Catalog reached 1000+ songs, stopping early")
-                break
+        for (song in results) {
+            val rawId = song.id.removePrefix("js_")
+            if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
+                allSongs[rawId] = song.copy(
+                    id = "dh_$rawId",
+                    audioUrl = ""
+                )
             }
         }
 

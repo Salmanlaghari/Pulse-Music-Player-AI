@@ -42,7 +42,6 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.MainViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.audiotools.AudioToolsScreen
 import com.salmanlaghari.pulsemusicplayerai.presentation.home.HomeScreen
-import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayer
 import com.salmanlaghari.pulsemusicplayerai.presentation.library.LibraryScreen
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
@@ -94,8 +93,8 @@ fun AppNavigation(
         BottomNavItem.Settings
     )
 
-    // Only show bottom navigation and mini player on main screens (not splash/sub-screens)
-    // AudioTools is excluded so the studio tools get a full-screen workspace without MiniPlayer.
+    // Only show bottom navigation on main screens (not splash/sub-screens)
+    // AudioTools is excluded so the studio tools get a full-screen workspace.
     val showNavigationAndPlayer = currentRoute in listOf(
         Screen.Home.route,
         Screen.Library.route,
@@ -111,14 +110,8 @@ fun AppNavigation(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-        bottomBar = {
-            if (showNavigationAndPlayer) {
-                Column {
-                    MiniPlayer(
-                        viewModel = musicViewModel,
-                        onExpand = { navController.navigate(Screen.FullPlayer.route) }
-                    )
-
+            bottomBar = {
+                if (showNavigationAndPlayer) {
                     AdMobBanner(
                         adUnitId = AdManager.getBannerHomeId(),
                         modifier = Modifier.fillMaxWidth()

@@ -91,6 +91,7 @@ fun YouTubeScreen(
     val isSouthAsianLoading by viewModel.isSouthAsianLoading.collectAsState()
     val southAsianProgress by viewModel.southAsianProgress.collectAsState()
     val southAsianLoadedAtMs by viewModel.southAsianLoadedAtMs.collectAsState()
+    val hasNewSouthAsianContent by viewModel.hasNewSouthAsianContent.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
     val playLoadingMessage by viewModel.playLoadingMessage.collectAsState()
@@ -674,6 +675,13 @@ fun YouTubeScreen(
                         if (southAsianLoadedAtMs > 0 && !isSouthAsianLoading) {
                             val lastSync = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(southAsianLoadedAtMs))
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (hasNewSouthAsianContent) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(Color.Green, CircleShape)
+                                    )
+                                }
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = null,

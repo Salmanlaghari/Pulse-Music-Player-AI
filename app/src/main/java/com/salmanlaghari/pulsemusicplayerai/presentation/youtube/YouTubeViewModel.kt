@@ -64,8 +64,12 @@ class YouTubeViewModel(
     private val _southAsianLoadedAtMs = MutableStateFlow(0L)
     val southAsianLoadedAtMs: StateFlow<Long> = _southAsianLoadedAtMs.asStateFlow()
 
+    private val _hasNewSouthAsianContent = MutableStateFlow(false)
+    val hasNewSouthAsianContent: StateFlow<Boolean> = _hasNewSouthAsianContent.asStateFlow()
+
     private var southAsianJob: Job? = null
     private var southAsianLoaded = false
+    private var southAsianLastCount = 0
     // Re-sync the Desi Hits catalog if it's older than this (keeps the list fresh
     // without hammering the API on every tab open).
     private val SOUTH_ASIAN_STALE_MS = 15 * 60 * 1000L
@@ -225,14 +229,20 @@ class YouTubeViewModel(
         southAsianJob?.cancel()
         southAsianJob = viewModelScope.launch {
             _isSouthAsianLoading.value = true
+            _hasNewSouthAsianContent.value = false
             try {
                 kotlinx.coroutines.delay(100)
                 val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
                     _southAsianProgress.value = completed to total
                 }
+                val previousCount = _southAsianSongs.value.size
                 _southAsianSongs.value = songs
                 southAsianLoaded = true
                 _southAsianLoadedAtMs.value = System.currentTimeMillis()
+                if (songs.size > previousCount && previousCount > 0) {
+                    _hasNewSouthAsianContent.value = true
+                }
+                southAsianLastCount = songs.size
                 Log.d(TAG, "Loaded ${songs.size} South Asian songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load South Asian catalog", e)
@@ -253,6 +263,7 @@ class YouTubeViewModel(
                 System.currentTimeMillis() - _southAsianLoadedAtMs.value > SOUTH_ASIAN_STALE_MS
         if (_southAsianSongs.value.isEmpty() || stale) {
             Log.d(TAG, "syncSouthAsianCatalog: re-syncing (stale=${stale}, size=${_southAsianSongs.value.size})")
+            _hasNewSouthAsianContent.value = false
             loadSouthAsianCatalog(force = true)
         }
     }
@@ -640,8 +651,10 @@ class YouTubeViewModel(
         // JioSaavn/Desi Hits songs: refresh the URL directly (faster than full search)
         if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
             Log.d(TAG, "resolveAudio: refreshing JioSaavn URL for '${song.title}'")
-            val refreshed = youTubeRepository.refreshSongAudio(song)
-            if (refreshed.hasValidAudio()) {
+            val refreshed = withTimeoutOrNull(8_000) {
+                youTubeRepository.refreshSongAudio(song)
+            }
+            if (refreshed != null && refreshed.hasValidAudio()) {
                 Log.d(TAG, "✓ resolveAudio: JioSaavn URL refreshed for '${song.title}'")
                 return refreshed
             }
@@ -650,21 +663,24 @@ class YouTubeViewModel(
         // For preview-only sources (or empty audio), try to find the full song
         if (isPreviewOnlySource(song.id) || !song.hasValidAudio()) {
             Log.d(TAG, "resolveAudio: resolving full song for '${song.title}' (source: ${song.sourceType})")
+            _playLoadingMessage.value = "Searching music sources..."
             val fullSong = try {
-                youTubeRepository.resolveFullSong(
-                    title = song.title,
-                    artist = song.artist,
-                    originalThumbnail = song.thumbnailUrl
-                )
+                withTimeoutOrNull(20_000) {
+                    youTubeRepository.resolveFullSong(
+                        title = song.title,
+                        artist = song.artist,
+                        originalThumbnail = song.thumbnailUrl
+                    )
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "resolveFullSong failed for ${song.title}: ${e.message}")
                 null
             }
 
             if (fullSong != null && fullSong.hasValidAudio()) {
-                // Keep the original song's display info but use the full stream URL
+                _playLoadingMessage.value = "Playing now"
                 return YouTubeSong(
-                    id = song.id, // keep original ID for UI tracking
+                    id = song.id,
                     title = song.title,
                     artist = song.artist,
                     duration = if (fullSong.duration > 0) fullSong.duration else song.duration,
@@ -683,7 +699,9 @@ class YouTubeViewModel(
 
         // Try to resolve from API (for YouTube/Internet Archive IDs)
         return try {
-            youTubeRepository.getAudioStream(song.id)
+            withTimeoutOrNull(10_000) {
+                youTubeRepository.getAudioStream(song.id)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Audio resolve failed for ${song.title}: ${e.message}")
             null

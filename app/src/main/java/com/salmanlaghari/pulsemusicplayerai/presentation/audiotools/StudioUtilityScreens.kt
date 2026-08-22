@@ -79,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -115,16 +116,99 @@ import kotlin.random.Random
 // ==========================================
 
 enum class StudioVisualizerPreset(val displayName: String, val description: String, val mappedPreset: VisualizerPreset) {
-    NEON_CIRCLE("Neon Circle", "Glowing neon ring pulsing with bass", VisualizerPreset.CIRCULAR_RADIAL_BARS),
-    RADIAL_SPECTRUM("Radial Spectrum", "Circular frequency bars radiating outward", VisualizerPreset.CIRCULAR_RADIAL_BARS),
-    ENERGY_RING("Energy Ring", "High-voltage electric ring with lightning arcs", VisualizerPreset.VORTEX),
-    GALAXY_PULSE("Galaxy Pulse", "Rotating galaxy ring with bass-reactive pulse", VisualizerPreset.GALAXY_SPIN),
-    CYBER_WAVE("Cyber Wave", "Stepped 8-bit digital waveform scanning horizontally", VisualizerPreset.STEP_BARS),
+    // ---------- BARS (15) ----------
     SPECTRUM_BARS("Spectrum Bars", "Classic equalizer bars rising from baseline", VisualizerPreset.VERTICAL_BARS),
-    PARTICLE_RING("Particle Ring", "Particles orbiting centre on elliptical paths", VisualizerPreset.CLOCKWISE_SPIN),
-    INFINITY_WAVE("Infinity Wave", "Overlaid sines drawing a rotating infinity loop", VisualizerPreset.MANDALA_ROTATE),
-    AURORA_PULSE("Aurora Pulse", "Organic aurora waves with reactive glow", VisualizerPreset.AURORA),
-    FUTURE_SPECTRUM("Future Spectrum", "Advanced circular telemetry pulse indicator", VisualizerPreset.EXPANDING_CIRCLES)
+    MIRROR_BARS("Mirror Bars", "Spectrum bars mirrored around the horizontal centre line", VisualizerPreset.MIRROR_BARS),
+    NEON_BARS("Neon Bars", "Vibrant neon bars pulsing from top and bottom baselines", VisualizerPreset.NEON_BARS),
+    FLAME_SPECTRUM("Flame Spectrum", "Rising red-to-yellow bars resembling flames", VisualizerPreset.FLAME_SPECTRUM),
+    INFINITY_BARS("Infinity Bars", "Bars expanding from the centre horizon to both sides", VisualizerPreset.INFINITY_BARS),
+    EXTREME_SPECTRUM_X("Extreme Spectrum X", "Dual-ended spectrum cross expanding on beats", VisualizerPreset.EXTREME_SPECTRUM_X),
+    LINEAR_BARS("Linear Bars", "Clean equalizer bars standing on a bottom baseline", VisualizerPreset.LINEAR_BARS),
+    DUAL_ENDED_BARS("Dual Ended Bars", "Bars growing outward from the centre line", VisualizerPreset.DUAL_ENDED_BARS),
+    RAINBOW_BARS("Rainbow Bars", "Full-spectrum coloured bars on a baseline", VisualizerPreset.RAINBOW_BARS),
+    GLOW_BARS("Glow Bars", "Bottom bars with a heavy neon glow", VisualizerPreset.GLOW_BARS),
+    PEAK_BARS("Peak Bars", "Bottom bars topped with bright peak caps", VisualizerPreset.PEAK_BARS),
+    THICK_BARS("Thick Bars", "Bold thick equalizer bars", VisualizerPreset.THICK_BARS),
+    HORIZONTAL_BARS("Horizontal Bars", "Bars growing outward from the centre line", VisualizerPreset.HORIZONTAL_BARS),
+    CENTERED_BARS("Centered Bars", "Classic equalizer bars rising from a baseline", VisualizerPreset.CENTERED_BARS),
+    SIDE_BARS("Side Bars", "A high-intensity dual-ended spectrum cross expanding on beats", VisualizerPreset.SIDE_BARS),
+
+    // ---------- CIRCULAR (15) ----------
+    CIRCULAR_SPECTRUM("Circular Spectrum", "Spectrum bars radiating outward around a centre ring", VisualizerPreset.CIRCULAR_RADIAL_BARS),
+    RAINBOW_RING("Rainbow Ring", "A full-spectrum ring of dots pulsating radially", VisualizerPreset.RAINBOW_RING),
+    GALAXY_RING("Galaxy Ring", "A rotating ring of particles orbiting on bass drops", VisualizerPreset.GALAXY_SPIN),
+    SPIRAL_GALAXY("Spiral Galaxy", "A multi-arm spiral of glowing cosmic dust", VisualizerPreset.SPIRAL_PULSE),
+    RADIAL_DOTS("Radial Dots", "Dots radiating outward from the centre", VisualizerPreset.RADIAL_WAVE),
+    FUTURE_PULSE("Future Pulse", "An advanced circular telemetry pulse indicator ring", VisualizerPreset.EXPANDING_CIRCLES),
+    ORBITAL_SR("Orbital Ring", "Planetary rings revolving with custom tilt", VisualizerPreset.CLOCKWISE_SPIN),
+    PULSE_RING("Pulse Ring", "A single ring scaling with the acoustic beat", VisualizerPreset.PULSING_CORE),
+    CONCENTRIC_DOTS("Concentric Dots", "Dots arranged in concentric rings", VisualizerPreset.CONCENTRIC),
+    WHEEL_SPECTRUM("Wheel Spectrum", "Spoked wheel of spectrum bars", VisualizerPreset.ROTATING_RINGS),
+    WAVE_BARS("Wave Bars", "A smooth filled waveform area resembling bars", VisualizerPreset.WAVE_BARS),
+    STEP_BARS("Step Bars", "An 8-bit stepped digital waveform", VisualizerPreset.STEP_BARS),
+    BARS_3D("3D Bars", "Bold thick equalizer bars", VisualizerPreset.BARS_3D),
+    STACKED_BARS("Stacked Bars", "Bars expanding from the centre horizon to both sides", VisualizerPreset.STACKED_BARS),
+    BOUNCING_BARS("Bouncing Bars", "Bottom bars topped with bright peak caps", VisualizerPreset.PEAK_BARS),
+    SPECTRUM_FLAT("Spectrum Flat", "Clean equalizer bars standing on a bottom baseline", VisualizerPreset.SPECTRUM_FLAT),
+    PEAK_METER("Peak Meter", "Bottom bars topped with bright peak caps", VisualizerPreset.PEAK_BARS),
+
+    // ---------- WAVE (10) ----------
+    WAVEFORM("Waveform", "The raw audio waveform drawn as a continuous line", VisualizerPreset.WAVEFORM),
+    DUAL_WAVE("Dual Wave", "Two mirrored waveform lines", VisualizerPreset.DUAL_WAVE),
+    MULTI_WAVE("Multi Wave", "Several layered waveform lines", VisualizerPreset.MULTI_WAVE),
+    MIRRORED_WAVE("Mirrored Wave", "Left-to-right perfectly mirrored wave", VisualizerPreset.MIRRORED_WAVE),
+    FILLED_WAVE("Filled Wave", "A waveform filled with colour underneath", VisualizerPreset.FILLED_WAVE),
+    RIBBON_WAVE("Sound Ribbon", "A smooth bezier ribbon weaving across the screen", VisualizerPreset.RIBBON_WAVE),
+    STEP_WAVE("Step Wave", "An 8-bit stepped digital waveform", VisualizerPreset.STEP_WAVE),
+    SMOOTH_WAVE("Smooth Wave", "A smooth filled waveform area", VisualizerPreset.SMOOTH_WAVE),
+    CROSS_WAVE("Cross Wave", "Two crossing waveform lines", VisualizerPreset.CROSS_WAVE),
+    ECHO_WAVE("Echo Wave", "Trailing echo waveform lines", VisualizerPreset.ECHO_WAVE),
+
+    // ---------- PARTICLES (10) ----------
+    PARTICLE_BEAT("Particle Beat", "Particles pushed outward by detected beats", VisualizerPreset.PARTICLE_BEAT),
+    PARTICLE_ORB("Particle Orb", "A central glowing orb surrounded by orbiting particles", VisualizerPreset.PARTICLE_ORB),
+    STARFIELD("Starfield", "Stars moving outward from the centre on audio", VisualizerPreset.STAR_FIELD),
+    QUANTUM_CLOUD("Quantum Cloud", "A cloud of high-velocity subatomic particles", VisualizerPreset.NEBULA_FLOW),
+    FIREWORKS("Fireworks", "Explosive firework bursts on beats", VisualizerPreset.FIREWORKS),
+    METEOR_SHOWER("Meteor Shower", "Diagonal meteor streaks flashing on transients", VisualizerPreset.RAIN_DROPS),
+    SNOWFALL("Snowfall", "Delicate snowflakes drifting on the beat", VisualizerPreset.SNOW_FALL),
+    COLOR_BURST("Color Burst", "Explosive colour particle bursts from centre", VisualizerPreset.SPARKLES),
+    ORBIT_PARTICLES("Orbit Particles", "Particles orbiting the centre on elliptical paths", VisualizerPreset.ORBITING_DOTS),
+    GALAXY_CLOUD("Galaxy Cloud", "A rotating cloud of glowing particles", VisualizerPreset.SMOKE_RINGS),
+
+    // ---------- GEOMETRIC (12) ----------
+    HEXAGON_MESH("Hexagon Mesh", "A structural grid of glowing hexagons", VisualizerPreset.HEXAGON_MESH),
+    CRYSTAL_MESH("Crystal Mesh", "Interconnected glowing crystal nodes", VisualizerPreset.CRYSTAL_MESH),
+    ISOMETRIC_GRID("Isometric Grid", "Cubes in isometric projection scaling with frequency", VisualizerPreset.ISOMETRIC_GRID),
+    DOUBLE_HELIX("Double Helix", "Two intertwined rotating waves forming a helix", VisualizerPreset.DOUBLE_HELIX),
+    KALEIDOSCOPE("Kaleidoscope", "Symmetric vectors mirrored around a rotating origin", VisualizerPreset.KALEIDOSCOPE),
+    PRISM("Prism", "Light refraction vectors splitting into rainbow colours", VisualizerPreset.PRISM),
+    DIAMOND_GLOW("Diamond Glow", "Nested glowing diamonds scaling with beats", VisualizerPreset.DIAMOND_GLOW),
+    LASER_BEAMS("Laser Beams", "Sharp laser rays projecting from the centre", VisualizerPreset.LASER_BEAMS),
+    INFINITY_LOOP("Infinity Loop", "An overlaid rotating infinity loop", VisualizerPreset.MANDALA_ROTATE),
+    FREQUENCY_LINES("Frequency Lines", "Clean overlaid sine-wave indicator bands", VisualizerPreset.FREQUENCY_LINES),
+    TUNNEL_WARP("Tunnel Warp", "Concentric squares zooming outward into a tunnel", VisualizerPreset.TUNNEL_WARP),
+    VORTEX("Vortex", "Concentric squares zooming outward into a tunnel", VisualizerPreset.VORTEX),
+
+    // ---------- MINIMAL (8) ----------
+    LINE_SPECTRUM("Line Spectrum", "Thin spectrum lines on a clean baseline", VisualizerPreset.LINE_SPECTRUM),
+    DOT_SPECTRUM("Dot Spectrum", "Dots rising on a baseline", VisualizerPreset.DOT_SPECTRUM),
+    PULSE_LINE("Pulse Line", "A single horizontal pulse line", VisualizerPreset.PULSE_LINE),
+    MINIMAL_BARS("Minimal Bars", "Thin minimal equalizer bars", VisualizerPreset.MINIMAL_BARS),
+    EQUALIZER_DOTS("Equalizer Dots", "Vertical columns of equializer dots", VisualizerPreset.EQUALIZER_DOTS),
+    TICK_SPECTRUM("Tick Spectrum", "Spectrum drawn as vertical ticks", VisualizerPreset.TICK_SPECTRUM),
+    SOFT_PULSE("Soft Pulse", "A single horizontal pulse line", VisualizerPreset.SOFT_PULSE),
+    BREATHING_GLOW("Breathing Glow", "A single ring scaling with the acoustic beat", VisualizerPreset.BREATHING_GLOW),
+
+    // ---------- AMBIENT (10) ----------
+    GRADIENT_SHIFT("Gradient Shift", "Rich, multi-layered cosmic aurora bands waving slowly", VisualizerPreset.GRADIENT_SHIFT),
+    COLOR_WAVE("Color Wave", "High-frequency plasma lines morphing with high-velocity speed", VisualizerPreset.COLOR_WAVE),
+    SLOW_FADE("Slow Fade", "A smooth filled waveform area", VisualizerPreset.SLOW_FADE),
+    DREAM_FLOW("Dream Flow", "Ambient waves of organic coloured glow mimicking Northern Lights", VisualizerPreset.DREAM_FLOW),
+    CALM_RIPPLE("Calm Ripple", "Concentric water ripples echoing outward with organic damping", VisualizerPreset.CALM_RIPPLE),
+    NIGHT_SKY("Night Sky", "Digital rain columns falling with speed and brightness driven by audio", VisualizerPreset.NIGHT_SKY),
+    AURORA("Aurora", "Ambient waves of organic coloured glow mimicking Northern Lights", VisualizerPreset.AURORA),
+    DEEP_SPACE("Deep Space", "Stars moving outward from the centre on audio", VisualizerPreset.DEEP_SPACE)
 }
 
 data class LiveBackgroundPreset(
@@ -257,11 +341,11 @@ private val STUDIO_COLOR_THEMES = listOf(
 )
 
 private val QUICK_PRESETS = listOf(
-    QuickPreset("cyber_night", "Cyber Night", "Visualizer + Cyber Background + Purple Glow", StudioVisualizerPreset.CYBER_WAVE, LIVE_BACKGROUNDS.find { it.id == "cyber_city" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
-    QuickPreset("galaxy_dream", "Galaxy Dream", "Circular Visualizer + Galaxy + Stars", StudioVisualizerPreset.GALAXY_PULSE, LIVE_BACKGROUNDS.find { it.id == "neon_galaxy" }!!, STUDIO_EFFECTS.find { it.id == "starfield" }!!, STUDIO_COLOR_THEMES.find { it.id == "electric_blue" }!!),
-    QuickPreset("neon_pulse", "Neon Pulse", "Neon Ring + Neon Waves + Glow", StudioVisualizerPreset.NEON_CIRCLE, LIVE_BACKGROUNDS.find { it.id == "neon_waves" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "neon_pink" }!!),
-    QuickPreset("aurora", "Aurora", "Aurora Background + Radial Visualizer", StudioVisualizerPreset.AURORA_PULSE, LIVE_BACKGROUNDS.find { it.id == "aurora" }!!, STUDIO_EFFECTS.find { it.id == "particles" }!!, STUDIO_COLOR_THEMES.find { it.id == "aurora" }!!),
-    QuickPreset("future_energy", "Future Energy", "Energy Ring + Futuristic Background + Light Rays", StudioVisualizerPreset.ENERGY_RING, LIVE_BACKGROUNDS.find { it.id == "futuristic_tunnel" }!!, STUDIO_EFFECTS.find { it.id == "light_rays" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
+    QuickPreset("cyber_night", "Cyber Night", "Visualizer + Cyber Background + Purple Glow", StudioVisualizerPreset.STEP_BARS, LIVE_BACKGROUNDS.find { it.id == "cyber_city" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
+    QuickPreset("galaxy_dream", "Galaxy Dream", "Circular Visualizer + Galaxy + Stars", StudioVisualizerPreset.GALAXY_RING, LIVE_BACKGROUNDS.find { it.id == "neon_galaxy" }!!, STUDIO_EFFECTS.find { it.id == "starfield" }!!, STUDIO_COLOR_THEMES.find { it.id == "electric_blue" }!!),
+    QuickPreset("neon_pulse", "Neon Pulse", "Neon Ring + Neon Waves + Glow", StudioVisualizerPreset.CIRCULAR_SPECTRUM, LIVE_BACKGROUNDS.find { it.id == "neon_waves" }!!, STUDIO_EFFECTS.find { it.id == "glow" }!!, STUDIO_COLOR_THEMES.find { it.id == "neon_pink" }!!),
+    QuickPreset("aurora", "Aurora", "Aurora Background + Radial Visualizer", StudioVisualizerPreset.AURORA, LIVE_BACKGROUNDS.find { it.id == "aurora" }!!, STUDIO_EFFECTS.find { it.id == "particles" }!!, STUDIO_COLOR_THEMES.find { it.id == "aurora" }!!),
+    QuickPreset("future_energy", "Future Energy", "Energy Ring + Futuristic Background + Light Rays", StudioVisualizerPreset.VORTEX, LIVE_BACKGROUNDS.find { it.id == "futuristic_tunnel" }!!, STUDIO_EFFECTS.find { it.id == "light_rays" }!!, STUDIO_COLOR_THEMES.find { it.id == "cyber_purple" }!!),
     QuickPreset("cinema", "Cinema", "Minimal Visualizer + Cinematic Background", StudioVisualizerPreset.SPECTRUM_BARS, LIVE_BACKGROUNDS.find { it.id == "space_tunnel" }!!, STUDIO_EFFECTS.find { it.id == "vignette" }!!, STUDIO_COLOR_THEMES.find { it.id == "midnight" }!!)
 )
 
@@ -411,7 +495,12 @@ private fun BackgroundPreviewCard(
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text("4K", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(
+                        text = preset.resolutionLabel,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             }
             if (selected) {
@@ -649,8 +738,12 @@ private fun QualitySelector(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         VideoResolution.values().forEach { res ->
-            val isLockedPremium = res == VideoResolution.FHD_1080 &&
-                    !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
+            val isLockedPremium = when (res) {
+                VideoResolution.FHD_1080 -> !premiumStore.isUnlocked(PremiumFeature.EXPORT_1080P).collectAsState(initial = false).value
+                VideoResolution.RES_4K -> !premiumStore.isUnlocked(PremiumFeature.EXPORT_4K).collectAsState(initial = false).value
+                VideoResolution.RES_8K -> !premiumStore.isUnlocked(PremiumFeature.EXPORT_8K).collectAsState(initial = false).value
+                else -> false
+            }
             val isSelected = selected == res && !isLockedPremium
             Card(
                 modifier = Modifier
@@ -658,7 +751,19 @@ private fun QualitySelector(
                     .height(40.dp)
                     .clickable {
                         if (isLockedPremium) {
-                            onRequestUnlock(PremiumFeature.EXPORT_1080P, "1080p Export") { onSelect(VideoResolution.FHD_1080) }
+                            val feature = when (res) {
+                                VideoResolution.FHD_1080 -> PremiumFeature.EXPORT_1080P
+                                VideoResolution.RES_4K -> PremiumFeature.EXPORT_4K
+                                VideoResolution.RES_8K -> PremiumFeature.EXPORT_8K
+                                else -> PremiumFeature.EXPORT_1080P
+                            }
+                            val label = when (res) {
+                                VideoResolution.FHD_1080 -> "1080p Export"
+                                VideoResolution.RES_4K -> "4K Export"
+                                VideoResolution.RES_8K -> "8K Export"
+                                else -> "Export"
+                            }
+                            onRequestUnlock(feature, label) { onSelect(res) }
                         } else {
                             onSelect(res)
                         }
@@ -1140,9 +1245,9 @@ fun VideoStudioScreen(
         backgroundTrackVolume = bgTrackVolume,
         backgroundMood = BuiltInBackgroundTracks.resolve(bgTrackResName)?.mood,
         effect = VideoEffect.fromId(selectedEffectId),
-        themePrimary = selectedTheme?.primary?.value?.toInt(),
-        themeSecondary = selectedTheme?.secondary?.value?.toInt(),
-        themeTertiary = selectedTheme?.tertiary?.value?.toInt(),
+        themePrimary = selectedTheme?.primary?.toArgb(),
+        themeSecondary = selectedTheme?.secondary?.toArgb(),
+        themeTertiary = selectedTheme?.tertiary?.toArgb(),
         outputName = outputFileName
     )
 
@@ -1440,13 +1545,14 @@ fun VideoStudioScreen(
                                         preset = bg,
                                         selected = selectedBackgroundId == bg.id,
                                         onClick = {
-                                            // Selecting a preset gradient background
-                                            // applies it to the export (it is carried
-                                            // by config.backgroundGradient) and clears
-                                            // any custom image so the gradient wins.
                                             selectedBackgroundId = bg.id
-                                            bgGradient = bg.gradient.map { it.value.toInt() }
+                                            bgGradient = bg.gradient.map { it.toArgb() }
                                             bgImageUri = null
+                                            when (bg.category) {
+                                                "4K" -> resolution = VideoResolution.RES_4K
+                                                "8K" -> resolution = VideoResolution.RES_8K
+                                                else -> resolution = VideoResolution.HD_720
+                                            }
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     )
