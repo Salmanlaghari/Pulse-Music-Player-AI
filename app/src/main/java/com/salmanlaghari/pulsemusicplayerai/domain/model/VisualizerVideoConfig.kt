@@ -116,6 +116,37 @@ enum class BackgroundFit(val displayName: String) {
 }
 
 /**
+ * Post-processing effects the user can layer on top of the rendered visualizer
+ * during export (and the matching live preview).
+ *
+ * Each id mirrors an [EffectType] in the export UI so the selection the user
+ * makes in the VIDEO EFFECTS section drives a genuinely different look. The
+ * renderer reads [VisualizerVideoConfig.effect] and applies a distinct overlay.
+ */
+enum class VideoEffect(val id: String, val displayName: String) {
+    NONE("none", "None"),
+    GLOW("glow", "Glow"),
+    BLOOM("bloom", "Bloom"),
+    PARTICLES("particles", "Particles"),
+    STARFIELD("starfield", "Starfield"),
+    LIGHT_RAYS("light_rays", "Light Rays"),
+    LENS_FLARE("lens_flare", "Lens Flare"),
+    SMOKE("smoke", "Smoke"),
+    SPARKS("sparks", "Sparks"),
+    EQ_GLOW("eq_glow", "Equalizer Glow"),
+    VIGNETTE("vignette", "Vignette"),
+    FILM_GRAIN("film_grain", "Film Grain"),
+    MOTION_BLUR("motion_blur", "Motion Blur"),
+    RGB_SHIFT("rgb_shift", "RGB Shift"),
+    NEON_EDGE("neon_edge", "Neon Edge");
+
+    companion object {
+        fun fromId(id: String?): VideoEffect =
+            entries.firstOrNull { it.id == id } ?: NONE
+    }
+}
+
+/**
  * The single source of truth for the MP3 -> MP4 export.
  *
  * The exact same instance drives the live preview and the encoder, which is what
@@ -144,8 +175,27 @@ data class VisualizerVideoConfig(
     val backgroundStyle: VideoBackgroundStyle = VideoBackgroundStyle.DARK_GRADIENT,
     /** Dim applied over the background image so overlays stay readable (0f..1f). */
     val backgroundDim: Float = 0.35f,
+    /**
+     * Procedural gradient background chosen from the ANIMATION BACKGROUNDS
+     * section (a list of ARGB colour ints). When set it is drawn by the renderer
+     * instead of the flat [backgroundStyle] fill, so a different background
+     * genuinely changes the exported video. Null keeps the flat style.
+     */
+    val backgroundGradient: List<Int>? = null,
     val accentColor: Int = 0xFFA855F7.toInt(),
     val secondaryColor: Int = 0xFF3B82F6.toInt(),
+    /**
+     * Post-processing effect applied on top of the rendered frame (VIDEO
+     * EFFECTS section). Defaults to [VideoEffect.NONE].
+     */
+    val effect: VideoEffect = VideoEffect.NONE,
+    /**
+     * Colour theme (COLOR THEME section) overriding the visualizer's accent /
+     * secondary colours. Null keeps the default [accentColor]/[secondaryColor].
+     */
+    val themePrimary: Int? = null,
+    val themeSecondary: Int? = null,
+    val themeTertiary: Int? = null,
     /** Scale multiplier applied to the visualizer geometry (0.4f..1.6f). */
     val visualizerScale: Float = 1.0f,
     /** Vertical anchor of the visualizer inside the frame (0f = top, 1f = bottom). */
@@ -202,4 +252,12 @@ data class VisualizerVideoConfig(
             val perPixel = (pixels * fps / 30L)
             return (perPixel / 4L).toInt().coerceIn(2_000_000, 16_000_000)
         }
+
+    /** Effective accent colour after applying the selected colour theme. */
+    val effectiveAccent: Int
+        get() = themePrimary ?: accentColor
+
+    /** Effective secondary colour after applying the selected colour theme. */
+    val effectiveSecondary: Int
+        get() = themeSecondary ?: secondaryColor
 }

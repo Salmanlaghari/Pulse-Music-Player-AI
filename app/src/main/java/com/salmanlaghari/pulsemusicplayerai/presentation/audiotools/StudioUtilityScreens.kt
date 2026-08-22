@@ -94,6 +94,7 @@ import com.salmanlaghari.pulsemusicplayerai.domain.model.CompressionPreset
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ExportedFile
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoAspectRatio
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoBackgroundStyle
+import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoEffect
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VideoResolution
 import com.salmanlaghari.pulsemusicplayerai.domain.model.BuiltInBackgroundTracks
 import com.salmanlaghari.pulsemusicplayerai.domain.model.VisualizerVideoConfig
@@ -1093,6 +1094,7 @@ fun VideoStudioScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<String?>(null) }
 
+    val selectedTheme = STUDIO_COLOR_THEMES.firstOrNull { it.id == selectedThemeId }
     val config = VisualizerVideoConfig(
         preset = preset.toVideoPreset(),
         aspectRatio = aspectRatio,
@@ -1106,6 +1108,7 @@ fun VideoStudioScreen(
         backgroundImageUri = bgImageUri,
         backgroundFit = bgFit,
         backgroundStyle = bgStyle,
+        backgroundGradient = bgGradient,
         backgroundDim = bgDim,
         visualizerScale = vizScale,
         visualizerPositionY = vizPosY,
@@ -1113,6 +1116,10 @@ fun VideoStudioScreen(
         backgroundTrackResName = bgTrackResName,
         backgroundTrackVolume = bgTrackVolume,
         backgroundMood = BuiltInBackgroundTracks.resolve(bgTrackResName)?.mood,
+        effect = VideoEffect.fromId(selectedEffectId),
+        themePrimary = selectedTheme?.primary?.value?.toInt(),
+        themeSecondary = selectedTheme?.secondary?.value?.toInt(),
+        themeTertiary = selectedTheme?.tertiary?.value?.toInt(),
         watermarkEnabled = watermarkOn,
         outputName = outputFileName
     )
@@ -1127,6 +1134,10 @@ fun VideoStudioScreen(
     var expandedAdvanced by remember { mutableStateOf(false) }
     var selectedBgCategory by remember { mutableStateOf("LIVE") }
     var selectedBackgroundId by remember { mutableStateOf<String?>(null) }
+    /** ARGB colour ints of the chosen ANIMATION BACKGROUND gradient (null = none). */
+    var bgGradient by remember { mutableStateOf<List<Int>?>(null) }
+    var selectedEffectId by remember { mutableStateOf<String?>(null) }
+    var selectedThemeId by remember { mutableStateOf<String?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1137,11 +1148,16 @@ fun VideoStudioScreen(
         }
     }
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia(ActivityResultContracts.PickVisualMedia.ImageOnly)
     ) { uri: Uri? ->
         if (uri != null) {
+            // A custom photo from device storage becomes the static background and
+            // takes precedence over any preset gradient (no READ_MEDIA_IMAGES
+            // permission needed — the picker grants scoped URI access).
             bgImageUri = uri.toString()
             bgStyle = VideoBackgroundStyle.DARK_GRADIENT
+            bgGradient = null
+            selectedBackgroundId = null
         }
     }
 
@@ -1401,10 +1417,89 @@ fun VideoStudioScreen(
                                     BackgroundPreviewCard(
                                         preset = bg,
                                         selected = selectedBackgroundId == bg.id,
-                                        onClick = { selectedBackgroundId = bg.id },
+                                        onClick = {
+                                            // Selecting a preset gradient background
+                                            // applies it to the export (it is carried
+                                            // by config.backgroundGradient) and clears
+                                            // any custom image so the gradient wins.
+                                            selectedBackgroundId = bg.id
+                                            bgGradient = bg.gradient.map { it.value.toInt() }
+                                            bgImageUri = null
+                                        },
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
+                            }
+
+                            // ---- Pick Background Image from device storage ----
+                            // Restored feature: opens the Android system image
+                            // picker (ActivityResultContracts.PickVisualMedia) so the
+                            // user can choose any photo as the static background. The
+                            // picked URI is scoped (no READ_MEDIA_IMAGES permission
+                            // required on Android 13+) and applied to the export.
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                "Custom Background",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { imagePickerLauncher.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        if (bgImageUri == null) "Pick Background Image" else "Change Image",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                if (bgImageUri != null) {
+                                    Button(
+                                        onClick = {
+                                            bgImageUri = null
+                                            bgGradient = null
+                                            selectedBackgroundId = null
+                                        },
+                                        modifier = Modifier.height(44.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                                    ) {
+                                        Text("Clear", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                            if (bgImageUri != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Background Fit", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    BackgroundFit.values().forEach { f ->
+                                        val isSel = bgFit == f
+                                        Card(
+                                            modifier = Modifier.weight(1f).height(40.dp).clickable { bgFit = f },
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = CardDefaults.cardColors(containerColor = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text(f.displayName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isSel) Color.White else MaterialTheme.colorScheme.onSurface)
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Background Dim (${(bgDim * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Slider(value = bgDim, onValueChange = { bgDim = it }, valueRange = 0f..0.9f, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary))
                             }
                         }
                     }
@@ -1421,7 +1516,16 @@ fun VideoStudioScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 STUDIO_EFFECTS.forEach { effect ->
-                                    EffectChip(effect = effect, selected = false, onClick = { })
+                                    EffectChip(
+                                        effect = effect,
+                                        selected = selectedEffectId == effect.id,
+                                        onClick = {
+                                            // Toggle the selected effect; only one
+                                            // effect may be active at a time and it is
+                                            // carried to the export via config.effect.
+                                            selectedEffectId = if (selectedEffectId == effect.id) null else effect.id
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -1439,7 +1543,17 @@ fun VideoStudioScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 STUDIO_COLOR_THEMES.forEach { theme ->
-                                    ThemeChip(theme = theme, selected = false, onClick = { })
+                                    ThemeChip(
+                                        theme = theme,
+                                        selected = selectedThemeId == theme.id,
+                                        onClick = {
+                                            // Toggle the colour theme; it overrides the
+                                            // visualizer's accent/secondary colours via
+                                            // config.themePrimary/Secondary and changes
+                                            // the exported video's colour scheme.
+                                            selectedThemeId = if (selectedThemeId == theme.id) null else theme.id
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -1630,81 +1744,9 @@ fun VideoStudioScreen(
         )
     }
 
-    // Centered export progress dialog with semi-transparent overlay
-    if (isProcessing) {
-        val exportStartTime = remember { System.currentTimeMillis() }
-        LaunchedEffect(progress) {
-            if (progress >= 100) {
-                kotlinx.coroutines.delay(500)
-            }
-        }
-        val elapsedSeconds = ((System.currentTimeMillis() - exportStartTime) / 1000).coerceAtLeast(1)
-        val estimatedTotal = if (progress > 0) (elapsedSeconds * 100 / progress) else 0
-        val remainingSeconds = (estimatedTotal - elapsedSeconds).coerceAtLeast(0)
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .padding(24.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "Exporting Video",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        statusMessage,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = progress / 100f,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        if (remainingSeconds > 0 && progress < 100) {
-                            "About $remainingSeconds seconds remaining"
-                        } else if (progress >= 100) {
-                            "Finalizing..."
-                        } else {
-                            "Preparing..."
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { viewModel.cancelActiveOperation() },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
-                    ) {
-                        Text("Cancel Export", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        }
-    }
+    // NOTE: The export progress HUD (single progress indicator + one Cancel
+    // button) is owned by the parent AudioToolsScreen so that this screen does
+    // not render a duplicate, stacked progress box during export.
 }
 
 // --- 2. AUDIO EXTRACTOR SCREEN ---
