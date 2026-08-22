@@ -78,35 +78,16 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val isLoading by musicViewModel.isLoading.collectAsState()
-
-    val bottomNavItems = listOf(
-        BottomNavItem.Home,
-        BottomNavItem.Library,
-        BottomNavItem.YouTube,
-        BottomNavItem.AudioTools,
-        BottomNavItem.Settings
-    )
-
-    val showNavigationAndPlayer = currentRoute in listOf(
-        Screen.Home.route,
-        Screen.Library.route,
-        Screen.YouTube.route,
-        Screen.Settings.route
-    )
+    val bottomNavItems = listOf(BottomNavItem.Home, BottomNavItem.Library, BottomNavItem.YouTube, BottomNavItem.AudioTools, BottomNavItem.Settings)
+    val showNavigationAndPlayer = currentRoute in listOf(Screen.Home.route, Screen.Library.route, Screen.YouTube.route, Screen.Settings.route)
     val showLoadingOverlay = isLoading && currentRoute != Screen.Splash.route
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
                 if (showNavigationAndPlayer) {
-                    AdMobBanner(
-                        adUnitId = AdManager.getBannerHomeId(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    NavigationBar(
-                        containerColor = NeonSurface.copy(alpha = 0.85f),
-                        tonalElevation = 0.dp
-                    ) {
+                    AdMobBanner(adUnitId = AdManager.getBannerHomeId(), modifier = Modifier.fillMaxWidth())
+                    NavigationBar(containerColor = NeonSurface.copy(alpha = 0.85f), tonalElevation = 0.dp) {
                         bottomNavItems.forEach { item ->
                             val selected = currentRoute == item.route
                             NavigationBarItem(
@@ -120,31 +101,11 @@ fun AppNavigation(
                                         }
                                     }
                                 },
-                                icon = {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = item.title,
-                                        tint = if (selected) NeonPurple else NeonTextSecondary
-                                    )
-                                },
+                                icon = { Icon(imageVector = item.icon, contentDescription = item.title, tint = if (selected) NeonPurple else NeonTextSecondary) },
                                 label = {
-                                    Text(
-                                        text = item.title,
-                                        fontSize = 10.5.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
-                                    )
+                                    Text(text = item.title, fontSize = 10.5.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal)
                                 },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = NeonPurple,
-                                    selectedTextColor = NeonPurple,
-                                    unselectedIconColor = NeonTextSecondary,
-                                    unselectedTextColor = NeonTextSecondary,
-                                    indicatorColor = NeonPurple.copy(alpha = 0.15f)
-                                )
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonPurple, selectedTextColor = NeonPurple, unselectedIconColor = NeonTextSecondary, unselectedTextColor = NeonTextSecondary, indicatorColor = NeonPurple.copy(alpha = 0.15f))
                             )
                         }
                     }
@@ -155,78 +116,32 @@ fun AppNavigation(
                 navController = navController,
                 startDestination = Screen.Splash.route,
                 modifier = Modifier.padding(innerPadding),
-                enterTransition = {
-                    slideIntoContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                        animationSpec = tween(400)
-                    ) + fadeIn(animationSpec = tween(400))
-                },
+                enterTransition = { slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Start, animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)) },
                 exitTransition = { fadeOut(animationSpec = tween(250)) },
                 popEnterTransition = { fadeIn(animationSpec = tween(350)) },
-                popExitTransition = {
-                    slideOutOfContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.End,
-                        animationSpec = tween(350)
-                    ) + fadeOut(animationSpec = tween(350))
-                }
+                popExitTransition = { slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.End, animationSpec = tween(350)) + fadeOut(animationSpec = tween(350)) }
             ) {
                 composable(Screen.Splash.route, enterTransition = { fadeIn(animationSpec = tween(600)) }, exitTransition = { fadeOut(animationSpec = tween(300)) }) {
-                    SplashScreen(onNavigateToHome = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
-                        }
-                    })
+                    SplashScreen(onNavigateToHome = { navController.navigate(Screen.Home.route) { popUpTo(Screen.Splash.route) { inclusive = true } } })
                 }
                 composable(Screen.Home.route) {
                     HomeScreen(
                         viewModel = musicViewModel,
                         onNavigateToSearch = { navController.navigate(Screen.Search.route) },
                         onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
-                        onNavigateToYouTube = {
-                            navController.navigate(Screen.YouTube.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        onNavigateToFavorites = {
-                            navController.navigate(Screen.Library.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        onNavigateToLibrary = {
-                            navController.navigate(Screen.Library.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onNavigateToYouTube = { navController.navigate(Screen.YouTube.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
+                        onNavigateToFavorites = { navController.navigate(Screen.Library.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
+                        onNavigateToLibrary = { navController.navigate(Screen.Library.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
                         onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
                     )
                 }
                 composable(Screen.Library.route) { LibraryScreen(viewModel = musicViewModel) }
                 composable(Screen.YouTube.route) {
-                    YouTubeScreen(
-                        viewModel = youTubeViewModel,
-                        onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) },
-                        onNavigateToChannelPlayer = { videoId, title ->
-                            navController.navigate("channel_player/$videoId/${Uri.encode(title)}")
-                        }
-                    )
+                    YouTubeScreen(viewModel = youTubeViewModel, onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }, onNavigateToChannelPlayer = { videoId, title -> navController.navigate("channel_player/$videoId/${Uri.encode(title)}") })
                 }
                 composable(Screen.AudioTools.route) { AudioToolsScreen() }
                 composable(Screen.Settings.route) {
-                    SettingsScreen(
-                        isDarkTheme = isDarkTheme,
-                        onDarkThemeChanged = { enabled -> mainViewModel.setDarkTheme(enabled) },
-                        onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
-                        onNavigateToPrivacy = { navController.navigate(Screen.SettingsPrivacy.route) },
-                        onNavigateToTerms = { navController.navigate(Screen.SettingsTerms.route) },
-                        onNavigateToFeedback = { navController.navigate(Screen.SettingsFeedback.route) },
-                        onNavigateToCrashLog = { navController.navigate(Screen.SettingsCrashLog.route) }
-                    )
+                    SettingsScreen(isDarkTheme = isDarkTheme, onDarkThemeChanged = { mainViewModel.setDarkTheme(it) }, onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) }, onNavigateToPrivacy = { navController.navigate(Screen.SettingsPrivacy.route) }, onNavigateToTerms = { navController.navigate(Screen.SettingsTerms.route) }, onNavigateToFeedback = { navController.navigate(Screen.SettingsFeedback.route) }, onNavigateToCrashLog = { navController.navigate(Screen.SettingsCrashLog.route) })
                 }
                 composable(Screen.SettingsAbout.route) { SettingsAboutScreen(onNavigateBack = { navController.popBackStack() }) }
                 composable(Screen.SettingsPrivacy.route) { SettingsPrivacyScreen(onNavigateBack = { navController.popBackStack() }) }
@@ -234,32 +149,14 @@ fun AppNavigation(
                 composable(Screen.SettingsFeedback.route) { SettingsFeedbackScreen(onNavigateBack = { navController.popBackStack() }) }
                 composable(Screen.SettingsCrashLog.route) { SettingsCrashLogScreen(onNavigateBack = { navController.popBackStack() }) }
                 composable(Screen.FullPlayer.route) {
-                    FullPlayerScreen(
-                        viewModel = musicViewModel,
-                        onNavigateBack = { navController.popBackStack() },
-                        onShowQueue = { navController.navigate(Screen.Queue.route) },
-                        onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
-                    )
+                    FullPlayerScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }, onShowQueue = { navController.navigate(Screen.Queue.route) }, onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) })
                 }
-                composable(
-                    route = Screen.ChannelPlayer.route,
-                    arguments = listOf(
-                        navArgument("videoId") { type = NavType.StringType },
-                        navArgument("title") { type = NavType.StringType }
-                    )
-                ) { backStackEntry ->
+                composable(route = Screen.ChannelPlayer.route, arguments = listOf(navArgument("videoId") { type = NavType.StringType }, navArgument("title") { type = NavType.StringType })) { backStackEntry ->
                     val videoId = backStackEntry.arguments?.getString("videoId") ?: ""
                     val title = backStackEntry.arguments?.getString("title")?.let { Uri.decode(it) } ?: ""
-                    ChannelPlayerScreen(
-                        videoId = videoId,
-                        title = title,
-                        channelName = "A D&E Song Music",
-                        onNavigateBack = { navController.popBackStack() }
-                    )
+                    ChannelPlayerScreen(videoId = videoId, title = title, channelName = "A D&E Song Music", onNavigateBack = { navController.popBackStack() })
                 }
-                composable(Screen.Equalizer.route) {
-                    EqualizerScreen(viewModel = musicViewModel, onNavigateToEqualizer = { navController.popBackStack() })
-                }
+                composable(Screen.Equalizer.route) { EqualizerScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable(Screen.Search.route) { SearchScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable(Screen.Queue.route) { QueueScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
             }
