@@ -46,17 +46,20 @@ object AdManager {
     private const val NATIVE_PLAYLIST_ID = "ca-app-pub-8178045957849630/6837750948"
 
     // Rewarded ad unit for Audio Tools (Watch & Unlock flow).
-    // Uses Google's test ID in DEBUG builds for safe development/testing.
-    // In RELEASE builds, uses the production ID to comply with AdMob policies.
+    //
+    // POLICY: Test ad units (Google's reserved ca-app-pub-3940256099942544
+    // publisher) are DEVELOPMENT-ONLY and must NEVER appear in a Release APK.
+    // This value is a single, hardcoded PRODUCTION unit ID with no DEBUG
+    // branch — there is no code path that can swap in a test ID for a release
+    // build. Real production ads are the only ads that can ever load here.
     private val REWARDED_AUDIO_TOOLS_ID =
-        if (BuildConfig.DEBUG) "ca-app-pub-3940256099942544/5224354917" // Test ID
-        else "ca-app-pub-8178045957849630/2527520554" // Production ID (pluse_rewarded_studio_unlock)
+        "ca-app-pub-8178045957849630/2527520554" // Production ID (pluse_rewarded_studio_unlock)
 
     /**
-     * Release-build safety net for the "test ads in release" policy risk (Issue 1).
+     * Release-build safety net for the "test ads in release" policy risk.
      * Every configured ad unit is checked; if any resolves to Google's reserved
-     * test-publisher ID (ca-app-pub-3940256099942544) we log a loud policy warning
-     * instead of silently serving test ads to real users in a RELEASE build.
+     * test-publisher ID (ca-app-pub-3940256099942544) we refuse to load ads at
+     * all instead of silently serving test ads to real users in a RELEASE build.
      */
     private fun assertNoTestAdUnitsInRelease() {
         if (BuildConfig.DEBUG) return
@@ -71,7 +74,7 @@ object AdManager {
         )
         configured.forEach { id ->
             if (id.startsWith(googleTestPrefix)) {
-                Log.e(TAG, "POLICY RISK: test ad unit detected in RELEASE build: $id")
+                throw IllegalStateException("POLICY RISK: test ad unit detected in RELEASE build: $id")
             }
         }
     }
@@ -457,12 +460,9 @@ object AdManager {
     }
 
     // ═══ REWARDED AD — AUDIO TOOLS "WATCH & UNLOCK" ═══
-    // REWARDED_AUDIO_TOOLS_ID is Google's official TEST rewarded unit
-    // (ca-app-pub-3940256099942544/5224354917). Test units always serve a valid
-    // test ad on a live connection — that is exactly what keeps this flow
-    // reliable in a build we can verify. Before a public production release,
-    // swap it for a real rewarded unit created under pub-8178045957849630 in
-    // the AdMob console (the other 14 units above are already production IDs).
+    // REWARDED_AUDIO_TOOLS_ID is a single, hardcoded PRODUCTION rewarded unit
+    // (pluse_rewarded_studio_unlock). Test ad units are development-only and
+    // are never referenced here, so a Release APK can only ever load real ads.
     private fun loadRewardedAudioTools(
         context: Context,
         onResult: ((RewardedAd?, LoadAdError?) -> Unit)? = null
