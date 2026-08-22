@@ -99,7 +99,9 @@ enum class VideoAspectRatio(val displayName: String, val widthRatio: Int, val he
 enum class VideoResolution(val displayName: String, val shortSide: Int) {
     SD_480("480p", 480),
     HD_720("720p", 720),
-    FHD_1080("1080p", 1080)
+    FHD_1080("1080p", 1080),
+    RES_4K("4K", 2160),
+    RES_8K("8K", 4320)
 }
 
 /** How the background is produced when no image is supplied. */

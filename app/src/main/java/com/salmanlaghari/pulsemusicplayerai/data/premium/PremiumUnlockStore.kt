@@ -12,6 +12,8 @@ object PremiumFeature {
     const val COMPRESSOR = "audio_tools_compressor"
     const val SPEED_PITCH = "audio_tools_speed_pitch"
     const val EXPORT_1080P = "audio_tools_export_1080p"
+    const val EXPORT_4K = "audio_tools_export_4k"
+    const val EXPORT_8K = "audio_tools_export_8k"
 }
 
 /**

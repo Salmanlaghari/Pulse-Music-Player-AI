@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,24 +27,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.salmanlaghari.pulsemusicplayerai.common.PulseBranding
-import com.salmanlaghari.pulsemusicplayerai.presentation.ui.NowPlayingControlSizes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ElectricBolt
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +47,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -93,21 +77,10 @@ fun HomeScreen(
     onNavigateToEqualizer: () -> Unit
 ) {
     val isPermissionGranted by viewModel.isPermissionGranted.collectAsState()
-
     if (!isPermissionGranted) {
-        PermissionScreen(onPermissionResult = { granted ->
-            viewModel.setPermissionGranted(granted)
-        })
+        PermissionScreen(onPermissionResult = { viewModel.setPermissionGranted(it) })
     } else {
-        HomeScreenContent(
-            viewModel = viewModel,
-            onNavigateToSearch = onNavigateToSearch,
-            onNavigateToPlayer = onNavigateToPlayer,
-            onNavigateToYouTube = onNavigateToYouTube,
-            onNavigateToFavorites = onNavigateToFavorites,
-            onNavigateToLibrary = onNavigateToLibrary,
-            onNavigateToEqualizer = onNavigateToEqualizer
-        )
+        HomeScreenContent(viewModel, onNavigateToSearch, onNavigateToPlayer, onNavigateToYouTube, onNavigateToFavorites, onNavigateToLibrary, onNavigateToEqualizer)
     }
 }
 
@@ -123,195 +96,82 @@ fun HomeScreenContent(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val scrollState = rememberScrollState()
     val allSongs by viewModel.allSongs.collectAsState()
     val recentlyAdded by viewModel.recentlyAdded.collectAsState()
     val favoriteSongs by viewModel.favoriteSongs.collectAsState()
     val currentSong by viewModel.currentSong.collectAsState()
-
-    // Dynamic color extraction for background ambience from active song artwork
+    val scrollState = rememberScrollState()
     var accentBgColor by remember { mutableStateOf(CardNavy) }
 
     LaunchedEffect(currentSong) {
         val song = currentSong
-        if (song != null) {
-            val color = withContext(Dispatchers.IO) {
-                val cacheDir = File(context.cacheDir, "artwork_cache")
-                val cacheFile = File(cacheDir, "song_${song.id}.jpg")
-                if (cacheFile.exists() && cacheFile.length() > 0) {
-                    try {
-                        val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-                        val bitmap = BitmapFactory.decodeFile(cacheFile.absolutePath, options)
-                        if (bitmap != null) {
-                            val avg = getAverageColor(bitmap)
-                            bitmap.recycle()
-                            Color(avg)
-                        } else {
-                            generateFallbackColor(song)
-                        }
-                    } catch (e: Exception) {
-                        generateFallbackColor(song)
-                    }
-                } else {
-                    generateFallbackColor(song)
-                }
-            }
-            accentBgColor = color
-        } else {
-            accentBgColor = CardNavy
+        accentBgColor = if (song == null) CardNavy else withContext(Dispatchers.IO) {
+            val file = File(File(context.cacheDir, "artwork_cache"), "song_${song.id}.jpg")
+            if (file.exists() && file.length() > 0) {
+                try {
+                    BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let { bitmap ->
+                        val color = Color(getAverageColor(bitmap))
+                        bitmap.recycle()
+                        color
+                    } ?: generateFallbackColor(song)
+                } catch (_: Exception) { generateFallbackColor(song) }
+            } else generateFallbackColor(song)
         }
     }
+    val animatedAccentBgColor by animateColorAsState(accentBgColor, tween(1000), label = "HomeBgAccent")
 
-    val animatedAccentBgColor by animateColorAsState(
-        targetValue = accentBgColor,
-        animationSpec = tween(1000),
-        label = "HomeBgAccent"
-    )
-
-    // Base background with premium dark neon
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(NeonBackground)
-    ) {
-        // Subtle neon ambient glows
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(NeonPurple.copy(alpha = 0.12f), Color.Transparent),
-                        radius = 900f
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(NeonCyan.copy(alpha = 0.08f), Color.Transparent),
-                        radius = 700f
-                    )
-                )
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(16.dp)
-        ) {
-            // Header: title and search
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+    Box(modifier = Modifier.fillMaxSize().background(NeonBackground)) {
+        Box(modifier = Modifier.fillMaxSize().background(Brush.radialGradient(colors = listOf(NeonPurple.copy(alpha = 0.12f), Color.Transparent), radius = 900f)))
+        Box(modifier = Modifier.fillMaxSize().background(Brush.radialGradient(colors = listOf(NeonCyan.copy(alpha = 0.08f), Color.Transparent), radius = 700f)))
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Pulse",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = (-0.5).sp
-                    )
+                    Text("Pulse", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = (-0.5).sp)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "⚡",
-                        fontSize = 20.sp,
-                        modifier = Modifier.shadow(
-                            elevation = 12.dp,
-                            shape = CircleShape,
-                            clip = false,
-                            ambientColor = CyanGlowSoft,
-                            spotColor = CyanGlow
-                        )
-                    )
+                    Text("⚡", fontSize = 20.sp, modifier = Modifier.shadow(elevation = 12.dp, shape = CircleShape, clip = false, ambientColor = CyanGlowSoft, spotColor = CyanGlow))
                 }
-
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onNavigateToSearch()
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = CyanGlow,
-                        modifier = Modifier.size(24.dp)
-                    )
+                IconButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onNavigateToSearch() }) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = CyanGlow, modifier = Modifier.size(24.dp))
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
-
-            // 1. Premium Welcome Card with 3D Tilt and Shine
             WelcomeCard()
-
             Spacer(modifier = Modifier.height(24.dp))
-
-            // 2. Continue Listening Section (Connected to Playback Engine)
             val songToContinue = currentSong ?: allSongs.firstOrNull()
             if (songToContinue != null) {
                 SectionHeader(title = "Continue Listening", showSeeAll = false) {}
                 Spacer(modifier = Modifier.height(12.dp))
-                ContinueListeningCard(
-                    song = songToContinue,
-                    onClick = { viewModel.playSong(songToContinue) }
-                )
+                ContinueListeningCard(song = songToContinue, onClick = { viewModel.playSong(songToContinue) })
                 Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // Quick Access Grid Section with click triggers mapped correctly
-            SectionHeader(title = "Quick Access", showSeeAll = false) {}
+            SectionHeader(title = "Quick Access", showSeeAll = false)
             Spacer(modifier = Modifier.height(12.dp))
-            QuickAccessRow(
-                onNavigateToYouTube = onNavigateToYouTube,
-                onNavigateToFavorites = onNavigateToFavorites,
-                onNavigateToLibrary = onNavigateToLibrary,
-                onNavigateToEqualizer = onNavigateToEqualizer
-            )
-
+            QuickAccessRow(onNavigateToYouTube, onNavigateToFavorites, onNavigateToLibrary, onNavigateToEqualizer)
             Spacer(modifier = Modifier.height(24.dp))
-
-            // 3. Recently Added list (Functional MediaStore integration)
             if (recentlyAdded.isNotEmpty()) {
                 SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(songs = recentlyAdded, onSongClick = { viewModel.playSong(it, recentlyAdded) })
+                SongHorizontalLazyRow(recentlyAdded) { viewModel.playSong(it, recentlyAdded) }
                 Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // 4. Favorite Songs list (Functional persistent cache)
             if (favoriteSongs.isNotEmpty()) {
                 SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(songs = favoriteSongs, onSongClick = { viewModel.playSong(it, favoriteSongs) })
+                SongHorizontalLazyRow(favoriteSongs) { viewModel.playSong(it, favoriteSongs) }
                 Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // 5. Recently Played (Functional stream load)
             if (allSongs.isNotEmpty()) {
                 SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(songs = allSongs.take(5), onSongClick = { viewModel.playSong(it) })
+                SongHorizontalLazyRow(allSongs.take(5)) { viewModel.playSong(it) }
                 Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // 6. Most Played placeholder
-            if (allSongs.isNotEmpty()) {
                 SectionHeader(title = "Most Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(songs = allSongs.sortedBy { it.title.length }.take(5), onSongClick = { viewModel.playSong(it) })
+                SongHorizontalLazyRow(allSongs.sortedBy { it.title.length }.take(5)) { viewModel.playSong(it) }
                 Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // Pulse branding at the bottom of the home feed
             PulseBranding(modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
-
             Spacer(modifier = Modifier.height(140.dp))
         }
     }
@@ -319,289 +179,78 @@ fun HomeScreenContent(
 
 @Composable
 fun WelcomeCard() {
-    GlassmorphicCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(140.dp)
-            .shadow(
-                elevation = 18.dp,
-                shape = RoundedCornerShape(22.dp),
-                ambientColor = PurplePrimary.copy(alpha = 0.45f),
-                spotColor = CyanGlow
-            ),
-        shape = RoundedCornerShape(22.dp),
-        is3D = true,
-        hasShine = true,
-        backgroundBrush = Brush.linearGradient(
-            colors = listOf(PurplePrimary, CardNavy2, CyanSecondary)
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
+    GlassmorphicCard(modifier = Modifier.fillMaxWidth().height(140.dp).shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = PurplePrimary.copy(alpha = 0.45f), spotColor = CyanGlow), shape = RoundedCornerShape(22.dp), is3D = true, hasShine = true, backgroundBrush = Brush.linearGradient(listOf(PurplePrimary, CardNavy2, CyanSecondary))) {
+        Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.CenterStart) {
             Column {
-                Text(
-                    text = "Welcome to Pulse AI Pro",
-                    color = Color.White,
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                Text("Welcome to Pulse AI Pro", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Your flagship acoustic universe. Discover live spectrum visualizers, professional audio studio workflows, and intuitive music controls.",
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 12.5.sp,
-                    lineHeight = 17.sp
-                )
+                Text("Your flagship acoustic universe. Discover live spectrum visualizers, professional audio studio workflows, and intuitive music controls.", color = Color.White.copy(alpha = 0.92f), fontSize = 12.5.sp, lineHeight = 17.sp)
             }
         }
     }
 }
 
 @Composable
-fun ContinueListeningCard(
-    song: Song,
-    onClick: () -> Unit
-) {
-    GlassmorphicCard(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(20.dp),
-                clip = false,
-                ambientColor = NeonPurpleGlow,
-                spotColor = NeonPurpleGlow
-            ),
-        shape = RoundedCornerShape(20.dp),
-        containerColor = NeonGlass
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                SongArtwork(
-                    song = song,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp)),
-                    iconSize = 28.dp
-                )
-
+fun ContinueListeningCard(song: Song, onClick: () -> Unit) {
+    GlassmorphicCard(onClick = onClick, modifier = Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow), shape = RoundedCornerShape(20.dp), containerColor = NeonGlass) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                SongArtwork(song, Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)), iconSize = 28.dp)
                 Spacer(modifier = Modifier.width(16.dp))
-
                 Column {
-                    Text(
-                        text = song.title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(song.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = "Last listened • ${song.artist}",
-                        fontSize = 12.sp,
-                        color = NeonTextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text("Last listened • ${song.artist}", fontSize = 12.sp, color = NeonTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .shadow(8.dp, RoundedCornerShape(16.dp), ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow)
-                    .background(
-                        brush = Brush.linearGradient(colors = listOf(NeonPurple, NeonPink))
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
+            Box(modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).shadow(8.dp, RoundedCornerShape(16.dp), ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow).background(Brush.linearGradient(listOf(NeonPurple, NeonPink))), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(28.dp))
             }
         }
     }
 }
 
 @Composable
-fun SectionHeader(
-    title: String,
-    showSeeAll: Boolean = true,
-    onSeeAllClick: () -> Unit = {}
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextDim,
-            letterSpacing = 1.8.sp
-        )
-        if (showSeeAll) {
-            Text(
-                text = "See All",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyanGlow,
-                modifier = Modifier.clickable { onSeeAllClick() }
-            )
-        }
+fun SectionHeader(title: String, showSeeAll: Boolean = true, onSeeAllClick: () -> Unit = {}) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextDim, letterSpacing = 1.8.sp)
+        if (showSeeAll) Text("See All", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanGlow, modifier = Modifier.clickable { onSeeAllClick() })
     }
 }
 
-data class QuickAccessItem(
-    val title: String,
-    val icon: String,
-    val onClick: () -> Unit
-)
+data class QuickAccessItem(val title: String, val icon: String, val onClick: () -> Unit)
 
 @Composable
-fun QuickAccessRow(
-    onNavigateToYouTube: () -> Unit,
-    onNavigateToFavorites: () -> Unit,
-    onNavigateToLibrary: () -> Unit,
-    onNavigateToEqualizer: () -> Unit
-) {
-    val items = listOf(
-        QuickAccessItem("YouTube Music", "▶️", onNavigateToYouTube),
-        QuickAccessItem("My Favorites", "🩵", onNavigateToFavorites),
-        QuickAccessItem("Library", "🎧", onNavigateToLibrary),
-        QuickAccessItem("Equalizer", "📊", onNavigateToEqualizer)
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.take(2).forEach { item ->
-            QuickAccessCard(item, modifier = Modifier.weight(1f))
-        }
-    }
+fun QuickAccessRow(onNavigateToYouTube: () -> Unit, onNavigateToFavorites: () -> Unit, onNavigateToLibrary: () -> Unit, onNavigateToEqualizer: () -> Unit) {
+    val items = listOf(QuickAccessItem("YouTube Music", "▶️", onNavigateToYouTube), QuickAccessItem("My Favorites", "🩵", onNavigateToFavorites), QuickAccessItem("Library", "🎧", onNavigateToLibrary), QuickAccessItem("Equalizer", "📊", onNavigateToEqualizer))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) { items.take(2).forEach { QuickAccessCard(it, Modifier.weight(1f)) } }
     Spacer(modifier = Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.takeLast(2).forEach { item ->
-            QuickAccessCard(item, modifier = Modifier.weight(1f))
-        }
-    }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) { items.takeLast(2).forEach { QuickAccessCard(it, Modifier.weight(1f)) } }
 }
 
 @Composable
 fun QuickAccessCard(item: QuickAccessItem, modifier: Modifier = Modifier) {
-    GlassmorphicCard(
-        onClick = item.onClick,
-        modifier = modifier
-            .height(80.dp)
-            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow),
-        shape = RoundedCornerShape(18.dp),
-        containerColor = NeonGlass
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(NeonPurple.copy(alpha = 0.4f), NeonCyan.copy(alpha = 0.25f))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = item.icon,
-                    fontSize = 20.sp
-                )
+    GlassmorphicCard(onClick = item.onClick, modifier = modifier.height(80.dp).shadow(8.dp, RoundedCornerShape(18.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow), shape = RoundedCornerShape(18.dp), containerColor = NeonGlass) {
+        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(brush = Brush.linearGradient(listOf(NeonPurple.copy(alpha = 0.4f), NeonCyan.copy(alpha = 0.25f))), shape = RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                Text(item.icon, fontSize = 20.sp)
             }
-            Text(
-                text = item.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-fun SongHorizontalLazyRow(
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit
-) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(end = 12.dp)
-    ) {
+fun SongHorizontalLazyRow(songs: List<Song>, onSongClick: (Song) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 12.dp)) {
         items(songs, key = { it.id }) { song ->
-            GlassmorphicCard(
-                onClick = { onSongClick(song) },
-                modifier = Modifier
-                    .width(135.dp)
-                    .height(175.dp),
-                shape = RoundedCornerShape(14.dp),
-                containerColor = GlassBg
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    SongArtwork(
-                        song = song,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(84.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        iconSize = 32.dp
-                    )
+            GlassmorphicCard(onClick = { onSongClick(song) }, modifier = Modifier.width(135.dp).height(175.dp), shape = RoundedCornerShape(14.dp), containerColor = GlassBg) {
+                Column(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                    SongArtwork(song, Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(12.dp)), iconSize = 32.dp)
                     Column {
-                        Text(
-                            text = song.title,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(song.title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = song.artist,
-                            fontSize = 11.sp,
-                            color = TextDim,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(song.artist, fontSize = 11.sp, color = TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -609,40 +258,20 @@ fun SongHorizontalLazyRow(
     }
 }
 
-// Custom Glassmorphic and Animated Press/Scale Card
 @Composable
-fun InteractiveCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    containerColor: Color = GlassBg,
-    content: @Composable ColumnScope.() -> Unit
-) {
+fun InteractiveCard(onClick: () -> Unit, modifier: Modifier = Modifier, containerColor: Color = GlassBg, content: @Composable ColumnScope.() -> Unit) {
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.94f else 1f, label = "ScaleTransition")
-
-    GlassmorphicCard(
-        modifier = modifier
-            .scale(scale)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        tryAwaitRelease()
-                        isPressed = false
-                    },
-                    onTap = {
-                        onClick()
-                    }
-                )
-            },
-        shape = RoundedCornerShape(18.dp),
-        containerColor = containerColor
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            content()
-        }
+    GlassmorphicCard(modifier = modifier.scale(scale).pointerInput(Unit) {
+        detectTapGestures(onPress = {
+            isPressed = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            tryAwaitRelease()
+            isPressed = false
+        }, onTap = { onClick() })
+    }, shape = RoundedCornerShape(18.dp), containerColor = containerColor) {
+        Column(modifier = Modifier.fillMaxSize()) { content() }
     }
 }
 
@@ -654,8 +283,7 @@ private fun getAverageColor(bitmap: android.graphics.Bitmap): Int {
     for (y in 0 until bitmap.height step 4) {
         for (x in 0 until bitmap.width step 4) {
             val c = bitmap.getPixel(x, y)
-            val a = android.graphics.Color.alpha(c)
-            if (a > 128) {
+            if (android.graphics.Color.alpha(c) > 128) {
                 redBucket += android.graphics.Color.red(c)
                 greenBucket += android.graphics.Color.green(c)
                 blueBucket += android.graphics.Color.blue(c)
@@ -664,144 +292,10 @@ private fun getAverageColor(bitmap: android.graphics.Bitmap): Int {
         }
     }
     if (pixelCount == 0L) return android.graphics.Color.BLACK
-    return android.graphics.Color.rgb(
-        (redBucket / pixelCount).toInt(),
-        (greenBucket / pixelCount).toInt(),
-        (blueBucket / pixelCount).toInt()
-    )
+    return android.graphics.Color.rgb((redBucket / pixelCount).toInt(), (greenBucket / pixelCount).toInt(), (blueBucket / pixelCount).toInt())
 }
 
 private fun generateFallbackColor(song: Song): Color {
     val hash = (song.title + song.artist).hashCode().absoluteValue
-    val hue = (hash % 360).toFloat()
-    return Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.6f, 0.35f)))
-}
-
-// Float player card styled with premium 3D Glassmorphism and compact size
-@Composable
-fun MiniPlayer(
-    viewModel: MusicViewModel,
-    onExpand: () -> Unit
-) {
-    val currentSong by viewModel.currentSong.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
-
-    val song = currentSong ?: return
-
-    GlassmorphicCard(
-        onClick = onExpand,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(horizontal = 14.dp)
-            .shadow(8.dp, RoundedCornerShape(14.dp), clip = false, ambientColor = NeonPurpleGlow, spotColor = NeonPurpleGlow),
-        shape = RoundedCornerShape(14.dp),
-        containerColor = NeonSurface
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    SongArtwork(
-                        song = song,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        iconSize = 18.dp
-                    )
-
-                    Column {
-                        Text(
-                            text = song.title,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = song.artist,
-                            fontSize = 10.sp,
-                            color = TextDim,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // Rebuilt play controls with explicit sizes matching FullPlayerScreen
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(
-                        onClick = { viewModel.skipToPrevious() },
-                        modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous Song",
-                            tint = Color.White,
-                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.togglePlayPause() },
-                        modifier = Modifier
-                            .size(NowPlayingControlSizes.PLAY_PAUSE_SIZE_DP.dp)
-                            .clip(CircleShape)
-                            .background(PurplePrimary)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play or Pause",
-                            tint = Color.White,
-                            modifier = Modifier.size(NowPlayingControlSizes.PLAY_PAUSE_ICON_DP.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.skipToNext() },
-                        modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_SIZE_DP.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next Song",
-                            tint = Color.White,
-                            modifier = Modifier.size(NowPlayingControlSizes.PREV_NEXT_ICON_DP.dp)
-                        )
-                    }
-                }
-            }
-
-            val progress = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .background(Color(0xFF2A2545))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(PurplePrimary, CyanSecondary)
-                            )
-                        )
-                )
-            }
-        }
-    }
+    return Color(android.graphics.Color.HSVToColor(floatArrayOf((hash % 360).toFloat(), 0.6f, 0.35f)))
 }

@@ -57,5 +57,53 @@ enum class VisualizerPreset(val displayName: String, val category: String, val d
     CALM_RIPPLE("Calm Ripple", "Ambient", "Concentric water ripples echoing outward with organic damping."),
     NIGHT_SKY("Night Sky", "Ambient", "Digital rain columns falling with speed and brightness driven by audio."),
     AURORA("Aurora", "Ambient", "Ambient waves of organic coloured glow mimicking Northern Lights."),
-    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio.")
+    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio.");
+
+    /** Compatibility aliases used by the studio's richer preset catalog. */
+    companion object {
+        val NEON_BARS = GLOW_BARS
+        val FLAME_SPECTRUM = VERTICAL_BARS
+        val INFINITY_BARS = STACKED_BARS
+        val EXTREME_SPECTRUM_X = SIDE_BARS
+        val LINEAR_BARS = VERTICAL_BARS
+        val DUAL_ENDED_BARS = SIDE_BARS
+        val THICK_BARS = BARS_3D
+        val PEAK_BARS = PEAK_METER
+
+        val RAINBOW_RING = CIRCULAR_RADIAL_BARS
+        val GALAXY_RING = GALAXY_SPIN
+        val SPIRAL_GALAXY = SPIRAL_PULSE
+
+        val WAVEFORM = WAVE_BARS
+        val DUAL_WAVE = COLOR_WAVE
+        val MULTI_WAVE = COLOR_WAVE
+        val MIRRORED_WAVE = WAVE_BARS
+        val FILLED_WAVE = DREAM_FLOW
+        val RIBBON_WAVE = DREAM_FLOW
+        val STEP_WAVE = STEP_BARS
+        val SMOOTH_WAVE = DREAM_FLOW
+        val CROSS_WAVE = COLOR_WAVE
+        val ECHO_WAVE = DREAM_FLOW
+
+        val PARTICLE_BEAT = DOTS_PULSE
+        val PARTICLE_ORB = FLYING_PARTICLES
+        val FIREWORKS = CONFETTI
+
+        val HEXAGON_MESH = MANDALA_ROTATE
+        val CRYSTAL_MESH = CONCENTRIC
+        val ISOMETRIC_GRID = STACKED_BARS
+        val KALEIDOSCOPE = MANDALA_ROTATE
+        val PRISM = RAINBOW_BARS
+        val DIAMOND_GLOW = CONCENTRIC
+        val LASER_BEAMS = RADIAL_WAVE
+        val FREQUENCY_LINES = COLOR_WAVE
+        val TUNNEL_WARP = VORTEX
+
+        val LINE_SPECTRUM = DOTS_PULSE
+        val DOT_SPECTRUM = DOTS_PULSE
+        val PULSE_LINE = SOFT_PULSE
+        val MINIMAL_BARS = VERTICAL_BARS
+        val EQUALIZER_DOTS = DOTS_PULSE
+        val TICK_SPECTRUM = DOTS_PULSE
+    }
 }
