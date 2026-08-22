@@ -54,11 +54,7 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > app/keystore/pulse-release.keystore
       - name: Verify release keystore fingerprint
         run: |
-          keytool -list -v \
-            -keystore app/keystore/pulse-release.keystore \
-            -alias "$RELEASE_KEY_ALIAS" \
-            -storepass "$RELEASE_KEYSTORE_PASSWORD" 2>/dev/null \
-            | grep -Ei "Alias name|SHA1|SHA256|MD5|Valid from|until" || true
+          keytool -list -v -keystore app/keystore/pulse-release.keystore -alias "$RELEASE_KEY_ALIAS" -storepass "$RELEASE_KEYSTORE_PASSWORD" 2>/dev/null | grep -Ei "Alias name|SHA1|SHA256|MD5|Valid from|until" || true
       - name: Run Unit Tests
         run: |
           retry() {
@@ -74,7 +70,7 @@ jobs:
             done
           }
           if ! retry bash -o pipefail -c './gradlew testDebugUnitTest --no-daemon --stacktrace --console=plain 2>&1 | tee gradle-test.log'; then
-            summary=$(tail -n 80 gradle-test.log | tr '\n' ' ' | cut -c1-9000)
+            summary=$(grep -E -B 2 -A 5 'e: |error: |FAILURE:|What went wrong' gradle-test.log | head -n 160 | tr '\n' ' ' | cut -c1-9000)
             echo "::error title=Gradle test failure::$summary"
             exit 1
           fi
@@ -93,7 +89,7 @@ jobs:
             done
           }
           if ! retry bash -o pipefail -c './gradlew assembleDebug bundleDebug assembleRelease bundleRelease --no-daemon --stacktrace --console=plain 2>&1 | tee gradle-build.log'; then
-            summary=$(tail -n 80 gradle-build.log | tr '\n' ' ' | cut -c1-9000)
+            summary=$(grep -E -B 2 -A 5 'e: |error: |FAILURE:|What went wrong' gradle-build.log | head -n 160 | tr '\n' ' ' | cut -c1-9000)
             echo "::error title=Gradle build failure::$summary"
             exit 1
           fi
