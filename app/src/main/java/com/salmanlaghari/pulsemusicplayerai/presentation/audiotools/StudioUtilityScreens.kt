@@ -1455,7 +1455,7 @@ fun VideoStudioScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(
-                                    onClick = { imagePickerLauncher.launch("image/"*") },
+                                    onClick = { imagePickerLauncher.launch("image/*") },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
