@@ -597,7 +597,7 @@ class YouTubeViewModel(
     private suspend fun playSongInternal(song: YouTubeSong, queue: List<YouTubeSong>): Boolean {
         AdManager.incrementSongChangeCount()
 
-        Log.d(TAG, "Attempting to play: ${song.title}")
+        Log.d(TAG, "Attempting to play: ${song.title} id=${song.id} audioValid=${song.hasValidAudio()}")
 
         // FAST PATH: if the selected song already has a valid, playable audio URL
         if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
@@ -609,12 +609,15 @@ class YouTubeViewModel(
             val refreshedSong = when {
                 song.id.startsWith("js_") || song.id.startsWith("dh_") -> {
                     _playLoadingMessage.value = "Refreshing stream..."
+                    Log.d(TAG, "Fast path: refreshing JioSaavn stream for ${song.title}")
                     val fresh = youTubeRepository.refreshSongAudio(song)
+                    Log.d(TAG, "Fast path: refresh result audioValid=${fresh.hasValidAudio()} for ${song.title}")
                     if (fresh.hasValidAudio()) fresh else song
                 }
                 song.id.startsWith("sc_") -> {
                     _playLoadingMessage.value = "Resolving SoundCloud stream..."
                     val streamUrl = youTubeRepository.refreshSoundCloudUrl(song.audioUrl)
+                    Log.d(TAG, "Fast path: SoundCloud resolved streamUrl=${streamUrl != null} for ${song.title}")
                     if (!streamUrl.isNullOrBlank()) song.copy(audioUrl = streamUrl) else song
                 }
                 else -> song
@@ -628,6 +631,7 @@ class YouTubeViewModel(
                 } catch (t: Exception) { }
                 return false
             }
+            Log.d(TAG, "Fast path: converted to Song uri=${songAsLocal.uri} for ${refreshedSong.title}")
             val initialQueue = mutableListOf(songAsLocal)
             playbackConnectionManager.playSong(songAsLocal, initialQueue)
             Log.d(TAG, "✓ Playing (fast path): ${refreshedSong.title}")
@@ -641,7 +645,9 @@ class YouTubeViewModel(
 
         // JioSaavn/Desi Hits: fast refresh
         if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            Log.d(TAG, "Slow path: refreshing JioSaavn stream for ${song.title}")
             val refreshed = youTubeRepository.refreshSongAudio(song)
+            Log.d(TAG, "Slow path: refresh result audioValid=${refreshed.hasValidAudio()} for ${song.title}")
             if (refreshed.hasValidAudio()) {
                 _currentlyPlaying.value = refreshed
                 playbackConnectionManager.setYouTubeSongsReference(queue)
@@ -652,6 +658,7 @@ class YouTubeViewModel(
                 resolveQueueInBackground(refreshed, queue, songAsLocal)
                 return true
             }
+            Log.w(TAG, "Slow path: JioSaavn refresh failed for ${song.title} — continuing to resolveAudio")
         }
 
         // SoundCloud: resolve the transcoding endpoint into a playable stream url

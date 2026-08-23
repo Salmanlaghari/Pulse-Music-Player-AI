@@ -673,14 +673,16 @@ class YouTubeRepository {
     // BOTH shapes here so song resolution (and therefore JioSaavn/Desi Hits
     // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
-        val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
-        if (primary != null) {
-            Log.d(TAG, "JioSaavn details PRIMARY OK for '$songId'")
-            return@withContext primary
+        repeat(3) { attempt ->
+            val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
+            if (primary != null) {
+                Log.d(TAG, "JioSaavn details PRIMARY OK for '$songId' (attempt ${attempt + 1})")
+                return@withContext primary
+            }
+            Log.w(TAG, "JioSaavn details PRIMARY failed for '$songId' (attempt ${attempt + 1}/3)")
+            if (attempt < 2) kotlinx.coroutines.delay(500L * (attempt + 1))
         }
-        // Primary endpoint down (saavn.sumit.co error 1027) — try the mirror,
-        // which serves a directly-playable media_url for the same song id.
-        Log.w(TAG, "JioSaavn details PRIMARY failed for '$songId' — trying mirror")
+        Log.w(TAG, "JioSaavn details PRIMARY FAILED for '$songId' after 3 attempts — trying mirror")
         return@withContext getJioSaavnSongDetailsMirrorRetry(songId)
     }
 
@@ -705,36 +707,42 @@ class YouTubeRepository {
     private suspend fun getJioSaavnSongDetailsPrimary(songId: String): JSONObject? {
         try {
             val url = "$JIOSAAVN_API/songs/$songId"
+            Log.d(TAG, "getJioSaavnSongDetailsPrimary: requesting $url")
             val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
             if (response.isNotBlank()) {
+                Log.d(TAG, "getJioSaavnSongDetailsPrimary: response length=${response.length} for $songId")
                 val json = JSONObject(response)
-
-                // Case 1: data is an ARRAY -> take the first song object
                 val dataArr = json.optJSONArray("data")
                 if (dataArr != null && dataArr.length() > 0) {
                     val first = dataArr.optJSONObject(0)
-                    if (first != null) return first
+                    if (first != null) {
+                        Log.d(TAG, "getJioSaavnSongDetailsPrimary: got data array item for $songId")
+                        return first
+                    }
                 }
-
-                // Case 2: data is an OBJECT (older format)
                 val dataObj = json.optJSONObject("data")
                 if (dataObj != null) {
-                    // Some responses nest results inside data.results / data.songs
                     val nested = dataObj.optJSONArray("results")
                         ?: dataObj.optJSONArray("songs")
                     if (nested != null && nested.length() > 0) {
                         val first = nested.optJSONObject(0)
-                        if (first != null) return first
+                        if (first != null) {
+                            Log.d(TAG, "getJioSaavnSongDetailsPrimary: got nested item for $songId")
+                            return first
+                        }
                     }
+                    Log.d(TAG, "getJioSaavnSongDetailsPrimary: returning dataObj for $songId")
                     return dataObj
                 }
-
-                // Case 3: legacy top-level format with status flag
                 if (json.optBoolean("status", false)) {
+                    Log.d(TAG, "getJioSaavnSongDetailsPrimary: legacy status=true for $songId")
                     return json
                 }
+                Log.w(TAG, "getJioSaavnSongDetailsPrimary: no usable data shape for $songId")
+            } else {
+                Log.w(TAG, "getJioSaavnSongDetailsPrimary: empty response for $songId")
             }
-        } catch (e: Exception) { Log.w(TAG, "JioSaavn song details error: ${e.message}") }
+        } catch (e: Exception) { Log.w(TAG, "JioSaavn song details error for $songId: ${e.message}") }
         return null
     }
 
@@ -747,19 +755,30 @@ class YouTubeRepository {
     private suspend fun getJioSaavnSongDetailsMirror(songId: String): JSONObject? {
         try {
             val url = "$JIOSAAVN_MIRROR/song?id=$songId"
+            Log.d(TAG, "getJioSaavnSongDetailsMirror: requesting $url")
             val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
-            if (response.isBlank()) return null
+            if (response.isBlank()) {
+                Log.w(TAG, "getJioSaavnSongDetailsMirror: empty response for $songId")
+                return null
+            }
+            Log.d(TAG, "getJioSaavnSongDetailsMirror: response length=${response.length} for $songId")
             val json = JSONObject(response)
-            if (!json.optBoolean("status", true)) return null
+            if (!json.optBoolean("status", true)) {
+                Log.w(TAG, "getJioSaavnSongDetailsMirror: status=false for $songId")
+                return null
+            }
 
             val bestUrl = pickBestVercelMediaUrl(json)
-            if (bestUrl.isNullOrBlank()) return null
-            // Synthetic object carrying the resolved media URL.
+            if (bestUrl.isNullOrBlank()) {
+                Log.w(TAG, "getJioSaavnSongDetailsMirror: no media_url for $songId")
+                return null
+            }
+            Log.d(TAG, "getJioSaavnSongDetailsMirror: got media_url for $songId")
             val out = JSONObject()
             out.put("media_url", bestUrl)
             return out
         } catch (e: Exception) {
-            Log.w(TAG, "JioSaavn mirror song details error: ${e.message}")
+            Log.w(TAG, "JioSaavn mirror song details error for $songId: ${e.message}")
             return null
         }
     }
@@ -800,19 +819,21 @@ class YouTubeRepository {
         try {
             val details = getJioSaavnSongDetails(songId)
             if (details != null) {
-                // Try downloadUrl array first
+                Log.d(TAG, "refreshJioSaavnUrl: got details for $songId, keys=${details.keys().toList()}")
                 val downloadArr = details.optJSONArray("downloadUrl")
                 val url = pickJioSaavnMediaUrl(downloadArr)
                 if (url != null && url.startsWith("http")) {
-                    Log.d(TAG, "✓ refreshJioSaavnUrl: got fresh URL for $songId")
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: got downloadUrl for $songId")
                     return@withContext url
                 }
-                // Try media_url field (old API format)
                 val mediaUrl = details.optString("media_url", "")
                 if (mediaUrl.isNotBlank() && mediaUrl.startsWith("http")) {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
                     return@withContext mediaUrl
                 }
+                Log.w(TAG, "refreshJioSaavnUrl: no usable URL in details for $songId")
+            } else {
+                Log.w(TAG, "refreshJioSaavnUrl: details is null for $songId")
             }
         } catch (e: Exception) {
             Log.w(TAG, "refreshJioSaavnUrl failed for $songId: ${e.message}")
@@ -827,37 +848,41 @@ class YouTubeRepository {
     suspend fun refreshSongAudio(song: YouTubeSong): YouTubeSong = withContext(Dispatchers.IO) {
         val rawId = song.id.removePrefix("js_").removePrefix("dh_")
         if (song.id.startsWith("js_") || song.id.startsWith("dh_")) {
+            Log.d(TAG, "refreshSongAudio: attempting refresh for id=$rawId title=${song.title}")
             // Primary path: resolve a fresh stream URL for the stored JioSaavn id.
             val freshUrl = refreshJioSaavnUrl(rawId)
             if (freshUrl != null) {
+                Log.d(TAG, "refreshSongAudio: primary refresh OK for ${song.title}")
                 return@withContext song.copy(audioUrl = freshUrl)
             }
+            Log.w(TAG, "refreshSongAudio: primary refresh failed for ${song.title} — trying title fallback")
 
             // Fallback: this specific id may have expired or been removed.
             // Re-search by title to obtain a fresh, playable JioSaavn id and
             // resolve its stream URL. This keeps Desi Hits/JioSaavn playback
             // alive even when an individual cached id stops working.
-            //
-            // NOTE: searchJioSaavn returns songs whose audioUrl is often empty
-            // (the mirror serves the URL only via the /song?id= endpoint), so we
-            // must NOT filter on audioUrl.isNotBlank() here — the candidate id
-            // is all we need; the URL is resolved below via refreshJioSaavnUrl.
             try {
                 val candidate = searchJioSaavn(song.title).firstOrNull { it.id.isNotBlank() }
                 if (candidate != null) {
                     val candidateRaw = candidate.id.removePrefix("js_")
+                    Log.d(TAG, "refreshSongAudio: title fallback candidate=$candidateRaw title=${candidate.title}")
                     val fallbackUrl = refreshJioSaavnUrl(candidateRaw)
                     if (fallbackUrl != null) {
+                        Log.d(TAG, "refreshSongAudio: title fallback refresh OK for ${song.title}")
                         return@withContext song.copy(
                             id = "dh_$candidateRaw",
                             audioUrl = fallbackUrl
                         )
                     }
+                    Log.w(TAG, "refreshSongAudio: title fallback refresh failed for candidate=$candidateRaw")
+                } else {
+                    Log.w(TAG, "refreshSongAudio: no search candidate for ${song.title}")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "refreshSongAudio fallback failed for '${song.title}': ${e.message}")
             }
         }
+        Log.w(TAG, "refreshSongAudio: returning original song without valid audio for ${song.title}")
         song
     }
 
@@ -2143,11 +2168,14 @@ class YouTubeRepository {
         try {
             val jioResults = searchJioSaavn(searchQuery)
             if (jioResults.isNotEmpty()) {
-                // Find best match by title similarity
                 val match = findBestMatch(jioResults, cleanTitle, cleanArtist)
-                if (match != null && match.hasValidAudio()) {
-                    Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}'")
-                    return@withContext match
+                if (match != null) {
+                    val refreshed = refreshSongAudio(match)
+                    if (refreshed.hasValidAudio()) {
+                        Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}'")
+                        return@withContext refreshed
+                    }
+                    Log.w(TAG, "resolveFullSong: JioSaavn match '${match.title}' has no valid audio after refresh")
                 }
             }
         } catch (e: Exception) {
