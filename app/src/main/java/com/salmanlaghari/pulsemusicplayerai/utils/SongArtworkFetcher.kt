@@ -34,7 +34,30 @@ class SongArtworkFetcher(
             )
         }
 
-        // 2. Try MediaStore artwork URI
+        // 2. Try remote http(s) artwork (streaming / Desi Hits / Deezer / etc.)
+        //    The custom fetcher only knows how to open local content:// + embedded
+        //    artwork, so a remote URL must be downloaded to the cache first.
+        if (song.artUri != null &&
+            (song.artUri.scheme == "http" || song.artUri.scheme == "https")
+        ) {
+            try {
+                val url = java.net.URL(song.artUri.toString())
+                url.openStream().use { input ->
+                    FileOutputStream(cacheFile).use { output -> input.copyTo(output) }
+                }
+                if (cacheFile.exists() && cacheFile.length() > 0) {
+                    return SourceResult(
+                        source = coil.decode.ImageSource(cacheFile.toOkioPath(), okio.FileSystem.SYSTEM),
+                        mimeType = "image/jpeg",
+                        dataSource = DataSource.NETWORK
+                    )
+                }
+            } catch (e: Exception) {
+                // Fall through to the placeholder (return null)
+            }
+        }
+
+        // 3. Try MediaStore artwork URI (local songs)
         if (song.artUri != null) {
             try {
                 context.contentResolver.openInputStream(song.artUri)?.use { inputStream ->
@@ -54,7 +77,7 @@ class SongArtworkFetcher(
             }
         }
 
-        // 3. Try Embedded Art using MediaMetadataRetriever
+        // 4. Try Embedded Art using MediaMetadataRetriever
         if (song.path.isNotEmpty()) {
             val file = File(song.path)
             if (file.exists()) {

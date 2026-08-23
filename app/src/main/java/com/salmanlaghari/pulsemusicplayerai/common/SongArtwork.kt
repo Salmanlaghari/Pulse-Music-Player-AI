@@ -32,8 +32,21 @@ fun SongArtwork(
         return
     }
 
+    // Local songs carry a content:// or file:// artUri (handled by SongArtworkFetcher
+    // via MediaStore / embedded artwork). Streaming / Desi Hits / Deezer songs carry a
+    // remote http(s) artwork URL in artUri, which the custom fetcher cannot open as a
+    // content URI. For those we pass the URL straight to Coil's default image loader so
+    // the thumbnail actually loads instead of falling back to the placeholder.
+    val model: Any = if (song.artUri != null &&
+        (song.artUri.scheme == "http" || song.artUri.scheme == "https")
+    ) {
+        song.artUri.toString()
+    } else {
+        song
+    }
+
     SubcomposeAsyncImage(
-        model = song,
+        model = model,
         contentDescription = "Artwork for ${song.title}",
         modifier = modifier,
         contentScale = contentScale,
