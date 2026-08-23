@@ -1,8 +1,6 @@
 package com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer
 
 import androidx.compose.ui.graphics.Color
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * AVEE-style visualizer template descriptor.
