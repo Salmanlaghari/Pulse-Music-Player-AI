@@ -631,7 +631,7 @@ class YouTubeViewModel(
                 }
                 // Update the playback queue if we resolved more songs
                 if (resolvedQueue.size > 1) {
-                    playbackConnectionManager.playSong(alreadyResolved, resolvedQueue)
+                    playbackConnectionManager.updateQueue(resolvedQueue)
                     Log.d(TAG, "Background queue resolved: ${resolvedQueue.size} songs")
                 }
             } catch (e: Exception) {

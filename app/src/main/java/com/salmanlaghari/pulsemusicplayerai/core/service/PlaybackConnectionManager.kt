@@ -243,6 +243,25 @@ class PlaybackConnectionManager(private val context: Context) {
         }
     }
 
+    fun updateQueue(newQueue: List<Song>) {
+        try {
+            val controller = mediaController ?: return
+            val safeQueue = newQueue.filter { s ->
+                val uri = s.uri?.toString() ?: ""
+                uri.isNotEmpty() && uri != "null" &&
+                        (uri.startsWith("http") || uri.startsWith("content"))
+            }
+            if (safeQueue.isEmpty()) return
+
+            _currentQueue.value = safeQueue
+            val mediaItems = safeQueue.map { it.toMediaItem() }
+            controller.setMediaItems(mediaItems, true)
+            updateStateFromController()
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackConn", "updateQueue failed", e)
+        }
+    }
+
     fun play() {
         mediaController?.play()
     }
@@ -387,6 +406,30 @@ class PlaybackConnectionManager(private val context: Context) {
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                val controller = mediaController ?: run {
+                    updateStateFromController()
+                    return
+                }
+                val repeatMode = controller.repeatMode
+                val itemCount = controller.mediaItemCount
+
+                if (repeatMode == Player.REPEAT_MODE_ONE) {
+                    controller.seekTo(controller.currentMediaItemIndex, 0L)
+                    controller.prepare()
+                    controller.play()
+                } else if (itemCount > 1 && repeatMode != Player.REPEAT_MODE_ONE) {
+                    controller.seekToNext()
+                    controller.prepare()
+                    controller.play()
+                } else if (repeatMode == Player.REPEAT_MODE_ALL && itemCount > 0) {
+                    controller.seekTo(0, 0L)
+                    controller.prepare()
+                    controller.play()
+                } else {
+                    controller.stop()
+                }
+            }
             updateStateFromController()
         }
 
