@@ -28,7 +28,7 @@ data class YouTubeSong(
             id.startsWith("js_") -> "JioSaavn"
             id.startsWith("dh_") -> "Desi Hits"
             id.startsWith("am_") -> "Apple Music"
-            id.startsWith("sp_") -> "Spotify"
+            id.startsWith("pw_") -> "PagalWorld"
             id.startsWith("yt_") -> "YouTube Music"
             id.startsWith("sc_") -> "SoundCloud"
             else -> "YouTube"
@@ -90,7 +90,7 @@ data class YouTubeSong(
             id.startsWith("am_") -> "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/00/00/00/0000000000/56x56bb.jpg"
             id.startsWith("sp_") -> "https://i.scdn.co/image/ab67616d0000b273000000000000000000000000"
             id.startsWith("dh_") -> "https://c.saavncdn.com/000/default-artwork-150x150.jpg"
-            else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_").removePrefix("js_").removePrefix("dh_").removePrefix("am_").removePrefix("sp_")}/default.jpg"
+            else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_").removePrefix("js_").removePrefix("dh_").removePrefix("am_").removePrefix("sp_").removePrefix("pw_")}/default.jpg"
         }
     }
 }
