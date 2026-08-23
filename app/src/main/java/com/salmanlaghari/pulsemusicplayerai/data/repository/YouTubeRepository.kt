@@ -424,49 +424,103 @@ class YouTubeRepository {
     }
     // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
-        // Try primary endpoint first with retry
-        repeat(3) { attempt ->
+        // 1. Try primary endpoint (saavn.sumit.co) with retry
+        repeat(2) { attempt ->
             val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
             if (primary.isNotEmpty()) {
                 Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
                 return primary
             }
-            if (attempt < 2) {
-                Log.w(TAG, "JioSaavn PRIMARY empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
-                kotlinx.coroutines.delay(500L * (attempt + 1))
-            }
+            if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
-        Log.w(TAG, "JioSaavn PRIMARY FAILED for '$query' after 3 attempts — using mirror fallback")
-        
-        // Try mirror 1 (jiosaavn-api.vercel.app) with retry
-        repeat(3) { attempt ->
+
+        // 2. Try Official JioSaavn API directly (jiosaavn.com/api.php) with retry
+        repeat(2) { attempt ->
+            val official = runCatching { searchJioSaavnOfficial(query) }.getOrDefault(emptyList())
+            if (official.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn OFFICIAL OK for '$query' -> ${official.size} results")
+                return official
+            }
+            if (attempt < 1) kotlinx.coroutines.delay(300L)
+        }
+
+        // 3. Try mirror 1 (jiosaavn-api.vercel.app) with retry
+        repeat(2) { attempt ->
             val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
             if (mirror1.isNotEmpty()) {
                 Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
                 return mirror1
             }
-            if (attempt < 2) {
-                Log.w(TAG, "JioSaavn MIRROR empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
-                kotlinx.coroutines.delay(500L * (attempt + 1))
-            }
+            if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
-        Log.w(TAG, "JioSaavn MIRROR empty for '$query' after 3 attempts — trying mirror 2")
-        
-        // Try mirror 2 (jiosaavn-api-blue.vercel.app) with retry
-        repeat(3) { attempt ->
+
+        // 4. Try mirror 2 (jiosaavn-api-blue.vercel.app) with retry
+        repeat(2) { attempt ->
             val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
             if (mirror2.isNotEmpty()) {
                 Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
                 return mirror2
             }
-            if (attempt < 2) {
-                Log.w(TAG, "JioSaavn MIRROR 2 empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
-                kotlinx.coroutines.delay(500L * (attempt + 1))
-            }
+            if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
-        
-        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query' after retries")
+
+        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
         return emptyList()
+    }
+
+    /**
+     * Search directly using official JioSaavn web API endpoints without third-party proxies.
+     */
+    private suspend fun searchJioSaavnOfficial(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val searchUrl = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=20&q=$encodedQuery"
+            val response = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+            if (response.isBlank()) return@withContext emptyList()
+
+            val json = JSONObject(response)
+            val results = json.optJSONArray("results") ?: return@withContext emptyList()
+            for (i in 0 until minOf(results.length(), 20)) {
+                try {
+                    val item = results.getJSONObject(i)
+                    val id = item.optString("id", "")
+                    if (id.isBlank()) continue
+                    val rawTitle = item.optString("song", item.optString("title", "Unknown"))
+                    val title = decodeHtmlEntities(rawTitle)
+                    val rawArtist = item.optString("primary_artists", item.optString("singers", "Unknown Artist"))
+                    val artist = decodeHtmlEntities(rawArtist)
+                    var image = item.optString("image", "")
+                    if (image.contains("150x150")) {
+                        image = image.replace("150x150", "500x500")
+                    }
+                    val durationSec = item.optLong("duration", 0)
+
+                    // Audio URL fallback chain from official object fields
+                    var audioUrl = item.optString("vlink", "")
+                    if (audioUrl.isBlank() || !audioUrl.startsWith("http")) {
+                        audioUrl = item.optString("media_preview_url", "")
+                    }
+                    if (audioUrl.isBlank() || !audioUrl.startsWith("http")) {
+                        audioUrl = item.optString("media_url", "")
+                    }
+
+                    songs.add(
+                        YouTubeSong(
+                            id = "js_$id",
+                            title = title,
+                            artist = artist.ifBlank { "Unknown Artist" },
+                            duration = durationSec,
+                            thumbnailUrl = image,
+                            audioUrl = if (audioUrl.startsWith("http")) audioUrl else ""
+                        )
+                    )
+                } catch (e: Exception) { /* skip malformed */ }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Official JioSaavn search error for '$query': ${e.message}")
+        }
+        return@withContext songs
     }
 
     /**
@@ -833,6 +887,16 @@ class YouTubeRepository {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
                     return@withContext mediaUrl
                 }
+                val vlink = details.optString("vlink", "")
+                if (vlink.isNotBlank() && vlink.startsWith("http")) {
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: got vlink for $songId")
+                    return@withContext vlink
+                }
+                val mediaPreviewUrl = details.optString("media_preview_url", "")
+                if (mediaPreviewUrl.isNotBlank() && mediaPreviewUrl.startsWith("http")) {
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: got media_preview_url for $songId")
+                    return@withContext mediaPreviewUrl
+                }
                 Log.w(TAG, "refreshJioSaavnUrl: no usable URL in details for $songId")
             } else {
                 Log.w(TAG, "refreshJioSaavnUrl: details is null for $songId")
@@ -840,6 +904,31 @@ class YouTubeRepository {
         } catch (e: Exception) {
             Log.w(TAG, "refreshJioSaavnUrl failed for $songId: ${e.message}")
         }
+
+        // Fallback: try official song details API directly
+        try {
+            val url = "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=$songId&_format=json&_marker=0"
+            val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
+            if (response.isNotBlank()) {
+                val root = JSONObject(response)
+                val item = root.optJSONObject(songId)
+                if (item != null) {
+                    val vlink = item.optString("vlink", "")
+                    if (vlink.isNotBlank() && vlink.startsWith("http")) {
+                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got vlink for $songId")
+                        return@withContext vlink
+                    }
+                    val mediaPreview = item.optString("media_preview_url", "")
+                    if (mediaPreview.isNotBlank() && mediaPreview.startsWith("http")) {
+                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_preview_url for $songId")
+                        return@withContext mediaPreview
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshJioSaavnUrl official fallback failed for $songId: ${e.message}")
+        }
+
         null
     }
 
@@ -2172,9 +2261,14 @@ class YouTubeRepository {
             if (jioResults.isNotEmpty()) {
                 val match = findBestMatch(jioResults, cleanTitle, cleanArtist)
                 if (match != null) {
+                    // FAST PATH: if match already has valid audio (e.g. from searchJioSaavnOfficial), return immediately
+                    if (match.hasValidAudio()) {
+                        Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}' with valid audio")
+                        return@withContext match
+                    }
                     val refreshed = refreshSongAudio(match)
                     if (refreshed.hasValidAudio()) {
-                        Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}'")
+                        Log.d(TAG, "✓ resolveFullSong: JioSaavn match '${match.title}' refreshed")
                         return@withContext refreshed
                     }
                     Log.w(TAG, "resolveFullSong: JioSaavn match '${match.title}' has no valid audio after refresh")
