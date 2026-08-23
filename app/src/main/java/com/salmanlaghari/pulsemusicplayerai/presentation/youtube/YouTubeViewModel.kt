@@ -20,6 +20,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+
+import com.salmanlaghari.pulsemusicplayerai.utils.dataStore
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
 class YouTubeViewModel(
@@ -30,6 +38,9 @@ class YouTubeViewModel(
 
     companion object {
         private const val TAG = "YouTubeVM"
+        private val SOUTH_ASIAN_CATALOG_KEY = stringPreferencesKey("south_asian_catalog_json")
+        private val SOUTH_ASIAN_CATALOG_TIMESTAMP_KEY = longPreferencesKey("south_asian_catalog_timestamp_ms")
+        private val SOUTH_ASIAN_CATALOG_TTL_MS = 24L * 60 * 60 * 1000
     }
 
     private val _searchResults = MutableStateFlow<List<YouTubeSong>>(emptyList())
@@ -118,6 +129,20 @@ class YouTubeViewModel(
             while (true) {
                 kotlinx.coroutines.delay(30 * 60 * 1000L)
                 syncSouthAsianCatalog()
+            }
+        }
+
+        // On-demand queue extension for Desi Hits / YouTube playback.
+        // When the user presses Next/Previous and the queue is exhausted,
+        // these callbacks resolve the adjacent song and extend the queue.
+        playbackConnectionManager.onNextRequested = {
+            viewModelScope.launch(Dispatchers.IO) {
+                resolveNextSongOnDemand()
+            }
+        }
+        playbackConnectionManager.onPreviousRequested = {
+            viewModelScope.launch(Dispatchers.IO) {
+                resolvePreviousSongOnDemand()
             }
         }
     }
@@ -218,6 +243,8 @@ class YouTubeViewModel(
      * Uses curated search queries to build a large deduplicated catalog.
      * All songs come with full 320kbps stream URLs (confirmed working).
      *
+     * Loads from local cache first if available and not stale (24h TTL).
+     *
      * @param force When true, bypasses the "already loaded" guard and re-syncs
      *              the catalog (used by the periodic auto-sync / stale refresh).
      */
@@ -226,29 +253,110 @@ class YouTubeViewModel(
             Log.d(TAG, "South Asian catalog already loaded (${_southAsianSongs.value.size} songs), skipping")
             return
         }
-        southAsianJob?.cancel()
-        southAsianJob = viewModelScope.launch {
-            _isSouthAsianLoading.value = true
-            _hasNewSouthAsianContent.value = false
-            try {
-                kotlinx.coroutines.delay(100)
-                val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
-                    _southAsianProgress.value = completed to total
+
+        viewModelScope.launch {
+            // Try cache first when not forcing a refresh
+            if (!force) {
+                try {
+                    val cached = loadSouthAsianCatalogFromCache()
+                    if (cached != null) {
+                        _southAsianSongs.value = cached
+                        southAsianLoaded = true
+                        Log.d(TAG, "Loaded ${cached.size} South Asian songs from cache")
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load South Asian catalog from cache: ${e.message}")
                 }
-                val previousCount = _southAsianSongs.value.size
-                _southAsianSongs.value = songs
-                southAsianLoaded = true
-                _southAsianLoadedAtMs.value = System.currentTimeMillis()
-                if (songs.size > previousCount && previousCount > 0) {
-                    _hasNewSouthAsianContent.value = true
-                }
-                southAsianLastCount = songs.size
-                Log.d(TAG, "Loaded ${songs.size} South Asian songs")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load South Asian catalog", e)
-            } finally {
-                _isSouthAsianLoading.value = false
             }
+
+            // Load from network
+            southAsianJob?.cancel()
+            southAsianJob = viewModelScope.launch {
+                _isSouthAsianLoading.value = true
+                _hasNewSouthAsianContent.value = false
+                try {
+                    kotlinx.coroutines.delay(100)
+                    val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
+                        _southAsianProgress.value = completed to total
+                    }
+                    val previousCount = _southAsianSongs.value.size
+                    _southAsianSongs.value = songs
+                    southAsianLoaded = true
+                    _southAsianLoadedAtMs.value = System.currentTimeMillis()
+                    saveSouthAsianCatalogToCache(songs)
+                    Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load South Asian catalog", e)
+                } finally {
+                    _isSouthAsianLoading.value = false
+                }
+            }
+        }
+    }
+
+    private suspend fun saveSouthAsianCatalogToCache(songs: List<YouTubeSong>) {
+        try {
+            val jsonArray = JSONArray()
+            for (song in songs) {
+                val songJson = JSONObject().apply {
+                    put("id", song.id)
+                    put("title", song.title)
+                    put("artist", song.artist)
+                    put("duration", song.duration)
+                    put("thumbnailUrl", song.thumbnailUrl)
+                    put("audioUrl", song.audioUrl)
+                    put("isLive", song.isLive)
+                }
+                jsonArray.put(songJson)
+            }
+            val cacheJson = JSONObject().apply {
+                put("songs", jsonArray)
+                put("timestamp", System.currentTimeMillis())
+            }.toString()
+
+            application.dataStore.edit { preferences ->
+                preferences[SOUTH_ASIAN_CATALOG_KEY] = cacheJson
+                preferences[SOUTH_ASIAN_CATALOG_TIMESTAMP_KEY] = System.currentTimeMillis()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cache South Asian catalog: ${e.message}")
+        }
+    }
+
+    private suspend fun loadSouthAsianCatalogFromCache(): List<YouTubeSong>? {
+        return try {
+            val preferences = application.dataStore.data.first()
+            val jsonString = preferences[SOUTH_ASIAN_CATALOG_KEY] ?: return null
+            val timestamp = preferences[SOUTH_ASIAN_CATALOG_TIMESTAMP_KEY] ?: 0L
+
+            if (System.currentTimeMillis() - timestamp > SOUTH_ASIAN_CATALOG_TTL_MS) {
+                Log.d(TAG, "South Asian catalog cache expired (${(System.currentTimeMillis() - timestamp) / 1000}s old)")
+                return null
+            }
+
+            val json = JSONObject(jsonString)
+            val jsonArray = json.getJSONArray("songs")
+            val songs = mutableListOf<YouTubeSong>()
+            for (i in 0 until jsonArray.length()) {
+                val songJson = jsonArray.getJSONObject(i)
+                songs.add(
+                    YouTubeSong(
+                        id = songJson.optString("id", ""),
+                        title = songJson.optString("title", ""),
+                        artist = songJson.optString("artist", ""),
+                        duration = songJson.optLong("duration", 0),
+                        thumbnailUrl = songJson.optString("thumbnailUrl", ""),
+                        audioUrl = songJson.optString("audioUrl", ""),
+                        isLive = songJson.optBoolean("isLive", false)
+                    )
+                )
+            }
+            Log.d(TAG, "Loaded ${songs.size} South Asian songs from cache")
+            songs
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse cached South Asian catalog: ${e.message}")
+            null
         }
     }
 
@@ -614,10 +722,9 @@ class YouTubeViewModel(
                 for (i in queue.indices) {
                     val qSong = queue[i]
                     if (qSong.id == selectedSong.id) continue
-                    if (resolvedQueue.size >= 6) break
+                    if (resolvedQueue.size >= 20) break
                     try {
                         val resolved = if (qSong.hasValidAudio() && !isPreviewOnlySource(qSong.id)) {
-                            // Refresh JioSaavn/Desi Hits URLs in background queue
                             if (qSong.id.startsWith("js_") || qSong.id.startsWith("dh_")) {
                                 youTubeRepository.refreshSongAudio(qSong)
                             } else qSong
@@ -629,7 +736,6 @@ class YouTubeViewModel(
                         }
                     } catch (e: Exception) { /* skip */ }
                 }
-                // Update the playback queue if we resolved more songs
                 if (resolvedQueue.size > 1) {
                     playbackConnectionManager.updateQueue(resolvedQueue)
                     Log.d(TAG, "Background queue resolved: ${resolvedQueue.size} songs")
@@ -637,6 +743,69 @@ class YouTubeViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "Background queue resolution failed: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun resolveNextSongOnDemand() {
+        try {
+            val currentSong = playbackConnectionManager.currentSong.value ?: return
+            val catalog = _southAsianSongs.value
+            if (catalog.isEmpty()) return
+
+            val currentId = currentSong.id
+            val currentIndex = catalog.indexOfFirst {
+                it.id.hashCode().toLong() == currentId
+            }
+            if (currentIndex == -1 || currentIndex >= catalog.size - 1) return
+
+            val nextSong = catalog[currentIndex + 1]
+            val refreshed = if (nextSong.hasValidAudio() && !isPreviewOnlySource(nextSong.id)) {
+                nextSong
+            } else {
+                youTubeRepository.refreshSongAudio(nextSong)
+            }
+
+            if (refreshed.hasValidAudio()) {
+                refreshed.toSong()?.let { songAsLocal ->
+                    playbackConnectionManager.addMediaItemToQueue(songAsLocal)
+                    Log.d(TAG, "On-demand resolved next song: ${refreshed.title}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "On-demand next song resolution failed: ${e.message}")
+        }
+    }
+
+    private suspend fun resolvePreviousSongOnDemand() {
+        try {
+            val currentSong = playbackConnectionManager.currentSong.value ?: return
+            val catalog = _southAsianSongs.value
+            if (catalog.isEmpty()) return
+
+            val currentId = currentSong.id
+            val currentIndex = catalog.indexOfFirst {
+                it.id.hashCode().toLong() == currentId
+            }
+            if (currentIndex <= 0) return
+
+            val prevSong = catalog[currentIndex - 1]
+            val refreshed = if (prevSong.hasValidAudio() && !isPreviewOnlySource(prevSong.id)) {
+                prevSong
+            } else {
+                youTubeRepository.refreshSongAudio(prevSong)
+            }
+
+            if (refreshed.hasValidAudio()) {
+                refreshed.toSong()?.let { songAsLocal ->
+                    val currentQueue = playbackConnectionManager.currentQueue.value.toMutableList()
+                    currentQueue.add(0, songAsLocal)
+                    playbackConnectionManager.updateQueue(currentQueue)
+                    playbackConnectionManager.seekTo(0)
+                    Log.d(TAG, "On-demand resolved previous song: ${refreshed.title}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "On-demand previous song resolution failed: ${e.message}")
         }
     }
 

@@ -262,6 +262,20 @@ class PlaybackConnectionManager(private val context: Context) {
         }
     }
 
+    fun addMediaItemToQueue(song: Song) {
+        try {
+            val controller = mediaController ?: return
+            val mediaItem = song.toMediaItem()
+            controller.addMediaItem(mediaItem)
+            updateStateFromController()
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackConn", "addMediaItemToQueue failed", e)
+        }
+    }
+
+    var onNextRequested: (() -> Unit)? = null
+    var onPreviousRequested: (() -> Unit)? = null
+
     fun play() {
         mediaController?.play()
     }
@@ -271,11 +285,21 @@ class PlaybackConnectionManager(private val context: Context) {
     }
 
     fun next() {
-        mediaController?.seekToNext()
+        val controller = mediaController ?: return
+        if (controller.mediaItemCount > controller.currentMediaItemIndex + 1) {
+            controller.seekToNext()
+        } else {
+            onNextRequested?.invoke()
+        }
     }
 
     fun previous() {
-        mediaController?.seekToPrevious()
+        val controller = mediaController ?: return
+        if (controller.currentMediaItemIndex > 0) {
+            controller.seekToPrevious()
+        } else {
+            onPreviousRequested?.invoke()
+        }
     }
 
     fun seekTo(positionMs: Long) {
