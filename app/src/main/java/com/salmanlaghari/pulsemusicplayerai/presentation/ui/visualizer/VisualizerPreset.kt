@@ -57,7 +57,7 @@ enum class VisualizerPreset(val displayName: String, val category: String, val d
     CALM_RIPPLE("Calm Ripple", "Ambient", "Concentric water ripples echoing outward with organic damping."),
     NIGHT_SKY("Night Sky", "Ambient", "Digital rain columns falling with speed and brightness driven by audio."),
     AURORA("Aurora", "Ambient", "Ambient waves of organic coloured glow mimicking Northern Lights."),
-    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio.")
+    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio."),
 
     /** Compatibility aliases used by the studio's richer preset catalog. */
     companion object {
