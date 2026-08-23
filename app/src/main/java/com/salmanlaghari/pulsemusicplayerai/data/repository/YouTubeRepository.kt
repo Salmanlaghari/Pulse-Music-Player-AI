@@ -5,8 +5,6 @@ import com.salmanlaghari.pulsemusicplayerai.BuildConfig
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -426,30 +424,48 @@ class YouTubeRepository {
     }
     // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
-        // Try primary endpoint first
-        val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
-        if (primary.isNotEmpty()) {
-            Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
-            return primary
+        // Try primary endpoint first with retry
+        repeat(3) { attempt ->
+            val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
+            if (primary.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
+                return primary
+            }
+            if (attempt < 2) {
+                Log.w(TAG, "JioSaavn PRIMARY empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
+                kotlinx.coroutines.delay(500L * (attempt + 1))
+            }
         }
-        Log.w(TAG, "JioSaavn PRIMARY EMPTY for '$query' — using mirror fallback")
+        Log.w(TAG, "JioSaavn PRIMARY FAILED for '$query' after 3 attempts — using mirror fallback")
         
-        // Try mirror 1 (jiosaavn-api.vercel.app)
-        val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
-        if (mirror1.isNotEmpty()) {
-            Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
-            return mirror1
+        // Try mirror 1 (jiosaavn-api.vercel.app) with retry
+        repeat(3) { attempt ->
+            val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
+            if (mirror1.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
+                return mirror1
+            }
+            if (attempt < 2) {
+                Log.w(TAG, "JioSaavn MIRROR empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
+                kotlinx.coroutines.delay(500L * (attempt + 1))
+            }
         }
-        Log.w(TAG, "JioSaavn MIRROR empty for '$query' — trying mirror 2")
+        Log.w(TAG, "JioSaavn MIRROR empty for '$query' after 3 attempts — trying mirror 2")
         
-        // Try mirror 2 (jiosaavn-api-blue.vercel.app)
-        val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
-        if (mirror2.isNotEmpty()) {
-            Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
-            return mirror2
+        // Try mirror 2 (jiosaavn-api-blue.vercel.app) with retry
+        repeat(3) { attempt ->
+            val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
+            if (mirror2.isNotEmpty()) {
+                Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
+                return mirror2
+            }
+            if (attempt < 2) {
+                Log.w(TAG, "JioSaavn MIRROR 2 empty for '$query' (attempt ${attempt + 1}/3) — retrying...")
+                kotlinx.coroutines.delay(500L * (attempt + 1))
+            }
         }
         
-        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
+        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query' after retries")
         return emptyList()
     }
 
@@ -905,28 +921,39 @@ class YouTubeRepository {
         val allSongs = mutableMapOf<String, YouTubeSong>() // key = JioSaavn ID for dedup
         val totalQueries = SOUTH_ASIAN_QUERIES.size
 
-        Log.d(TAG, "Loading South Asian catalog: $totalQueries queries (parallel)")
+        Log.d(TAG, "Loading South Asian catalog: $totalQueries queries (sequential)")
 
-        // Run all queries in parallel for fast sync, then deduplicate results.
-        val deferred = SOUTH_ASIAN_QUERIES.map { query ->
-            kotlinx.coroutines.async {
-                runCatching {
-                    searchJioSaavn(query)
-                }.getOrDefault(emptyList()).also { results ->
-                    onProgress?.invoke(SOUTH_ASIAN_QUERIES.size - totalQueries + 1, totalQueries)
+        var completed = 0
+        for (query in SOUTH_ASIAN_QUERIES) {
+            if (completed > 0) kotlinx.coroutines.delay(500)
+
+            var results: List<YouTubeSong> = emptyList()
+            repeat(2) { attempt ->
+                try {
+                    results = searchJioSaavn(query)
+                    if (results.isNotEmpty()) return@repeat
+                } catch (e: Exception) {
+                    Log.w(TAG, "Catalog query '$query' attempt $attempt failed: ${e.message}")
+                    if (attempt == 0) kotlinx.coroutines.delay(500)
                 }
             }
-        }
 
-        val results = deferred.awaitAll().flatten()
+            for (song in results) {
+                val rawId = song.id.removePrefix("js_")
+                if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
+                    allSongs[rawId] = song.copy(
+                        id = "dh_$rawId",
+                        audioUrl = ""
+                    )
+                }
+            }
 
-        for (song in results) {
-            val rawId = song.id.removePrefix("js_")
-            if (rawId.isNotBlank() && !allSongs.containsKey(rawId)) {
-                allSongs[rawId] = song.copy(
-                    id = "dh_$rawId",
-                    audioUrl = ""
-                )
+            completed++
+            onProgress?.invoke(completed, totalQueries)
+
+            if (allSongs.size >= 1000) {
+                Log.d(TAG, "Catalog reached 1000+ songs, stopping early")
+                break
             }
         }
 
