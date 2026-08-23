@@ -149,7 +149,7 @@ fun LibraryScreenContent(viewModel: MusicViewModel, onNavigateToPlayer: () -> Un
                     if (songs.isEmpty()) {
                         EmptyListPlaceholder("No songs found on local storage.")
                     } else {
-                        LazySongsList(songs = songs, onSongClick = { viewModel.playSong(it, songs); onNavigateToPlayer() })
+                        LazySongsList(songs = songs, onSongClick = { viewModel.playSong(it, songs) }, onNavigateToPlayer = onNavigateToPlayer)
                     }
                 }
                 1 -> {
