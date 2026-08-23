@@ -60,7 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import java.text.SimpleDateFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
@@ -746,37 +746,6 @@ fun YouTubeScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(240.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(color = CyanGlow)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            val (completed, total) = southAsianProgress
-                            val progressText = if (total > 0) {
-                                "Loading $completed / $total playlists…"
-                            } else {
-                                "Loading Desi Hits catalog…"
-                            }
-                            Text(
-                                text = progressText,
-                                color = TextDim,
-                                fontSize = 13.sp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Fetching Bollywood, Pakistani, Punjabi & South Indian songs",
-                                color = TextDim,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                } else if (southAsianSongs.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
                             .height(220.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -948,11 +917,27 @@ fun YouTubeSongCard(
                     .background(CardNavy),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = song.thumbnailUrl,
                     contentDescription = song.title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    loading = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    error = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 )
                 if (isCurrentlyPlaying) {
                     Box(
@@ -1044,7 +1029,7 @@ fun ChannelVideoCard(
                     .background(CardNavy),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = video.thumbnailUrl,
                     contentDescription = video.title,
                     contentScale = ContentScale.Crop,

@@ -135,7 +135,7 @@ fun AppNavigation(
                         onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) }
                     )
                 }
-                composable(Screen.Library.route) { LibraryScreen(viewModel = musicViewModel) }
+                composable(Screen.Library.route) { LibraryScreen(viewModel = musicViewModel, onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }) }
                 composable(Screen.YouTube.route) {
                     YouTubeScreen(viewModel = youTubeViewModel, onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }, onNavigateToChannelPlayer = { videoId, title -> navController.navigate("channel_player/$videoId/${Uri.encode(title)}") })
                 }
@@ -157,7 +157,7 @@ fun AppNavigation(
                     ChannelPlayerScreen(videoId = videoId, title = title, channelName = "A D&E Song Music", onNavigateBack = { navController.popBackStack() })
                 }
                 composable(Screen.Equalizer.route) { EqualizerScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
-                composable(Screen.Search.route) { SearchScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
+                composable(Screen.Search.route) { SearchScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }, onNavigateToPlayer = { navController.navigate(Screen.FullPlayer.route) }) }
                 composable(Screen.Queue.route) { QueueScreen(viewModel = musicViewModel, onNavigateBack = { navController.popBackStack() }) }
             }
         }

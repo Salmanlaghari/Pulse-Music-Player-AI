@@ -141,7 +141,7 @@ fun HomeScreenContent(
             if (songToContinue != null) {
                 SectionHeader(title = "Continue Listening", showSeeAll = false) {}
                 Spacer(modifier = Modifier.height(12.dp))
-                ContinueListeningCard(song = songToContinue, onClick = { viewModel.playSong(songToContinue) })
+                ContinueListeningCard(song = songToContinue, onClick = { viewModel.playSong(songToContinue); onNavigateToPlayer() })
                 Spacer(modifier = Modifier.height(24.dp))
             }
             SectionHeader(title = "Quick Access", showSeeAll = false)
@@ -151,23 +151,23 @@ fun HomeScreenContent(
             if (recentlyAdded.isNotEmpty()) {
                 SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(recentlyAdded) { viewModel.playSong(it, recentlyAdded) }
+                SongHorizontalLazyRow(recentlyAdded) { viewModel.playSong(it, recentlyAdded); onNavigateToPlayer() }
                 Spacer(modifier = Modifier.height(24.dp))
             }
             if (favoriteSongs.isNotEmpty()) {
                 SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(favoriteSongs) { viewModel.playSong(it, favoriteSongs) }
+                SongHorizontalLazyRow(favoriteSongs) { viewModel.playSong(it, favoriteSongs); onNavigateToPlayer() }
                 Spacer(modifier = Modifier.height(24.dp))
             }
             if (allSongs.isNotEmpty()) {
                 SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(allSongs.take(5)) { viewModel.playSong(it) }
+                SongHorizontalLazyRow(allSongs.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
                 Spacer(modifier = Modifier.height(24.dp))
                 SectionHeader(title = "Most Played") { onNavigateToLibrary() }
                 Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(allSongs.sortedBy { it.title.length }.take(5)) { viewModel.playSong(it) }
+                SongHorizontalLazyRow(allSongs.sortedBy { it.title.length }.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
                 Spacer(modifier = Modifier.height(24.dp))
             }
             PulseBranding(modifier = Modifier.fillMaxWidth())

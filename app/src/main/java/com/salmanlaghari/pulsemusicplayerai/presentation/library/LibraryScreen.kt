@@ -57,7 +57,7 @@ import com.salmanlaghari.pulsemusicplayerai.data.ads.AdMobBanner
 import com.salmanlaghari.pulsemusicplayerai.data.ads.AdManager
 
 @Composable
-fun LibraryScreen(viewModel: MusicViewModel) {
+fun LibraryScreen(viewModel: MusicViewModel, onNavigateToPlayer: () -> Unit) {
     val isPermissionGranted by viewModel.isPermissionGranted.collectAsState()
 
     if (!isPermissionGranted) {
@@ -65,12 +65,12 @@ fun LibraryScreen(viewModel: MusicViewModel) {
             viewModel.setPermissionGranted(granted)
         })
     } else {
-        LibraryScreenContent(viewModel = viewModel)
+        LibraryScreenContent(viewModel = viewModel, onNavigateToPlayer = onNavigateToPlayer)
     }
 }
 
 @Composable
-fun LibraryScreenContent(viewModel: MusicViewModel) {
+fun LibraryScreenContent(viewModel: MusicViewModel, onNavigateToPlayer: () -> Unit) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
 
@@ -149,7 +149,7 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
                     if (songs.isEmpty()) {
                         EmptyListPlaceholder("No songs found on local storage.")
                     } else {
-                        LazySongsList(songs = songs, onSongClick = { viewModel.playSong(it, songs) })
+                        LazySongsList(songs = songs, onSongClick = { viewModel.playSong(it, songs) }, onNavigateToPlayer = onNavigateToPlayer)
                     }
                 }
                 1 -> {
@@ -231,7 +231,8 @@ fun LibraryScreenContent(viewModel: MusicViewModel) {
 @Composable
 fun LazySongsList(
     songs: List<Song>,
-    onSongClick: (Song) -> Unit
+    onSongClick: (Song) -> Unit,
+    onNavigateToPlayer: () -> Unit
 ) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -239,7 +240,7 @@ fun LazySongsList(
         items(songs) { song ->
             LibrarySongRowCard(
                 song = song,
-                onClick = { onSongClick(song) }
+                onClick = { onSongClick(song); onNavigateToPlayer() }
             )
         }
     }
