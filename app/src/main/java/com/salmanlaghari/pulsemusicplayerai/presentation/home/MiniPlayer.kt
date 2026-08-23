@@ -28,6 +28,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -52,6 +54,7 @@ fun MiniPlayer(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     if (currentSong == null) return
 
@@ -138,6 +141,7 @@ fun MiniPlayer(
                             interactionSource = playPauseInteractionSource,
                             indication = null
                         ) {
+                            haptic.performHapticFeedback(HapticFeedbackType.Light)
                             viewModel.togglePlayPause()
                         },
                     contentAlignment = Alignment.Center

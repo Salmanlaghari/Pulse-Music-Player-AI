@@ -208,7 +208,13 @@ enum class StudioVisualizerPreset(val displayName: String, val description: Stri
     CALM_RIPPLE("Calm Ripple", "Concentric water ripples echoing outward with organic damping", VisualizerPreset.CALM_RIPPLE),
     NIGHT_SKY("Night Sky", "Digital rain columns falling with speed and brightness driven by audio", VisualizerPreset.NIGHT_SKY),
     AURORA("Aurora", "Ambient waves of organic coloured glow mimicking Northern Lights", VisualizerPreset.AURORA),
-    DEEP_SPACE("Deep Space", "Stars moving outward from the centre on audio", VisualizerPreset.DEEP_SPACE)
+    DEEP_SPACE("Deep Space", "Stars moving outward from the centre on audio", VisualizerPreset.DEEP_SPACE),
+
+    // ---------- AVEE-STYLE TEMPLATES (4) ----------
+    RADIAL_PULSE("Radial Pulse", "AVEE-style radial pulse with expanding rings and centre orb", VisualizerPreset.RADIAL_PULSE),
+    PARTICLE_BURST("Particle Burst", "AVEE-style particle burst with physics-based particles on beats", VisualizerPreset.PARTICLE_BURST),
+    SPECTRUM_RINGS("Spectrum Rings", "AVEE-style concentric spectrum rings with frequency-reactive radii", VisualizerPreset.SPECTRUM_RINGS),
+    KALEIDOSCOPE_WAVE("Kaleidoscope Wave", "AVEE-style kaleidoscope with mirrored waveform segments", VisualizerPreset.KALEIDOSCOPE_WAVE)
 }
 
 data class LiveBackgroundPreset(
