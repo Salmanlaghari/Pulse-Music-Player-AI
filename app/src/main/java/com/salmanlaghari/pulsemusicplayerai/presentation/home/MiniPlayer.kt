@@ -122,6 +122,7 @@ fun MiniPlayer(
                     }
                 }
 
+                val playPauseInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -132,9 +133,9 @@ fun MiniPlayer(
                                 colors = listOf(NeonPurple, NeonBlue, NeonCyan)
                             )
                         )
-                        .premiumPressScale()
+                        .premiumPressScale(playPauseInteractionSource)
                         .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            interactionSource = playPauseInteractionSource,
                             indication = null
                         ) {
                             viewModel.togglePlayPause()
