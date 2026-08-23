@@ -124,5 +124,17 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Show interstitial ad when returning from background
         AdManager.showInterstitialResume(this)
+
+        // Re-evaluate media permission on every resume so a first-launch grant
+        // or a settings change immediately resumes local library loading.
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val hasPermission = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            musicViewModel.setPermissionGranted(true)
+        }
     }
 }
