@@ -819,7 +819,9 @@ class YouTubeRepository {
         try {
             val details = getJioSaavnSongDetails(songId)
             if (details != null) {
-                Log.d(TAG, "refreshJioSaavnUrl: got details for $songId, keys=${details.keys().toList()}")
+                val keys = mutableListOf<String>()
+                details.keys().forEachRemaining { keys.add(it) }
+                Log.d(TAG, "refreshJioSaavnUrl: got details for $songId, keys=$keys")
                 val downloadArr = details.optJSONArray("downloadUrl")
                 val url = pickJioSaavnMediaUrl(downloadArr)
                 if (url != null && url.startsWith("http")) {
