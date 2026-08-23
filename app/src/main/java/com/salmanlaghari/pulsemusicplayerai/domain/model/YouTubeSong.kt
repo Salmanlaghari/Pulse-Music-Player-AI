@@ -89,6 +89,7 @@ data class YouTubeSong(
             id.startsWith("dz_") -> "https://e-cdns-images.dzcdn.net/images/cover/000000000/56x56.jpg"
             id.startsWith("am_") -> "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/00/00/00/0000000000/56x56bb.jpg"
             id.startsWith("sp_") -> "https://i.scdn.co/image/ab67616d0000b273000000000000000000000000"
+            id.startsWith("dh_") -> "https://c.saavncdn.com/000/default-artwork-150x150.jpg"
             else -> "https://i.ytimg.com/vi/${id.removePrefix("yt_").removePrefix("dz_").removePrefix("ia_").removePrefix("jm_").removePrefix("js_").removePrefix("dh_").removePrefix("am_").removePrefix("sp_")}/default.jpg"
         }
     }

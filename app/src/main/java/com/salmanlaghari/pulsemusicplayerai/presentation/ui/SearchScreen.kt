@@ -44,7 +44,8 @@ import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 @Composable
 fun SearchScreen(
     viewModel: MusicViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToPlayer: () -> Unit
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -150,7 +151,7 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(72.dp)
-                            .clickable { viewModel.playSong(song) },
+                            .clickable { viewModel.playSong(song); onNavigateToPlayer() },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
