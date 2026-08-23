@@ -141,7 +141,7 @@ fun MiniPlayer(
                             interactionSource = playPauseInteractionSource,
                             indication = null
                         ) {
-                            haptic.performHapticFeedback(HapticFeedbackType.Light)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.togglePlayPause()
                         },
                     contentAlignment = Alignment.Center
