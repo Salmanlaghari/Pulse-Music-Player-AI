@@ -16,6 +16,31 @@ import android.text.Html
 
 class YouTubeRepository {
 
+    // ═══ ENDPOINT CIRCUIT BREAKER ═══
+    // A dead endpoint (e.g. saavn.sumit.co returning Cloudflare 1027) must not
+    // be retried on every query — that alone used to add minutes to the Desi
+    // Hits catalog load and made the UI show endless "Retry". After 2
+    // consecutive failures an endpoint is skipped for COOLDOWN_MS.
+    private val endpointFailureCounts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val endpointCooldownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun endpointAvailable(name: String): Boolean =
+        System.currentTimeMillis() >= (endpointCooldownUntil[name] ?: 0L)
+
+    private fun recordEndpointSuccess(name: String) {
+        endpointFailureCounts[name] = 0
+        endpointCooldownUntil.remove(name)
+    }
+
+    private fun recordEndpointFailure(name: String) {
+        val count = (endpointFailureCounts[name] ?: 0) + 1
+        endpointFailureCounts[name] = count
+        if (count >= 2) {
+            endpointCooldownUntil[name] = System.currentTimeMillis() + 5 * 60 * 1000L
+            Log.w(TAG, "Circuit breaker: '$name' OPEN for 5 min after $count consecutive failures")
+        }
+    }
+
     companion object {
         private const val TAG = "YouTubeRepo"
 
@@ -424,45 +449,56 @@ class YouTubeRepository {
     }
     // ═══════════════════════════════════════════════
     suspend fun searchJioSaavn(query: String): List<YouTubeSong> {
-        // 1. Try primary endpoint (saavn.sumit.co) with retry
-        repeat(2) { attempt ->
-            val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
-            if (primary.isNotEmpty()) {
-                Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
-                return primary
-            }
-            if (attempt < 1) kotlinx.coroutines.delay(300L)
-        }
-
-        // 2. Try Official JioSaavn API directly (jiosaavn.com/api.php) with retry
-        repeat(2) { attempt ->
+        // 1. Try Official JioSaavn API first (jiosaavn.com/api.php — first-party,
+        //    most reliable; third-party proxies come and go)
+        if (endpointAvailable("official")) repeat(2) { attempt ->
             val official = runCatching { searchJioSaavnOfficial(query) }.getOrDefault(emptyList())
             if (official.isNotEmpty()) {
+                recordEndpointSuccess("official")
                 Log.d(TAG, "JioSaavn OFFICIAL OK for '$query' -> ${official.size} results")
                 return official
             }
+            Log.w(TAG, "JioSaavn OFFICIAL empty for '$query' (attempt ${attempt + 1}/2)")
             if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
+        recordEndpointFailure("official")
 
-        // 3. Try mirror 1 (jiosaavn-api.vercel.app) with retry
-        repeat(2) { attempt ->
+        // 2. Try mirror 1 (jiosaavn-api.vercel.app) with retry
+        if (endpointAvailable("mirror1")) repeat(2) { attempt ->
             val mirror1 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR) }.getOrDefault(emptyList())
             if (mirror1.isNotEmpty()) {
+                recordEndpointSuccess("mirror1")
                 Log.d(TAG, "JioSaavn MIRROR OK for '$query' -> ${mirror1.size} results")
                 return mirror1
             }
             if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
+        recordEndpointFailure("mirror1")
 
-        // 4. Try mirror 2 (jiosaavn-api-blue.vercel.app) with retry
-        repeat(2) { attempt ->
+        // 3. Try mirror 2 (jiosaavn-api-blue.vercel.app) with retry
+        if (endpointAvailable("mirror2")) repeat(2) { attempt ->
             val mirror2 = runCatching { searchJioSaavnMirror(query, JIOSAAVN_MIRROR_2) }.getOrDefault(emptyList())
             if (mirror2.isNotEmpty()) {
+                recordEndpointSuccess("mirror2")
                 Log.d(TAG, "JioSaavn MIRROR 2 OK for '$query' -> ${mirror2.size} results")
                 return mirror2
             }
             if (attempt < 1) kotlinx.coroutines.delay(300L)
         }
+        recordEndpointFailure("mirror2")
+
+        // 4. Try primary endpoint (saavn.sumit.co) LAST — it has had extended
+        //    outages (Cloudflare error 1027) and burning two timeouts on it per
+        //    query stalled the whole Desi Hits catalog load.
+        if (endpointAvailable("primary")) {
+            val primary = runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
+            if (primary.isNotEmpty()) {
+                recordEndpointSuccess("primary")
+                Log.d(TAG, "JioSaavn PRIMARY OK for '$query' -> ${primary.size} results")
+                return primary
+            }
+        }
+        recordEndpointFailure("primary")
 
         Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
         return emptyList()
@@ -496,17 +532,25 @@ class YouTubeRepository {
                     }
                     val durationSec = item.optLong("duration", 0)
 
-                    // Audio URL fallback chain — ONLY full-stream fields.
+                    // Audio URL fallback chain — ONLY full-stream sources.
                     // "vlink" is rejected when hosted on jiotunepreview.jio.com
                     // (ringtone/preview host), and "media_preview_url" is never
                     // accepted: both serve short 96kbps preview clips, not the
-                    // full song. An empty audioUrl here is fine — the existing
-                    // refresh path (refreshJioSaavnUrl → getJioSaavnSongDetails)
-                    // resolves the real full-stream URL before playback.
-                    var audioUrl = item.optString("vlink", "")
-                    if (!isFullStreamUrl(audioUrl)) {
-                        audioUrl = item.optString("media_url", "")
-                        if (!isFullStreamUrl(audioUrl)) audioUrl = ""
+                    // full song. The official search response carries a
+                    // DES-encrypted_media_url which decrypts to the real
+                    // full-stream CDN URL.
+                    val encrypted = item.optString("encrypted_media_url", "")
+                    var audioUrl = if (encrypted.isNotBlank()) {
+                        decryptJioSaavnMediaUrl(encrypted)
+                            ?.let { maybeUpgradeTo320Kbps(it, item.optString("320kbps", "false")) }
+                            ?: ""
+                    } else ""
+                    if (audioUrl.isBlank()) {
+                        audioUrl = item.optString("vlink", "")
+                        if (!isFullStreamUrl(audioUrl)) {
+                            audioUrl = item.optString("media_url", "")
+                            if (!isFullStreamUrl(audioUrl)) audioUrl = ""
+                        }
                     }
 
                     songs.add(
@@ -706,6 +750,38 @@ class YouTubeRepository {
         return songs
     }
 
+    /**
+     * Decrypt a JioSaavn `encrypted_media_url` into the real full-stream CDN
+     * URL. The official API only ships this DES-CBC encrypted value; the key
+     * below is the well-known JioSaavn public key used by every jiosaavn-api
+     * implementation.
+     */
+    private fun decryptJioSaavnMediaUrl(encBase64: String): String? {
+        return try {
+            val key = "38346591".toByteArray(Charsets.UTF_8)
+            val cipher = javax.crypto.Cipher.getInstance("DES/CBC/PKCS5Padding")
+            cipher.init(
+                javax.crypto.Cipher.DECRYPT_MODE,
+                javax.crypto.spec.SecretKeySpec(key, "DES"),
+                javax.crypto.spec.IvParameterSpec(key)
+            )
+            val decrypted = cipher.doFinal(android.util.Base64.decode(encBase64, android.util.Base64.DEFAULT))
+            val url = String(decrypted, Charsets.UTF_8).trim()
+            if (url.startsWith("http")) url else null
+        } catch (e: Exception) {
+            Log.w(TAG, "decryptJioSaavnMediaUrl failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Upgrade a 96kbps CDN URL to 320kbps when the API flags it available. */
+    private fun maybeUpgradeTo320Kbps(url: String, kbpsFlag: String): String =
+        if (kbpsFlag == "true" && url.endsWith("_96.mp4")) {
+            url.replace("_96.mp4", "_320.mp4")
+        } else {
+            url
+        }
+
     // Pick the highest quality media URL from JioSaavn downloadUrl array
     private fun pickJioSaavnMediaUrl(downloadArr: JSONArray?): String? {
         if (downloadArr == null || downloadArr.length() == 0) return null
@@ -746,34 +822,84 @@ class YouTubeRepository {
     // BOTH shapes here so song resolution (and therefore JioSaavn/Desi Hits
     // playback) works regardless of which format the API serves.
     private suspend fun getJioSaavnSongDetails(songId: String): JSONObject? = withContext(Dispatchers.IO) {
-        repeat(3) { attempt ->
+        // 1. Mirror (jiosaavn-api.vercel.app) first — returns a directly
+        //    playable media_url and is currently the most reliable source.
+        if (endpointAvailable("details_mirror")) repeat(2) { attempt ->
+            val res = runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+            if (res != null) {
+                recordEndpointSuccess("details_mirror")
+                Log.d(TAG, "JioSaavn details MIRROR OK for '$songId' (attempt ${attempt + 1})")
+                return@withContext res
+            }
+            if (attempt < 1) kotlinx.coroutines.delay(400L)
+        }
+        recordEndpointFailure("details_mirror")
+
+        // 2. Official song.getDetails API (jiosaavn.com/api.php).
+        if (endpointAvailable("details_official")) {
+            val official = runCatching { getJioSaavnSongDetailsOfficial(songId) }.getOrNull()
+            if (official != null) {
+                recordEndpointSuccess("details_official")
+                Log.d(TAG, "JioSaavn details OFFICIAL OK for '$songId'")
+                return@withContext official
+            }
+        }
+        recordEndpointFailure("details_official")
+
+        // 3. Primary saavn.sumit.co LAST — extended outages made it the
+        //    slowest path when tried first.
+        if (endpointAvailable("details_primary")) repeat(2) { attempt ->
             val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
             if (primary != null) {
+                recordEndpointSuccess("details_primary")
                 Log.d(TAG, "JioSaavn details PRIMARY OK for '$songId' (attempt ${attempt + 1})")
                 return@withContext primary
             }
-            Log.w(TAG, "JioSaavn details PRIMARY failed for '$songId' (attempt ${attempt + 1}/3)")
-            if (attempt < 2) kotlinx.coroutines.delay(500L * (attempt + 1))
+            if (attempt < 1) kotlinx.coroutines.delay(500L)
         }
-        Log.w(TAG, "JioSaavn details PRIMARY FAILED for '$songId' after 3 attempts — trying mirror")
-        return@withContext getJioSaavnSongDetailsMirrorRetry(songId)
+        recordEndpointFailure("details_primary")
+
+        Log.e(TAG, "JioSaavn details ALL endpoints FAILED for '$songId'")
+        return@withContext null
     }
 
     /**
-     * Mirror retry for song details (same resilience rationale as the search
-     * fallback): the working mirror can rate-limit, so retry before giving up.
+     * Official jiosaavn.com song.getDetails endpoint, surfaced as a synthetic
+     * JSONObject with `media_url` so [refreshJioSaavnUrl] handles it uniformly.
+     * Only full-stream URLs are returned — preview fields never pass through.
      */
-    private suspend fun getJioSaavnSongDetailsMirrorRetry(songId: String): JSONObject? {
-        repeat(3) { attempt ->
-            val res = runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
-            if (res != null) {
-                Log.d(TAG, "JioSaavn details MIRROR OK for '$songId' (attempt ${attempt + 1})")
-                return res
+    private suspend fun getJioSaavnSongDetailsOfficial(songId: String): JSONObject? {
+        try {
+            val url = "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=$songId&_format=json&_marker=0"
+            Log.d(TAG, "getJioSaavnSongDetailsOfficial: requesting $url")
+            val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
+            if (response.isBlank()) return null
+            val item = JSONObject(response).optJSONObject(songId) ?: return null
+            val mediaUrl = item.optString("media_url", "")
+            if (isFullStreamUrl(mediaUrl)) {
+                val out = JSONObject()
+                out.put("media_url", mediaUrl)
+                return out
             }
-            Log.w(TAG, "JioSaavn details MIRROR failed for '$songId' (attempt ${attempt + 1})")
-            if (attempt < 2) kotlinx.coroutines.delay(400L * (attempt + 1))
+            // Official API returns only an encrypted_media_url (DES-encrypted).
+            // Decrypt it to obtain the real full-stream CDN URL.
+            val enc = item.optString("encrypted_media_url", "")
+            if (enc.isNotBlank()) {
+                val decrypted = decryptJioSaavnMediaUrl(enc)
+                if (isFullStreamUrl(decrypted)) {
+                    val upgraded = maybeUpgradeTo320Kbps(
+                        decrypted!!,
+                        item.optString("320kbps", "false")
+                    )
+                    val out = JSONObject()
+                    out.put("media_url", upgraded)
+                    return out
+                }
+            }
+            Log.w(TAG, "getJioSaavnSongDetailsOfficial: no full-stream media_url for $songId")
+        } catch (e: Exception) {
+            Log.w(TAG, "getJioSaavnSongDetailsOfficial failed for $songId: ${e.message}")
         }
-        Log.e(TAG, "JioSaavn details BOTH primary and mirror FAILED for '$songId'")
         return null
     }
 
