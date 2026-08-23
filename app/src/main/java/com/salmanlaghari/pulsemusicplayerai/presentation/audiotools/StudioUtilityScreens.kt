@@ -148,9 +148,7 @@ enum class StudioVisualizerPreset(val displayName: String, val description: Stri
     STEP_BARS("Step Bars", "An 8-bit stepped digital waveform", VisualizerPreset.STEP_BARS),
     BARS_3D("3D Bars", "Bold thick equalizer bars", VisualizerPreset.BARS_3D),
     STACKED_BARS("Stacked Bars", "Bars expanding from the centre horizon to both sides", VisualizerPreset.STACKED_BARS),
-    BOUNCING_BARS("Bouncing Bars", "Bottom bars topped with bright peak caps", VisualizerPreset.PEAK_BARS),
     SPECTRUM_FLAT("Spectrum Flat", "Clean equalizer bars standing on a bottom baseline", VisualizerPreset.SPECTRUM_FLAT),
-    PEAK_METER("Peak Meter", "Bottom bars topped with bright peak caps", VisualizerPreset.PEAK_BARS),
 
     // ---------- WAVE (10) ----------
     WAVEFORM("Waveform", "The raw audio waveform drawn as a continuous line", VisualizerPreset.WAVEFORM),
@@ -407,12 +405,15 @@ private fun VisualizerCard(
         modifier = modifier
             .height(72.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant
         ),
-        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+        border = if (selected) BorderStroke(
+            1.5.dp,
+            Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary))
+        ) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 8.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -481,10 +482,13 @@ private fun BackgroundPreviewCard(
             .fillMaxWidth()
             .height(90.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+        border = if (selected) BorderStroke(
+            1.5.dp,
+            Brush.linearGradient(listOf(Color.White, MaterialTheme.colorScheme.primary, Color.White))
+        ) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 8.dp else 1.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
@@ -719,12 +723,23 @@ private fun FormatSelector(
                 border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = ratio.displayName,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = when (ratio) {
+                                VideoAspectRatio.RATIO_16_9 -> "YouTube"
+                                VideoAspectRatio.RATIO_9_16 -> "Shorts"
+                                VideoAspectRatio.RATIO_1_1 -> "Square"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = ratio.displayName,
+                            fontSize = 9.sp,
+                            color = if (isSelected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
         }
@@ -1488,23 +1503,33 @@ fun VideoStudioScreen(
 
                     // ---- LIVE VISUALIZER ----
                     item {
-                        CollapsibleSection(title = "LIVE VISUALIZER", expanded = expandedVisualizer, onToggle = { expandedVisualizer = !expandedVisualizer }) {
+                        CollapsibleSection(title = "LIVE VISUALIZER — PREMIUM BEAT ENGINE", expanded = expandedVisualizer, onToggle = { expandedVisualizer = !expandedVisualizer }) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            FlowRow(
+                            // Premium 2027-style HORIZONTAL carousel: every visualizer
+                            // is one swipe away and taps straight onto the preview.
+                            // All presets are driven by the real audio spectrum + beat
+                            // detector, so what pulses on screen IS the song.
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                maxItemsInEachRow = 2
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp)
                             ) {
-                                STUDIO_VISUALIZERS.forEach { viz ->
+                                items(STUDIO_VISUALIZERS.size) { idx ->
+                                    val viz = STUDIO_VISUALIZERS[idx]
                                     VisualizerCard(
                                         preset = viz,
                                         selected = preset.toVideoPreset() == viz.mappedPreset.toVideoPreset(),
                                         onClick = { preset = viz.mappedPreset },
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.width(230.dp)
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "\u2728 Beat-reactive \u2022 swipe to browse \u2022 tap to apply",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                            )
                         }
                     }
 
@@ -1540,13 +1565,15 @@ fun VideoStudioScreen(
                                 "FUTURE" -> FUTURE_BACKGROUNDS
                                 else -> LIVE_BACKGROUNDS
                             }
-                            FlowRow(
+                            // Horizontal premium carousel — 20+ LIVE animations,
+                            // 4K templates and 8K templates all swipeable.
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                maxItemsInEachRow = 2
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp)
                             ) {
-                                backgroundsForCategory.forEach { bg ->
+                                items(backgroundsForCategory.size) { idx ->
+                                    val bg = backgroundsForCategory[idx]
                                     BackgroundPreviewCard(
                                         preset = bg,
                                         selected = selectedBackgroundId == bg.id,
@@ -1560,7 +1587,7 @@ fun VideoStudioScreen(
                                                 else -> resolution = VideoResolution.HD_720
                                             }
                                         },
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.width(150.dp)
                                     )
                                 }
                             }
