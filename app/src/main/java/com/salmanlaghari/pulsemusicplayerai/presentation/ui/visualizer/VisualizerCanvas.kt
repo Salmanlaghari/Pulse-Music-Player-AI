@@ -20,9 +20,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
+
+import com.salmanlaghari.pulsemusicplayerai.presentation.ui.visualizer.VisualizerTemplate
 
 @Composable
 fun VisualizerCanvas(
@@ -33,7 +36,8 @@ fun VisualizerCanvas(
     modifier: Modifier = Modifier,
     primaryColor: Color = MaterialTheme.colorScheme.primary,
     secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary
+    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
+    template: VisualizerTemplate? = null
 ) {
     var phase by remember { mutableStateOf(0f) }
 
@@ -55,93 +59,119 @@ fun VisualizerCanvas(
     val fireParticles = remember { List(40) { FireParticle( (Math.random() * 2 - 1).toFloat(), (Math.random()).toFloat(), (0.01f + Math.random() * 0.02f).toFloat() ) } }
     val meteors = remember { List(25) { Meteor( (Math.random() * 2 - 1).toFloat(), (Math.random() * 2 - 1).toFloat(), (0.02f + Math.random() * 0.03f).toFloat(), (15f + Math.random() * 15).toFloat() ) } }
 
-    Canvas(modifier = modifier.fillMaxSize()) {
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                this.alpha = 0.99f
+            }
+    ) {
         val width = size.width
         val height = size.height
         val centerX = width / 2f
         val centerY = height / 2f
         val minDim = minOf(width, height)
 
+        val tpl = template
+        val pCol = tpl?.primaryColor ?: primaryColor
+        val sCol = tpl?.secondaryColor ?: secondaryColor
+        val tCol = tpl?.tertiaryColor ?: tertiaryColor
+        val sens = sensitivity * (tpl?.glowIntensity ?: 1f)
+
         when (preset) {
             VisualizerPreset.CIRCULAR_RADIAL_BARS -> {
-                drawCircularBars(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawCircularBars(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.CONCENTRIC -> {
-                drawConcentricRings(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+                drawConcentricRings(phase, sens, pCol, tCol, centerX, centerY, minDim)
             }
             VisualizerPreset.RADIAL_WAVE -> {
-                drawConcentricRings(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+                drawConcentricRings(phase, sens, pCol, tCol, centerX, centerY, minDim)
             }
             VisualizerPreset.SPIRAL_PULSE -> {
-                drawSpiralGalaxy(phase, sensitivity, primaryColor, tertiaryColor, centerX, centerY, minDim)
+                drawSpiralGalaxy(phase, sens, pCol, tCol, centerX, centerY, minDim)
             }
             VisualizerPreset.ROTATING_RINGS -> {
-                drawCircularBars(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawCircularBars(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.CLOCKWISE_SPIN -> {
-                drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawOrbitalRings(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.COUNTER_SPIN -> {
-                drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawOrbitalRings(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.PULSING_CORE -> {
-                drawPulsingCore(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawPulsingCore(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.EXPANDING_CIRCLES -> {
-                drawFuturePulse(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawFuturePulse(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.GALAXY_SPIN -> {
-                drawGalaxyRing(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawGalaxyRing(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.DOUBLE_HELIX -> {
-                drawDoubleHelix(phase, sensitivity, primaryColor, tertiaryColor, width, centerY)
+                drawDoubleHelix(phase, sens, pCol, tCol, width, centerY)
             }
             VisualizerPreset.ORBITING_DOTS -> {
-                drawOrbitingDots(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawOrbitingDots(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.SOLAR_SYSTEM -> {
-                drawOrbitalRings(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawOrbitalRings(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.VORTEX -> {
-                drawTunnelWarp(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawTunnelWarp(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.MANDALA_ROTATE -> {
-                drawKaleidoscope(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawKaleidoscope(phase, sens, pCol, sCol, centerX, centerY, minDim)
+            }
+
+            // ---------- AVEE-STYLE TEMPLATES ----------
+            VisualizerPreset.RADIAL_PULSE -> {
+                drawRadialPulse(phase, sens, pCol, sCol, centerX, centerY, minDim)
+            }
+            VisualizerPreset.PARTICLE_BURST -> {
+                drawParticleBurst(phase, sens, pCol, sCol, centerX, centerY, minDim)
+            }
+            VisualizerPreset.SPECTRUM_RINGS -> {
+                drawSpectrumRings(phase, sens, pCol, sCol, centerX, centerY, minDim)
+            }
+            VisualizerPreset.KALEIDOSCOPE_WAVE -> {
+                drawKaleidoscopeWave(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
 
             // ---------- BARS ----------
             VisualizerPreset.VERTICAL_BARS -> {
-                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawLinearBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.HORIZONTAL_BARS -> {
-                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawLinearBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.MIRROR_BARS -> {
-                drawMirrorBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawMirrorBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.CENTERED_BARS -> {
-                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawLinearBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.SIDE_BARS -> {
-                drawSpectrumX(phase, sensitivity, primaryColor, secondaryColor, centerX, centerY, minDim)
+                drawSpectrumX(phase, sens, pCol, sCol, centerX, centerY, minDim)
             }
             VisualizerPreset.WAVE_BARS -> {
-                drawFluidWave(phase, sensitivity, primaryColor, secondaryColor, width, centerY)
+                drawFluidWave(phase, sens, pCol, sCol, width, centerY)
             }
             VisualizerPreset.STEP_BARS -> {
-                drawCyberWave(phase, sensitivity, primaryColor, width, height)
+                drawCyberWave(phase, sens, pCol, width, height)
             }
             VisualizerPreset.RAINBOW_BARS -> {
-                drawRainbowBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawRainbowBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.GLOW_BARS -> {
-                drawNeonBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawNeonBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.BARS_3D -> {
-                drawLinearBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawLinearBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.STACKED_BARS -> {
-                drawInfinityBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
+                drawInfinityBars(phase, sens, pCol, sCol, width, height)
             }
             VisualizerPreset.BOUNCING_BARS -> {
                 drawPeakBars(phase, sensitivity, primaryColor, secondaryColor, width, height)
@@ -1087,3 +1117,90 @@ private class MatrixColumn(var xPct: Float, var yPct: Float, val speed: Float, v
 private class Bubble(var xPct: Float, var yPct: Float, val speed: Float, val size: Float)
 private class FireParticle(var xScale: Float, var yPct: Float, val speed: Float)
 private class Meteor(var xPct: Float, var yPct: Float, val speed: Float, val len: Float)
+
+// ---------- AVEE-STYLE TEMPLATE RENDERERS ----------
+private fun DrawScope.drawRadialPulse(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val ringCount = 6
+    val maxRadius = minDim * 0.45f
+    for (r in 0 until ringCount) {
+        val baseRadius = maxRadius * ((r + 1).toFloat() / ringCount)
+        val pulse = sin(phase * 2f + r * 0.8f).absoluteValue * sensitivity * maxRadius * 0.25f
+        val radius = baseRadius + pulse
+        drawCircle(
+            color = pCol.copy(alpha = 0.15f + (1f - r.toFloat() / ringCount) * 0.4f),
+            radius = radius,
+            center = Offset(cx, cy),
+            style = Stroke(width = 2f + (ringCount - r).toFloat() * 0.5f)
+        )
+    }
+    drawCircle(
+        color = sCol.copy(alpha = 0.9f),
+        radius = 12f + sin(phase * 4f).absoluteValue * 8f * sensitivity,
+        center = Offset(cx, cy)
+    )
+}
+
+private fun DrawScope.drawParticleBurst(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val count = 80
+    val beat = sin(phase * 3f).absoluteValue
+    val maxDist = minDim * 0.4f * (0.6f + beat * sensitivity * 0.4f)
+    for (i in 0 until count) {
+        val angle = (i.toFloat() / count) * 360f + phase * 15f
+        val rad = Math.toRadians(angle.toDouble())
+        val dist = maxDist * (0.2f + sin(phase * 2f + i * 0.4f).absoluteValue * 0.8f)
+        val px = cx + (dist * cos(rad)).toFloat()
+        val py = cy + (dist * sin(rad)).toFloat()
+        val alpha = 0.3f + beat * 0.7f
+        drawCircle(
+            color = if (i % 2 == 0) pCol.copy(alpha = alpha) else sCol.copy(alpha = alpha),
+            radius = 2f + beat * 4f,
+            center = Offset(px, py)
+        )
+    }
+}
+
+private fun DrawScope.drawSpectrumRings(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val rings = 10
+    val pointsPerRing = 64
+    val maxRadius = minDim * 0.42f
+    for (r in 0 until rings) {
+        val baseRadius = maxRadius * ((r + 1).toFloat() / rings)
+        val points = pointsPerRing / (r + 1)
+        for (i in 0 until points) {
+            val angle = (i.toFloat() / points) * 360f
+            val rad = Math.toRadians(angle.toDouble())
+            val wave = sin(phase * 3f + i * 0.3f + r * 0.5f).absoluteValue
+            val radius = baseRadius + wave * minDim * 0.06f * sensitivity
+            val px = cx + (radius * cos(rad)).toFloat()
+            val py = cy + (radius * sin(rad)).toFloat()
+            drawCircle(
+                color = if (i % 2 == 0) pCol else sCol,
+                radius = 2f + wave * 3f,
+                center = Offset(px, py)
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawKaleidoscopeWave(phase: Float, sensitivity: Float, pCol: Color, sCol: Color, cx: Float, cy: Float, minDim: Float) {
+    val segments = 8
+    val pointsPerSegment = 24
+    val maxRadius = minDim * 0.35f
+    for (seg in 0 until segments) {
+        val baseAngle = (seg.toFloat() / segments) * 360f
+        for (i in 0 until pointsPerSegment) {
+            val t = i.toFloat() / pointsPerSegment
+            val angle = baseAngle + t * 60f
+            val rad = Math.toRadians(angle.toDouble())
+            val wave = sin(phase * 2.5f + i * 0.4f + seg * 0.7f).absoluteValue
+            val radius = t * maxRadius * (0.7f + wave * 0.3f * sensitivity)
+            val px = cx + (radius * cos(rad)).toFloat()
+            val py = cy + (radius * sin(rad)).toFloat()
+            drawCircle(
+                color = if (i % 3 == 0) pCol else if (i % 3 == 1) sCol else Color.White,
+                radius = 1.5f + wave * 3f,
+                center = Offset(px, py)
+            )
+        }
+    }
+}
