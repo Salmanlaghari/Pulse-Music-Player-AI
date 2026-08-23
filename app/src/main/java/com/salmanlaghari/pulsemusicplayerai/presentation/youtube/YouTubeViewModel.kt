@@ -126,8 +126,12 @@ class YouTubeViewModel(
         // periodically in the background (every 30 minutes). The catalog only
         // re-loads when it is stale, so this is a no-op most of the time.
         viewModelScope.launch {
+            // Auto-sync loop with adaptive cadence: retry every 2 minutes while
+            // the catalog is empty (so a transient API outage self-heals fast),
+            // otherwise re-sync every 30 minutes to stay fresh.
             while (true) {
-                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                val empty = _southAsianSongs.value.isEmpty()
+                kotlinx.coroutines.delay(if (empty) 2 * 60 * 1000L else 30 * 60 * 1000L)
                 syncSouthAsianCatalog()
             }
         }
@@ -281,12 +285,18 @@ class YouTubeViewModel(
                     val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
                         _southAsianProgress.value = completed to total
                     }
-                    val previousCount = _southAsianSongs.value.size
-                    _southAsianSongs.value = songs
-                    southAsianLoaded = true
-                    _southAsianLoadedAtMs.value = System.currentTimeMillis()
-                    saveSouthAsianCatalogToCache(songs)
-                    Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
+                    if (songs.isNotEmpty()) {
+                        _southAsianSongs.value = songs
+                        southAsianLoaded = true
+                        _southAsianLoadedAtMs.value = System.currentTimeMillis()
+                        saveSouthAsianCatalogToCache(songs)
+                        Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
+                    } else {
+                        // All endpoints failed — KEEP whatever is on screen (cache or
+                        // previous load). Clearing the list is what made the tab look
+                        // like "sync never works".
+                        Log.w(TAG, "South Asian network sync returned 0 songs — keeping ${_southAsianSongs.value.size} existing")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load South Asian catalog", e)
                 } finally {
@@ -331,10 +341,10 @@ class YouTubeViewModel(
             val jsonString = preferences[SOUTH_ASIAN_CATALOG_KEY] ?: return null
             val timestamp = preferences[SOUTH_ASIAN_CATALOG_TIMESTAMP_KEY] ?: 0L
 
-            if (System.currentTimeMillis() - timestamp > SOUTH_ASIAN_CATALOG_TTL_MS) {
-                Log.d(TAG, "South Asian catalog cache expired (${(System.currentTimeMillis() - timestamp) / 1000}s old)")
-                return null
-            }
+            // NOTE: no hard TTL rejection here. A stale catalog is infinitely
+            // better than an empty tab — it is shown immediately and the
+            // periodic auto-sync refreshes it in the background.
+            Log.d(TAG, "South Asian catalog cache hit (${(System.currentTimeMillis() - timestamp) / 1000}s old)")
 
             val json = JSONObject(jsonString)
             val jsonArray = json.getJSONArray("songs")
