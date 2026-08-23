@@ -496,13 +496,17 @@ class YouTubeRepository {
                     }
                     val durationSec = item.optLong("duration", 0)
 
-                    // Audio URL fallback chain from official object fields
+                    // Audio URL fallback chain — ONLY full-stream fields.
+                    // "vlink" is rejected when hosted on jiotunepreview.jio.com
+                    // (ringtone/preview host), and "media_preview_url" is never
+                    // accepted: both serve short 96kbps preview clips, not the
+                    // full song. An empty audioUrl here is fine — the existing
+                    // refresh path (refreshJioSaavnUrl → getJioSaavnSongDetails)
+                    // resolves the real full-stream URL before playback.
                     var audioUrl = item.optString("vlink", "")
-                    if (audioUrl.isBlank() || !audioUrl.startsWith("http")) {
-                        audioUrl = item.optString("media_preview_url", "")
-                    }
-                    if (audioUrl.isBlank() || !audioUrl.startsWith("http")) {
+                    if (!isFullStreamUrl(audioUrl)) {
                         audioUrl = item.optString("media_url", "")
+                        if (!isFullStreamUrl(audioUrl)) audioUrl = ""
                     }
 
                     songs.add(
@@ -711,12 +715,27 @@ class YouTubeRepository {
             try {
                 val item = downloadArr.getJSONObject(i)
                 val url = item.optString("url", "")
-                if (url.isNotBlank() && url.startsWith("http")) {
-                    return url
-                }
+                if (isFullStreamUrl(url)) return url
             } catch (e: Exception) { }
         }
         return null
+    }
+
+    /**
+     * True only when [url] points at a documented FULL-STREAM audio file.
+     *
+     * Preview sources are explicitly rejected:
+     * - "media_preview_url" values (short ~30s 96kbps clips)
+     * - any URL on jiotunepreview.jio.com (ringtone/preview host)
+     * Accepting these causes songs to cut off after a few seconds and users
+     * to report "song not playing".
+     */
+    private fun isFullStreamUrl(url: String?): Boolean {
+        if (url.isNullOrBlank() || !url.startsWith("http")) return false
+        val lower = url.lowercase()
+        if (lower.contains("jiotunepreview.jio.com")) return false
+        if (lower.contains("media_preview_url")) return false
+        return true
     }
 
     // Get full song URL from JioSaavn (320kbps) - new saavn.sumit.co API
@@ -883,20 +902,15 @@ class YouTubeRepository {
                     return@withContext url
                 }
                 val mediaUrl = details.optString("media_url", "")
-                if (mediaUrl.isNotBlank() && mediaUrl.startsWith("http")) {
+                if (isFullStreamUrl(mediaUrl)) {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
                     return@withContext mediaUrl
                 }
-                val vlink = details.optString("vlink", "")
-                if (vlink.isNotBlank() && vlink.startsWith("http")) {
-                    Log.d(TAG, "✓ refreshJioSaavnUrl: got vlink for $songId")
-                    return@withContext vlink
-                }
-                val mediaPreviewUrl = details.optString("media_preview_url", "")
-                if (mediaPreviewUrl.isNotBlank() && mediaPreviewUrl.startsWith("http")) {
-                    Log.d(TAG, "✓ refreshJioSaavnUrl: got media_preview_url for $songId")
-                    return@withContext mediaPreviewUrl
-                }
+                // NOTE: "vlink" and "media_preview_url" are intentionally NOT
+                // accepted here. They point at preview/ringtone clips (often on
+                // jiotunepreview.jio.com) that cut off after 10–30 seconds,
+                // which users perceive as "song not playing". Returning null
+                // lets callers fall back to full-stream resolution instead.
                 Log.w(TAG, "refreshJioSaavnUrl: no usable URL in details for $songId")
             } else {
                 Log.w(TAG, "refreshJioSaavnUrl: details is null for $songId")
@@ -913,15 +927,14 @@ class YouTubeRepository {
                 val root = JSONObject(response)
                 val item = root.optJSONObject(songId)
                 if (item != null) {
-                    val vlink = item.optString("vlink", "")
-                    if (vlink.isNotBlank() && vlink.startsWith("http")) {
-                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got vlink for $songId")
-                        return@withContext vlink
-                    }
-                    val mediaPreview = item.optString("media_preview_url", "")
-                    if (mediaPreview.isNotBlank() && mediaPreview.startsWith("http")) {
-                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_preview_url for $songId")
-                        return@withContext mediaPreview
+                    // Only full-stream fields are accepted. "vlink" (frequently
+                    // a jiotunepreview.jio.com ringtone/preview) and
+                    // "media_preview_url" (short clip) would play for only
+                    // 10–30 seconds, so both are rejected.
+                    val officialMediaUrl = item.optString("media_url", "")
+                    if (isFullStreamUrl(officialMediaUrl)) {
+                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_url for $songId")
+                        return@withContext officialMediaUrl
                     }
                 }
             }
