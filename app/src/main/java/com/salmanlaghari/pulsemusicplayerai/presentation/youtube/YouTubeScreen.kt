@@ -60,7 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import java.text.SimpleDateFormat
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
@@ -917,7 +917,7 @@ fun YouTubeSongCard(
                     .background(CardNavy),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = song.thumbnailUrl,
                     contentDescription = song.title,
                     contentScale = ContentScale.Crop,
@@ -1029,7 +1029,7 @@ fun ChannelVideoCard(
                     .background(CardNavy),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = video.thumbnailUrl,
                     contentDescription = video.title,
                     contentScale = ContentScale.Crop,
