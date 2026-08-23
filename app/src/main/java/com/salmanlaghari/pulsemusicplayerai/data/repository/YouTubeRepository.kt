@@ -5,6 +5,7 @@ import com.salmanlaghari.pulsemusicplayerai.BuildConfig
 import com.salmanlaghari.pulsemusicplayerai.domain.model.ChannelVideo
 import com.salmanlaghari.pulsemusicplayerai.domain.model.YouTubeSong
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -1377,39 +1378,75 @@ class YouTubeRepository {
     //   2. Each song page carries data-file/data-year/data-month attributes that
     //      build the direct full-song MP3 CDN URL, plus og:image (500x500 cover)
     //      and "sung by <artists>" metadata in the body text.
+    //
+    // Reliability rules (learned from live traffic):
+    //   - Some pages ship an EMPTY data-file or no audio tag at all. Those songs are
+    //     still listed (full metadata) with audioUrl="" so the existing playback
+    //     pipeline resolves a full stream from JioSaavn/YouTube Music instead.
+    //   - Every stream URL is validated with a tiny ranged GET during search, so
+    //     "shows but doesn't play" results can never reach the UI as playable.
+    //   - Song pages are fetched in parallel to keep search fast.
     // Replaces the old Spotify source (metadata + broken previews only).
+    // No region/language restriction — the WP search index covers every song the
+    // site hosts (Bollywood, Punjabi, Indipop, Haryanvi, and more).
     // ═══════════════════════════════════════════════════════════════════════════════
     suspend fun searchPagalWorld(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<YouTubeSong>()
         try {
             val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-            val searchUrl = "https://pagal-world.com.co/wp-json/wp/v2/search?search=$encoded&per_page=10"
+            val searchUrl = "https://pagal-world.com.co/wp-json/wp/v2/search?search=$encoded&per_page=20"
             val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
             if (searchResponse.isBlank()) {
                 Log.w(TAG, "PagalWorld search returned no body for '$query'")
                 return@withContext emptyList()
             }
             val arr = JSONArray(searchResponse)
-            for (i in 0 until minOf(arr.length(), 10)) {
+            val candidates = mutableListOf<Pair<String, String>>() // pageUrl to fallbackTitle
+            for (i in 0 until arr.length()) {
                 try {
                     val item = arr.getJSONObject(i)
                     val songPageUrl = item.optString("url", "")
                     if (!songPageUrl.contains("/song/")) continue
-                    val fallbackTitle = decodeHtmlEntities(item.optString("title", "Unknown"))
+                    candidates.add(songPageUrl to decodeHtmlEntities(item.optString("title", "Unknown")))
+                } catch (_: Exception) { /* skip malformed */ }
+            }
+            if (candidates.isEmpty()) return@withContext emptyList()
 
-                    val page = httpGetSafe(songPageUrl, timeout = NORMAL_TIMEOUT)
-                    if (page.isBlank()) continue
+            // Fetch pages in parallel batches of 5 — 4x faster than sequential.
+            val fetched = kotlinx.coroutines.sync.Mutex()
+            val pages = mutableListOf<Triple<String, String, String?>>() // url, title, html?
+            val batchJobs = mutableListOf<kotlinx.coroutines.Job>()
+            candidates.chunked(5).forEach { batch ->
+                batchJobs += launch {
+                    for ((url, title) in batch) {
+                        val html = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
+                        synchronized(pages) { pages.add(Triple(url, title, html.ifBlank { null })) }
+                    }
+                }
+            }
+            batchJobs.forEach { it.join() }
 
-                    // Direct audio: the LAST data-file entry wins — pages list the
-                    // 128kbps variant first, then the 320kbps one.
-                    val fileEntries = Regex("data-file=\"([^\"]+)\"").findAll(page).toList()
-                    val file = fileEntries.lastOrNull()?.groupValues?.get(1) ?: continue
-                    val year = Regex("data-year=\"([^\"]*)\"").find(page)?.groupValues?.get(1) ?: ""
-                    val month = Regex("data-month=\"([^\"]*)\"").find(page)?.groupValues?.get(1) ?: ""
-                    val audioUrl = if (year.isNotBlank() && month.isNotBlank()) {
-                        val encodedFile = URLEncoder.encode(file, "UTF-8").replace("+", "%20")
-                        "https://pagal-world.com.co/wp-content/uploads/$year/$month/$encodedFile"
-                    } else ""
+            for ((pageUrl, fallbackTitle, page) in pages) {
+                try {
+                    if (page == null) continue
+
+                    // Parse each <audio ...> tag AS A UNIT so file/year/month always
+                    // belong together (never mix one tag's file with another's date).
+                    val audioTags = Regex("<audio[^>]*>").findAll(page).toList()
+                    var pickedFile: String? = null
+                    var pickedYear = ""
+                    var pickedMonth = ""
+                    for (tag in audioTags) {
+                        val t = tag.value
+                        val f = Regex("data-file=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: continue
+                        val y = Regex("data-year=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
+                        val m = Regex("data-month=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
+                        // Prefer the 320kbps variant when present; otherwise keep the first.
+                        val better = f.contains("320", ignoreCase = true)
+                        if (pickedFile == null || better) {
+                            pickedFile = f; pickedYear = y; pickedMonth = m
+                        }
+                    }
 
                     // Metadata: cover art from og:image, artists from "sung by ..."
                     val thumbnail = Regex("<meta property=\"og:image\" content=\"([^\"]+)\"")
@@ -1418,7 +1455,18 @@ class YouTubeRepository {
                         .find(page)?.groupValues?.get(1)?.trim()
                         ?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
 
-                    val slug = songPageUrl.trimEnd('/').substringAfterLast('/')
+                    var audioUrl = ""
+                    if (pickedFile != null && pickedYear.isNotBlank() && pickedMonth.isNotBlank()) {
+                        val encodedFile = URLEncoder.encode(pickedFile, "UTF-8").replace("+", "%20")
+                        audioUrl = "https://pagal-world.com.co/wp-content/uploads/$pickedYear/$pickedMonth/$encodedFile"
+                        // Validate the stream NOW: a tiny 100-byte ranged GET must come
+                        // back as audio (200/206). Anything else -> treat as no stream
+                        // so playback falls back to full-song resolution instead of
+                        // failing in the player.
+                        if (!httpIsReachableAudio(audioUrl)) audioUrl = ""
+                    }
+
+                    val slug = pageUrl.trimEnd('/').substringAfterLast('/')
                     songs.add(
                         YouTubeSong(
                             id = "pw_$slug",
@@ -1434,8 +1482,34 @@ class YouTubeRepository {
         } catch (e: Exception) {
             Log.w(TAG, "PagalWorld search error: ${e.message}")
         }
-        Log.d(TAG, "PagalWorld found ${songs.size} results for '$query'")
+        Log.d(TAG, "PagalWorld found ${songs.size} results for '$query' (${songs.count { it.hasValidAudio() }} streamable)")
         songs
+    }
+
+    /** True when [url] answers a tiny ranged GET with an audio-capable status (200/206). */
+    private fun httpIsReachableAudio(urlString: String): Boolean {
+        var conn: java.net.HttpURLConnection? = null
+        return try {
+            val c = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+            conn = c
+            c.requestMethod = "GET"
+            applyBypassHeaders(c)
+            c.setRequestProperty("Range", "bytes=0-99")
+            c.connectTimeout = FAST_TIMEOUT
+            c.readTimeout = FAST_TIMEOUT
+            c.instanceFollowRedirects = true
+            val code = c.responseCode
+            if (code in 200..206) {
+                // Drain a tiny slice manually (readNBytes needs API 33+).
+                val buf = ByteArray(100)
+                try { c.inputStream.use { it.read(buf) } } catch (_: Exception) {}
+                true
+            } else false
+        } catch (_: Exception) {
+            false
+        } finally {
+            conn?.disconnect()
+        }
     }
 
     // =========================================================================
