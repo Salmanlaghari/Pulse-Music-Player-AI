@@ -262,6 +262,7 @@ class YouTubeViewModel(
                     if (cached != null) {
                         _southAsianSongs.value = cached
                         southAsianLoaded = true
+                        _southAsianLoadedAtMs.value = System.currentTimeMillis()
                         Log.d(TAG, "Loaded ${cached.size} South Asian songs from cache")
                         return@launch
                     }
