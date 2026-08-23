@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /search
+Sitemap: https://salmanlaghari.github.io/Pulse-Music-Player-AI/sitemap.xml
