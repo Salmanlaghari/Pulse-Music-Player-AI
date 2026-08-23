@@ -57,7 +57,13 @@ enum class VisualizerPreset(val displayName: String, val category: String, val d
     CALM_RIPPLE("Calm Ripple", "Ambient", "Concentric water ripples echoing outward with organic damping."),
     NIGHT_SKY("Night Sky", "Ambient", "Digital rain columns falling with speed and brightness driven by audio."),
     AURORA("Aurora", "Ambient", "Ambient waves of organic coloured glow mimicking Northern Lights."),
-    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio.");
+    DEEP_SPACE("Deep Space", "Ambient", "Stars moving outward from the centre on audio."),
+
+    // ---------- AVEE-STYLE TEMPLATES (4) ----------
+    RADIAL_PULSE("Radial Pulse", "Template", "AVEE-style radial pulse with expanding rings and centre orb."),
+    PARTICLE_BURST("Particle Burst", "Template", "AVEE-style particle burst with physics-based particles on beats."),
+    SPECTRUM_RINGS("Spectrum Rings", "Template", "AVEE-style concentric spectrum rings with frequency-reactive radii."),
+    KALEIDOSCOPE_WAVE("Kaleidoscope Wave", "Template", "AVEE-style kaleidoscope with mirrored waveform segments."),
 
     /** Compatibility aliases used by the studio's richer preset catalog. */
     companion object {

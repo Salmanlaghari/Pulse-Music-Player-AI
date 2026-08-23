@@ -60,6 +60,7 @@ import com.salmanlaghari.pulsemusicplayerai.common.SongArtwork
 import com.salmanlaghari.pulsemusicplayerai.domain.model.Song
 import com.salmanlaghari.pulsemusicplayerai.presentation.MusicViewModel
 import com.salmanlaghari.pulsemusicplayerai.presentation.ui.PermissionScreen
+import com.salmanlaghari.pulsemusicplayerai.presentation.home.MiniPlayer
 import com.salmanlaghari.pulsemusicplayerai.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -123,56 +124,63 @@ fun HomeScreenContent(
     Box(modifier = Modifier.fillMaxSize().background(NeonBackground)) {
         Box(modifier = Modifier.fillMaxSize().background(Brush.radialGradient(colors = listOf(NeonPurple.copy(alpha = 0.12f), Color.Transparent), radius = 900f)))
         Box(modifier = Modifier.fillMaxSize().background(Brush.radialGradient(colors = listOf(NeonCyan.copy(alpha = 0.08f), Color.Transparent), radius = 700f)))
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Pulse", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = (-0.5).sp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("⚡", fontSize = 20.sp, modifier = Modifier.shadow(elevation = 12.dp, shape = CircleShape, clip = false, ambientColor = CyanGlowSoft, spotColor = CyanGlow))
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+                    .padding(16.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pulse", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = (-0.5).sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("⚡", fontSize = 20.sp, modifier = Modifier.shadow(elevation = 12.dp, shape = CircleShape, clip = false, ambientColor = CyanGlowSoft, spotColor = CyanGlow))
+                    }
+                    IconButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onNavigateToSearch() }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = CyanGlow, modifier = Modifier.size(24.dp))
+                    }
                 }
-                IconButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onNavigateToSearch() }) {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = CyanGlow, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
+                WelcomeCard()
+                Spacer(modifier = Modifier.height(24.dp))
+                val songToContinue = currentSong ?: allSongs.firstOrNull()
+                if (songToContinue != null) {
+                    SectionHeader(title = "Continue Listening", showSeeAll = false) {}
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ContinueListeningCard(song = songToContinue, onClick = { viewModel.playSong(songToContinue); onNavigateToPlayer() })
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            WelcomeCard()
-            Spacer(modifier = Modifier.height(24.dp))
-            val songToContinue = currentSong ?: allSongs.firstOrNull()
-            if (songToContinue != null) {
-                SectionHeader(title = "Continue Listening", showSeeAll = false) {}
+                SectionHeader(title = "Quick Access", showSeeAll = false)
                 Spacer(modifier = Modifier.height(12.dp))
-                ContinueListeningCard(song = songToContinue, onClick = { viewModel.playSong(songToContinue); onNavigateToPlayer() })
+                QuickAccessRow(onNavigateToYouTube, onNavigateToFavorites, onNavigateToLibrary, onNavigateToEqualizer)
                 Spacer(modifier = Modifier.height(24.dp))
+                if (recentlyAdded.isNotEmpty()) {
+                    SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SongHorizontalLazyRow(recentlyAdded) { viewModel.playSong(it, recentlyAdded); onNavigateToPlayer() }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                if (favoriteSongs.isNotEmpty()) {
+                    SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SongHorizontalLazyRow(favoriteSongs) { viewModel.playSong(it, favoriteSongs); onNavigateToPlayer() }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                if (allSongs.isNotEmpty()) {
+                    SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SongHorizontalLazyRow(allSongs.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    SectionHeader(title = "Most Played") { onNavigateToLibrary() }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SongHorizontalLazyRow(allSongs.sortedBy { it.title.length }.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                PulseBranding(modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            SectionHeader(title = "Quick Access", showSeeAll = false)
-            Spacer(modifier = Modifier.height(12.dp))
-            QuickAccessRow(onNavigateToYouTube, onNavigateToFavorites, onNavigateToLibrary, onNavigateToEqualizer)
-            Spacer(modifier = Modifier.height(24.dp))
-            if (recentlyAdded.isNotEmpty()) {
-                SectionHeader(title = "Recently Added") { onNavigateToLibrary() }
-                Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(recentlyAdded) { viewModel.playSong(it, recentlyAdded); onNavigateToPlayer() }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-            if (favoriteSongs.isNotEmpty()) {
-                SectionHeader(title = "Favorite Songs") { onNavigateToFavorites() }
-                Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(favoriteSongs) { viewModel.playSong(it, favoriteSongs); onNavigateToPlayer() }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-            if (allSongs.isNotEmpty()) {
-                SectionHeader(title = "Recently Played") { onNavigateToLibrary() }
-                Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(allSongs.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
-                Spacer(modifier = Modifier.height(24.dp))
-                SectionHeader(title = "Most Played") { onNavigateToLibrary() }
-                Spacer(modifier = Modifier.height(12.dp))
-                SongHorizontalLazyRow(allSongs.sortedBy { it.title.length }.take(5)) { viewModel.playSong(it); onNavigateToPlayer() }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-            PulseBranding(modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(8.dp))
-            Spacer(modifier = Modifier.height(140.dp))
+            MiniPlayer(viewModel = viewModel, onNavigateToPlayer = onNavigateToPlayer)
         }
     }
 }
