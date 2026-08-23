@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
@@ -59,13 +58,7 @@ fun VisualizerCanvas(
     val fireParticles = remember { List(40) { FireParticle( (Math.random() * 2 - 1).toFloat(), (Math.random()).toFloat(), (0.01f + Math.random() * 0.02f).toFloat() ) } }
     val meteors = remember { List(25) { Meteor( (Math.random() * 2 - 1).toFloat(), (Math.random() * 2 - 1).toFloat(), (0.02f + Math.random() * 0.03f).toFloat(), (15f + Math.random() * 15).toFloat() ) } }
 
-    Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                this.alpha = 0.99f
-            }
-    ) {
+    Canvas(modifier = modifier.fillMaxSize()) {
         val width = size.width
         val height = size.height
         val centerX = width / 2f
