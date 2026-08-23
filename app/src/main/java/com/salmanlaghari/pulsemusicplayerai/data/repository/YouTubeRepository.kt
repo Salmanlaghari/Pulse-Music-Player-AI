@@ -1370,75 +1370,71 @@ class YouTubeRepository {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════
-    // SPOTIFY SEARCH — via Spotify public access token (metadata + 30s preview)
+    // PAGALWORLD SEARCH — full MP3 streams with complete metadata (no API key)
+    //
+    // PagalWorld is a WordPress site. It exposes:
+    //   1. /wp-json/wp/v2/search?search=...  → song page URLs (official WP JSON API)
+    //   2. Each song page carries data-file/data-year/data-month attributes that
+    //      build the direct full-song MP3 CDN URL, plus og:image (500x500 cover)
+    //      and "sung by <artists>" metadata in the body text.
+    // Replaces the old Spotify source (metadata + broken previews only).
     // ═══════════════════════════════════════════════════════════════════════════════
-    suspend fun searchSpotify(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
+    suspend fun searchPagalWorld(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<YouTubeSong>()
         try {
-            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-
-            // 1. Obtain a public access token (Spotify Web Player anonymous token endpoint)
-            val tokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player"
-            val tokenResponse = httpGet(tokenUrl, timeout = FAST_TIMEOUT)
-            var accessToken: String? = null
-            if (tokenResponse.isNotBlank()) {
-                try {
-                    val tokenJson = JSONObject(tokenResponse)
-                    accessToken = tokenJson.optString("accessToken", "")
-                } catch (e: Exception) { /* fall through */ }
-            }
-
-            if (accessToken.isNullOrBlank()) {
-                Log.w(TAG, "Spotify token fetch failed; skipping Spotify search")
+            val encoded = URLEncoder.encode(query.trim(), "UTF-8")
+            val searchUrl = "https://pagal-world.com.co/wp-json/wp/v2/search?search=$encoded&per_page=10"
+            val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+            if (searchResponse.isBlank()) {
+                Log.w(TAG, "PagalWorld search returned no body for '$query'")
                 return@withContext emptyList()
             }
+            val arr = JSONArray(searchResponse)
+            for (i in 0 until minOf(arr.length(), 10)) {
+                try {
+                    val item = arr.getJSONObject(i)
+                    val songPageUrl = item.optString("url", "")
+                    if (!songPageUrl.contains("/song/")) continue
+                    val fallbackTitle = decodeHtmlEntities(item.optString("title", "Unknown"))
 
-            // 2. Search tracks using the public access token
-            val searchUrl = "https://api.spotify.com/v1/search?q=$encodedQuery&type=track&limit=30"
-            val searchResponse = httpGetWithAuth(searchUrl, "Bearer $accessToken", timeout = NORMAL_TIMEOUT)
+                    val page = httpGetSafe(songPageUrl, timeout = NORMAL_TIMEOUT)
+                    if (page.isBlank()) continue
 
-            if (searchResponse.isNotBlank()) {
-                val json = JSONObject(searchResponse)
-                val tracks = json.optJSONObject("tracks")?.optJSONArray("items")
-                    ?: return@withContext emptyList()
+                    // Direct audio: the LAST data-file entry wins — pages list the
+                    // 128kbps variant first, then the 320kbps one.
+                    val fileEntries = Regex("data-file=\"([^\"]+)\"").findAll(page).toList()
+                    val file = fileEntries.lastOrNull()?.groupValues?.get(1) ?: continue
+                    val year = Regex("data-year=\"([^\"]*)\"").find(page)?.groupValues?.get(1) ?: ""
+                    val month = Regex("data-month=\"([^\"]*)\"").find(page)?.groupValues?.get(1) ?: ""
+                    val audioUrl = if (year.isNotBlank() && month.isNotBlank()) {
+                        val encodedFile = URLEncoder.encode(file, "UTF-8").replace("+", "%20")
+                        "https://pagal-world.com.co/wp-content/uploads/$year/$month/$encodedFile"
+                    } else ""
 
-                for (i in 0 until tracks.length()) {
-                    try {
-                        val track = tracks.getJSONObject(i)
-                        val trackName = track.optString("name", "Unknown")
-                        val trackId = track.optString("id", "")
-                        val artists = track.optJSONArray("artists")
-                        val artistName = if (artists != null && artists.length() > 0) {
-                            artists.getJSONObject(0).optString("name", "Unknown Artist")
-                        } else "Unknown Artist"
-                        val durationMs = track.optLong("duration_ms", 0)
-                        val durationSec = if (durationMs > 0) durationMs / 1000 else 0
-                        val previewUrl = track.optString("preview_url", "")
-                        val albumObj = track.optJSONObject("album")
-                        val images = albumObj?.optJSONArray("images")
-                        val thumbnail = if (images != null && images.length() > 0) {
-                            images.getJSONObject(0).optString("url", "")
-                        } else ""
+                    // Metadata: cover art from og:image, artists from "sung by ..."
+                    val thumbnail = Regex("<meta property=\"og:image\" content=\"([^\"]+)\"")
+                        .find(page)?.groupValues?.get(1) ?: ""
+                    val artist = Regex("sung by ([^.<]+)")
+                        .find(page)?.groupValues?.get(1)?.trim()
+                        ?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
 
-                        // Spotify preview_url can be null for some tracks; still include metadata-only
-                        // entries so they appear in sync results, but mark audio as empty so fallback resolves them.
-                        val audio = previewUrl.takeIf { it.isNotBlank() && it.startsWith("http") } ?: ""
-                        songs.add(
-                            YouTubeSong(
-                                id = "sp_$trackId",
-                                title = trackName,
-                                artist = artistName,
-                                duration = durationSec,
-                                thumbnailUrl = thumbnail.ifBlank { "https://i.scdn.co/image/ab67616d0000b273000000000000000000000000" },
-                                audioUrl = audio
-                            )
+                    val slug = songPageUrl.trimEnd('/').substringAfterLast('/')
+                    songs.add(
+                        YouTubeSong(
+                            id = "pw_$slug",
+                            title = fallbackTitle,
+                            artist = artist,
+                            duration = 0, // ExoPlayer reports the real duration on load
+                            thumbnailUrl = thumbnail,
+                            audioUrl = audioUrl
                         )
-                    } catch (e: Exception) { /* skip invalid track */ }
-                }
+                    )
+                } catch (e: Exception) { /* skip malformed result */ }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Spotify search error: ${e.message}")
+            Log.w(TAG, "PagalWorld search error: ${e.message}")
         }
+        Log.d(TAG, "PagalWorld found ${songs.size} results for '$query'")
         songs
     }
 
@@ -2831,31 +2827,6 @@ class YouTubeRepository {
             httpGet(urlString, timeout)
         } catch (e: Exception) {
             ""
-        }
-    }
-
-    // HTTP GET with Authorization header (used for Spotify public token API)
-    private fun httpGetWithAuth(urlString: String, authHeader: String, timeout: Int = 10000): String {
-        return try {
-            val url = URL(urlString)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            applyBypassHeaders(conn)
-            conn.setRequestProperty("Authorization", authHeader)
-            conn.connectTimeout = timeout
-            conn.readTimeout = timeout
-            conn.instanceFollowRedirects = true
-
-            val responseCode = conn.responseCode
-            if (responseCode == 200) {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } else {
-                Log.w(TAG, "HTTP(auth) error: $responseCode for URL: $urlString")
-                throw Exception("HTTP $responseCode")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "HTTP GET(auth) failed for $urlString: ${e.message}")
-            throw e
         }
     }
 

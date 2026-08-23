@@ -459,17 +459,17 @@ class YouTubeViewModel(
         }
     }
 
-    fun searchSpotify(query: String) {
+    fun searchPagalWorld(query: String) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(500)
             _isSearching.value = true
             try {
-                val results = youTubeRepository.searchSpotify(query)
+                val results = youTubeRepository.searchPagalWorld(query)
                 _searchResults.value = results
-                Log.d(TAG, "Spotify found ${results.size} results for '$query'")
+                Log.d(TAG, "PagalWorld found ${results.size} results for '$query'")
             } catch (e: Exception) {
-                Log.e(TAG, "Spotify search failed", e)
+                Log.e(TAG, "PagalWorld search failed", e)
                 _searchResults.value = emptyList()
             } finally {
                 _isSearching.value = false
@@ -533,23 +533,23 @@ class YouTubeViewModel(
                 // whole aggregated search and makes the app appear hung.
                 val appleDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchAppleMusic(query) } }.getOrDefault(null) ?: emptyList() }
                 val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(null) ?: emptyList() }
-                val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(null) ?: emptyList() }
+                val pagalWorldDeferred = async { runCatching { withTimeoutOrNull(12000) { youTubeRepository.searchPagalWorld(query) } }.getOrDefault(null) ?: emptyList() }
                 val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(null) ?: emptyList() }
                 val soundcloudDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSoundCloud(query) } }.getOrDefault(null) ?: emptyList() }
                 val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(null) ?: emptyList() }
 
                 val apple = appleDeferred.await().take(10)
                 val saavn = saavnDeferred.await().take(10)
-                val spotify = spotifyDeferred.await().take(10)
+                val pagalWorld = pagalWorldDeferred.await().take(10)
                 val ytm = ytmDeferred.await().take(10)
                 val soundcloud = soundcloudDeferred.await().take(10)
                 val general = generalDeferred.await().take(10)
 
-                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} spotify=${spotify.size} ytm=${ytm.size} soundcloud=${soundcloud.size} general=${general.size}")
+                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} pagalworld=${pagalWorld.size} ytm=${ytm.size} soundcloud=${soundcloud.size} general=${general.size}")
 
                 // JioSaavn kept first so full-song Bollywood/Hindi results stay
                 // synced at the top, then the other synced platforms follow.
-                for (list in listOf(saavn, apple, spotify, ytm, soundcloud, general)) {
+                for (list in listOf(saavn, apple, pagalWorld, ytm, soundcloud, general)) {
                     for (s in list) {
                         if (seen.add(s.id)) combined.add(s)
                     }
