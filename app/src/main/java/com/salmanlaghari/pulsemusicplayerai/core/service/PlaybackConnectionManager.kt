@@ -74,8 +74,7 @@ class PlaybackConnectionManager(private val context: Context) {
     private var positionUpdateJob: Job? = null
     private var sleepTimerJob: Job? = null
 
-    // Track last persisted position to avoid hammering DataStore every tick (fixes UI jank / hang)
-    private var lastSavedPositionMs: Long = -1L
+    // Track last persisted song id to avoid hammering DataStore every tick (fixes UI jank / hang)
     private var lastSavedSongId: Long = -1L
 
     init {
@@ -103,7 +102,21 @@ class PlaybackConnectionManager(private val context: Context) {
         youTubeSongsReference = songs
     }
 
-    private fun updateStateFromController() {
+    /**
+     * Reconcile every UI-facing StateFlow from the live MediaController.
+     *
+     * This is the single source of truth for what the Now Playing screen shows.
+     * It is invoked both from the [PlayerListener] callbacks and on a tight loop
+     * while audio is playing (see [startPositionUpdates]) so the UI can NEVER get
+     * stuck on a stale "Not Playing / 00:00" state: even if the one-shot refresh
+     * inside [playSong] runs before the controller has resolved the current media
+     * item / playback state, the next tick here corrects it.
+     *
+     * Note: this method intentionally does NOT start/stop the position-update loop
+     * itself — that is driven by [updateStateFromController] and [playSong] so we
+     * don't recursively re-launch the loop.
+     */
+    private fun syncStateFromController() {
         val controller = mediaController ?: return
         _isPlaying.value = controller.isPlaying
         _shuffleEnabled.value = controller.shuffleModeEnabled
@@ -122,7 +135,8 @@ class PlaybackConnectionManager(private val context: Context) {
                 ?: youTubeSongsReference.find { "yt_${it.id}" == activeMediaId }?.toSong()
                 ?: youTubeSongsReference.find { it.id.hashCode().toLong().toString() == activeMediaId }?.toSong()
             _currentSong.value = foundSong
-            if (foundSong != null) {
+            if (foundSong != null && foundSong.id != lastSavedSongId) {
+                lastSavedSongId = foundSong.id
                 saveLastPlayedState(foundSong.id, controller.currentPosition.coerceAtLeast(0L))
             }
         } else {
@@ -139,11 +153,17 @@ class PlaybackConnectionManager(private val context: Context) {
             foundSong?.let { queueItems.add(it) }
         }
         _currentQueue.value = queueItems
+    }
 
-        if (controller.isPlaying) {
-            startPositionUpdates()
-        } else {
-            stopPositionUpdates()
+    /**
+     * Push the current controller state to the UI flows, and (re)start the
+     * continuous position/state reconciliation loop whenever audio is playing.
+     */
+    private fun updateStateFromController() {
+        syncStateFromController()
+        val controller = mediaController
+        if (controller != null) {
+            if (controller.isPlaying) startPositionUpdates() else stopPositionUpdates()
         }
     }
 
@@ -151,22 +171,13 @@ class PlaybackConnectionManager(private val context: Context) {
         positionUpdateJob?.cancel()
         positionUpdateJob = scope.launch {
             while (true) {
-                mediaController?.let { controller ->
-                    val pos = controller.currentPosition.coerceAtLeast(0L)
-                    _currentPosition.value = pos
-                    _duration.value = controller.duration.coerceAtLeast(0L)
-                    // Throttle persistence: only save when position moved by >= 5s or song changed.
-                    // This avoids the constant DataStore writes that caused the app to feel "hung".
-                    val cur = _currentSong.value
-                    if (cur != null) {
-                        val movedEnough = (pos - lastSavedPositionMs).let { it >= 5000 || it <= -5000 }
-                        if (cur.id != lastSavedSongId || movedEnough) {
-                            lastSavedSongId = cur.id
-                            lastSavedPositionMs = pos
-                            saveLastPlayedState(cur.id, pos)
-                        }
-                    }
-                }
+                // Continuously reconcile the full playback state from the controller.
+                // This guarantees the Now Playing screen always mirrors what is actually
+                // playing (current track, play/pause, position, duration) — even if the
+                // one-shot refresh inside playSong() ran before the controller had
+                // resolved the current media item or playback state.
+                syncStateFromController()
+
                 // 500ms tick gives a smoother progress bar without flooding the UI thread
                 delay(500)
             }
@@ -223,6 +234,10 @@ class PlaybackConnectionManager(private val context: Context) {
             controller.setPlaybackParameters(androidx.media3.common.PlaybackParameters(_playbackSpeed.value, _playbackPitch.value))
 
             updateStateFromController()
+            // Force the continuous reconciliation loop to start immediately so the
+            // Now Playing screen reflects the new track without waiting for an
+            // asynchronous player callback.
+            startPositionUpdates()
         } catch (e: Exception) {
             android.util.Log.e("PlaybackConn", "playSong failed", e)
         }
@@ -333,7 +348,6 @@ class PlaybackConnectionManager(private val context: Context) {
                     _currentPosition.value = lastPosition
                     _duration.value = lastSong.duration
                     lastSavedSongId = lastSong.id
-                    lastSavedPositionMs = lastPosition
 
                     // Pre-load the song silently into queue (do not auto-play on restore)
                     controller.setMediaItem(lastSong.toMediaItem())
