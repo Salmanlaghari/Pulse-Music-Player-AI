@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "description": "Remote JioSaavn API endpoint configuration for Pulse Music Player AI. The app fetches this file at startup (cached in memory) so endpoints can be reordered, disabled, or replaced after release WITHOUT shipping an app update. Order matters: the app tries endpoints top to bottom, skipping any that are down (circuit breaker).",
+  "endpoints": [
+    {
+      "name": "official",
+      "type": "official",
+      "url": "https://www.jiosaavn.com/api.php",
+      "enabled": true,
+      "note": "First-party JioSaavn web API. Most reliable. Returns DES-encrypted_media_url which the app decrypts to full-stream CDN URLs."
+    },
+    {
+      "name": "mirror1",
+      "type": "mirror",
+      "url": "https://jiosaavn-api.vercel.app",
+      "enabled": true,
+      "note": "Public mirror (jiosaavn-api). /api/search and /song?id=."
+    },
+    {
+      "name": "mirror2",
+      "type": "mirror",
+      "url": "https://jiosaavn-api-blue.vercel.app",
+      "enabled": true,
+      "note": "Backup public mirror."
+    },
+    {
+      "name": "primary",
+      "type": "primary",
+      "url": "https://saavn.sumit.co/api",
+      "enabled": true,
+      "note": "saavn.sumit.co. Had extended Cloudflare 1027 outages, so it is tried LAST. Flip order here when it is healthy again."
+    }
+  ]
+}

@@ -50,6 +50,28 @@ fun PermissionScreen(
         onPermissionResult(isGranted)
     }
 
+    // Android 13+ requires POST_NOTIFICATIONS at runtime — without it the
+    // media playback notification never appears in the top bar / lock screen.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Ask for notifications alongside audio access so both system dialogs
+    // appear in one natural flow.
+    val launchPermissions = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        launcher.launch(permissionToRequest)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -121,7 +143,7 @@ fun PermissionScreen(
 
             // Click to grant permission button
             Button(
-                onClick = { launcher.launch(permissionToRequest) },
+                onClick = { launchPermissions() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
