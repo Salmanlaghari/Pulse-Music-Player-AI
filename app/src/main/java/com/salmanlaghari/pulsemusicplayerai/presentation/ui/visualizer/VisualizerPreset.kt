@@ -63,7 +63,7 @@ enum class VisualizerPreset(val displayName: String, val category: String, val d
     RADIAL_PULSE("Radial Pulse", "Template", "AVEE-style radial pulse with expanding rings and centre orb."),
     PARTICLE_BURST("Particle Burst", "Template", "AVEE-style particle burst with physics-based particles on beats."),
     SPECTRUM_RINGS("Spectrum Rings", "Template", "AVEE-style concentric spectrum rings with frequency-reactive radii."),
-    KALEIDOSCOPE_WAVE("Kaleidoscope Wave", "Template", "AVEE-style kaleidoscope with mirrored waveform segments."),
+    KALEIDOSCOPE_WAVE("Kaleidoscope Wave", "Template", "AVEE-style kaleidoscope with mirrored waveform segments.");
 
     /** Compatibility aliases used by the studio's richer preset catalog. */
     companion object {

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
@@ -62,7 +63,7 @@ fun VisualizerCanvas(
         modifier = modifier
             .fillMaxSize()
             .graphicsLayer {
-                alpha = 0.99f
+                this.alpha = 0.99f
             }
     ) {
         val width = size.width
