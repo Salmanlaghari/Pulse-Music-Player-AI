@@ -529,56 +529,41 @@ class YouTubeRepository {
         // JioSaavn APIs after release without an app update.
         ensureRemoteEndpointsLoaded()
 
-        // PARALLEL RACE: fire ALL enabled endpoints at once and take the first
-        // non-empty result. Sequential fallback ordering proved fragile — any
-        // single slow/blocked host (per-ISP Cloudflare rules differ!) stalled
-        // the whole Desi Hits catalog. Racing makes the fastest healthy path
-        // win regardless of which one it is, on every network.
-        val available = jiosaavnEndpoints.filter { endpointAvailable(it.name) }
-        if (available.isEmpty()) {
-            Log.w(TAG, "All JioSaavn endpoints in cooldown — forcing primary anyway")
-            return runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
-        }
+        // GENTLE SEQUENTIAL strategy (primary -> official -> mirrors).
+        // A parallel race was tried and REVERTED: firing 4 hosts at once for
+        // every catalog query (25 queries = 100 rapid requests) tripped
+        // Cloudflare rate-limits on real devices and killed the whole sync,
+        // while the old gentle sequential flow kept working (proven by a
+        // user device syncing 577 songs on the previous build).
+        val ordered = listOf(
+            jiosaavnEndpoints.firstOrNull { it.type == "primary" },
+            jiosaavnEndpoints.firstOrNull { it.type == "official" },
+            jiosaavnEndpoints.firstOrNull { it.type == "mirror" }
+        ).filterNotNull()
 
-        var winner: List<YouTubeSong>? = null
-        kotlinx.coroutines.coroutineScope {
-            val resultChannel = kotlinx.coroutines.channels.Channel<List<YouTubeSong>>(capacity = available.size)
-            val jobs = available.map { endpoint ->
-                launch {
-                    val results = runCatching {
-                        when (endpoint.type) {
-                            "official" -> searchJioSaavnOfficial(query, endpoint.url)
-                            "mirror" -> searchJioSaavnMirror(query, endpoint.url)
-                            else -> searchJioSaavnPrimary(query, endpoint.url)
-                        }
-                    }.getOrDefault(emptyList())
-                    if (results.isNotEmpty()) {
-                        recordEndpointSuccess(endpoint.name)
-                        Log.d(TAG, "JioSaavn ${endpoint.name} OK for '$query' -> ${results.size} results")
-                    } else {
-                        recordEndpointFailure(endpoint.name)
-                        Log.w(TAG, "JioSaavn ${endpoint.name} empty for '$query'")
+        for (endpoint in ordered) {
+            if (!endpointAvailable(endpoint.name)) continue
+            repeat(2) { attempt ->
+                val results = runCatching {
+                    when (endpoint.type) {
+                        "official" -> searchJioSaavnOfficial(query, endpoint.url)
+                        "mirror" -> searchJioSaavnMirror(query, endpoint.url)
+                        else -> searchJioSaavnPrimary(query, endpoint.url)
                     }
-                    resultChannel.trySend(results)
+                }.getOrDefault(emptyList())
+                if (results.isNotEmpty()) {
+                    recordEndpointSuccess(endpoint.name)
+                    Log.d(TAG, "JioSaavn ${endpoint.name} OK for '$query' -> ${results.size} results")
+                    return results
                 }
+                Log.w(TAG, "JioSaavn ${endpoint.name} empty for '$query' (attempt ${attempt + 1}/2)")
+                if (attempt < 1) kotlinx.coroutines.delay(300L)
             }
-            // First non-empty wins; everything else is cancelled.
-            repeat(available.size) {
-                val results = kotlinx.coroutines.withTimeoutOrNull(12_000L) { resultChannel.receive() }
-                if (!results.isNullOrEmpty()) {
-                    winner = results
-                    jobs.forEach { it.cancel() }
-                    return@coroutineScope
-                }
-            }
-            jobs.forEach { it.cancel() }
+            recordEndpointFailure(endpoint.name)
         }
-        winner?.let { return it }
 
-        // One last shot WITHOUT breaker restrictions: a cold device network can
-        // transiently fail every host; retry primary once directly.
-        Log.e(TAG, "JioSaavn race failed for '$query' — direct primary retry")
-        return runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
+        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
+        return emptyList()
     }
 
     /**
@@ -1294,8 +1279,18 @@ class YouTubeRepository {
             }
         }
 
-        Log.d(TAG, "South Asian catalog loaded: ${allSongs.size} unique songs")
-        allSongs.values.toList()
+        // SECOND-LEVEL DEDUP: different song IDs often carry the SAME title +
+        // artist (re-releases, "From <Movie>" variants, single vs album
+        // version). Users saw the same song listed twice/thrice — collapse by
+        // normalised "title|artist", keeping the FIRST (highest-ranked) entry.
+        val seenTitles = HashSet<String>()
+        val deduped = allSongs.values.filter { song ->
+            val key = song.title.lowercase().trim() + "|" + song.artist.lowercase().trim()
+            seenTitles.add(key)
+        }
+
+        Log.d(TAG, "South Asian catalog loaded: ${allSongs.size} unique IDs -> ${deduped.size} after title/artist dedup")
+        deduped
     }
 
     // ═══════════════════════════════════════════════
