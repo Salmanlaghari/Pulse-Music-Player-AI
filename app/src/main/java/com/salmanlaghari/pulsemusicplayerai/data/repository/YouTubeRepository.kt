@@ -1256,7 +1256,8 @@ class YouTubeRepository {
      * @return Deduplicated list of YouTubeSong with full 320kbps audio URLs.
      */
     suspend fun loadSouthAsianCatalog(
-        onProgress: ((Int, Int) -> Unit)? = null
+        onProgress: ((Int, Int) -> Unit)? = null,
+        onPartial: ((List<YouTubeSong>) -> Unit)? = null
     ): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val allSongs = mutableMapOf<String, YouTubeSong>() // key = JioSaavn ID for dedup
         val totalQueries = SOUTH_ASIAN_QUERIES.size
@@ -1264,6 +1265,12 @@ class YouTubeRepository {
         Log.d(TAG, "Loading South Asian catalog: $totalQueries queries (sequential)")
 
         var completed = 0
+        // SECOND-LEVEL DEDUP state, maintained incrementally so partial
+        // emissions are already clean (no duplicate title+artist rows shown
+        // while the sync is still running in the background).
+        val seenTitles = HashSet<String>()
+        fun dedupeKey(song: YouTubeSong) =
+            song.title.lowercase().trim() + "|" + song.artist.lowercase().trim()
         for (query in SOUTH_ASIAN_QUERIES) {
             if (completed > 0) kotlinx.coroutines.delay(250)
 
