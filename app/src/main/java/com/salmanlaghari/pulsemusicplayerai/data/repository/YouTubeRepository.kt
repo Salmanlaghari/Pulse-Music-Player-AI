@@ -1212,8 +1212,18 @@ class YouTubeRepository {
             }
         }
 
-        Log.d(TAG, "South Asian catalog loaded: ${allSongs.size} unique songs")
-        allSongs.values.toList()
+        // SECOND-LEVEL DEDUP: different song IDs often carry the SAME title +
+        // artist (re-releases, "From <Movie>" variants, single vs album
+        // version). Users saw the same song listed twice/thrice — collapse by
+        // normalised "title|artist", keeping the FIRST (highest-ranked) entry.
+        val seenTitles = HashSet<String>()
+        val deduped = allSongs.values.filter { song ->
+            val key = song.title.lowercase().trim() + "|" + song.artist.lowercase().trim()
+            seenTitles.add(key)
+        }
+
+        Log.d(TAG, "South Asian catalog loaded: ${allSongs.size} unique IDs -> ${deduped.size} after title/artist dedup")
+        deduped
     }
 
     // ═══════════════════════════════════════════════
