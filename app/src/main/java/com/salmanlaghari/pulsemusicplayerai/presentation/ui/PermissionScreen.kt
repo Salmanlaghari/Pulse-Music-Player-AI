@@ -47,6 +47,18 @@ fun PermissionScreen(
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        if (isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            // Audio granted — NOW ask for notifications (one at a time; two
+            // simultaneous system dialogs cancel each other and forced users
+            // to tap Grant Access twice).
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        // The app proceeds on audio grant regardless of the notification answer.
         onPermissionResult(isGranted)
     }
 
@@ -58,17 +70,9 @@ fun PermissionScreen(
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Ask for notifications alongside audio access so both system dialogs
-    // appear in one natural flow.
+    // Single tap: request audio access first; the notification dialog is
+    // chained AFTER audio is granted (see launcher callback above).
     val launchPermissions = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
         launcher.launch(permissionToRequest)
     }
 
