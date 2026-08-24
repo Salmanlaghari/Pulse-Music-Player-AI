@@ -3,18 +3,25 @@
   "description": "Remote JioSaavn API endpoint configuration for Pulse Music Player AI. The app fetches this file at startup (cached in memory) so endpoints can be reordered, disabled, or replaced after release WITHOUT shipping an app update. Order matters: the app tries endpoints top to bottom, skipping any that are down (circuit breaker).",
   "endpoints": [
     {
+      "name": "primary",
+      "type": "primary",
+      "url": "https://saavn.sumit.co/api",
+      "enabled": true,
+      "note": "saavn.sumit.co \u2014 VERIFIED LIVE with working 320kbps CDN streams (206 audio/mp4). Tried FIRST."
+    },
+    {
       "name": "official",
       "type": "official",
       "url": "https://www.jiosaavn.com/api.php",
       "enabled": true,
-      "note": "First-party JioSaavn web API. Most reliable. Returns DES-encrypted_media_url which the app decrypts to full-stream CDN URLs."
+      "note": "First-party metadata API. NOTE: encrypted_media_url DES decryption currently returns garbage (rotated server-side) \u2014 use only for metadata/ids."
     },
     {
       "name": "mirror1",
       "type": "mirror",
       "url": "https://jiosaavn-api.vercel.app",
       "enabled": true,
-      "note": "Public mirror (jiosaavn-api). /api/search and /song?id=."
+      "note": "WARNING: its media_url CDN links currently return HTTP 404. Kept as last-resort fallback only."
     },
     {
       "name": "mirror2",
@@ -22,13 +29,6 @@
       "url": "https://jiosaavn-api-blue.vercel.app",
       "enabled": true,
       "note": "Backup public mirror."
-    },
-    {
-      "name": "primary",
-      "type": "primary",
-      "url": "https://saavn.sumit.co/api",
-      "enabled": true,
-      "note": "saavn.sumit.co. Had extended Cloudflare 1027 outages, so it is tried LAST. Flip order here when it is healthy again."
     }
   ]
 }
