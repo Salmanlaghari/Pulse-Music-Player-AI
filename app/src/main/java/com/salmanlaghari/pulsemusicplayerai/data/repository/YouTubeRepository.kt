@@ -1082,7 +1082,23 @@ class YouTubeRepository {
      * @param songId The raw JioSaavn song ID (without js_ or dh_ prefix)
      * @return A fresh 320kbps audio URL, or null if resolution fails
      */
+    // Short-lived in-memory cache of freshly resolved JioSaavn stream URLs.
+    // CDN links live well beyond a single play session, so replaying or
+    // re-entering a song from the queue must NOT re-hit the network — this is
+    // the single biggest win for "song took long to start" complaints.
+    private val jioSaavnUrlCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+    private const val JIO_SAAVN_URL_TTL_MS = 15 * 60 * 1000L
+
     suspend fun refreshJioSaavnUrl(songId: String): String? = withContext(Dispatchers.IO) {
+        // FAST PATH: serve from the recent-resolution cache when fresh.
+        jioSaavnUrlCache[songId]?.let { (url, ts) ->
+            if (System.currentTimeMillis() - ts < JIO_SAAVN_URL_TTL_MS) {
+                Log.d(TAG, "refreshJioSaavnUrl: cache hit for $songId")
+                return@withContext url
+            }
+            jioSaavnUrlCache.remove(songId)
+        }
+
         // Try EACH detail source and validate every candidate URL with a tiny
         // ranged GET. A dead URL (e.g. the mirror's stale CDN links that 404)
         // can never reach the player — we simply move to the next candidate.
@@ -1112,6 +1128,7 @@ class YouTubeRepository {
                 }
                 Log.d(TAG, "✓ refreshJioSaavnUrl: verified $sourceName stream for $songId")
                 recordEndpointSuccess("details_$sourceName")
+                jioSaavnUrlCache[songId] = candidate to System.currentTimeMillis()
                 return@withContext candidate
             }
             recordEndpointFailure("details_$sourceName")
@@ -1128,6 +1145,7 @@ class YouTubeRepository {
                 val officialMediaUrl = item?.optString("media_url", "") ?: ""
                 if (isFullStreamUrl(officialMediaUrl) && httpIsReachableAudio(officialMediaUrl)) {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_url for $songId")
+                    jioSaavnUrlCache[songId] = officialMediaUrl to System.currentTimeMillis()
                     return@withContext officialMediaUrl
                 }
             }
@@ -1247,7 +1265,7 @@ class YouTubeRepository {
 
         var completed = 0
         for (query in SOUTH_ASIAN_QUERIES) {
-            if (completed > 0) kotlinx.coroutines.delay(500)
+            if (completed > 0) kotlinx.coroutines.delay(250)
 
             var results: List<YouTubeSong> = emptyList()
             repeat(2) { attempt ->
@@ -1256,7 +1274,7 @@ class YouTubeRepository {
                     if (results.isNotEmpty()) return@repeat
                 } catch (e: Exception) {
                     Log.w(TAG, "Catalog query '$query' attempt $attempt failed: ${e.message}")
-                    if (attempt == 0) kotlinx.coroutines.delay(500)
+                    if (attempt == 0) kotlinx.coroutines.delay(300)
                 }
             }
 
@@ -1644,7 +1662,7 @@ class YouTubeRepository {
     }
 
     /** True when [url] answers a tiny ranged GET with an audio-capable status (200/206). */
-    private fun httpIsReachableAudio(urlString: String): Boolean {
+    private fun httpIsReachableAudio(urlString: String, timeoutMs: Int = 3000): Boolean {
         var conn: java.net.HttpURLConnection? = null
         return try {
             val c = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
@@ -1652,8 +1670,8 @@ class YouTubeRepository {
             c.requestMethod = "GET"
             applyBypassHeaders(c)
             c.setRequestProperty("Range", "bytes=0-99")
-            c.connectTimeout = FAST_TIMEOUT
-            c.readTimeout = FAST_TIMEOUT
+            c.connectTimeout = timeoutMs
+            c.readTimeout = timeoutMs
             c.instanceFollowRedirects = true
             val code = c.responseCode
             if (code in 200..206) {
