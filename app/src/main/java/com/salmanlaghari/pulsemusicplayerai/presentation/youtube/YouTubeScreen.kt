@@ -385,6 +385,7 @@ fun YouTubeScreen(
                             onClick = {
                                 selectedSource = MusicSource.PAGAL_WORLD
                                 if (searchQuery.length >= 3) searchWithSource(searchQuery)
+                                else viewModel.loadPagalWorldLatest() // Fresh Picks: newest uploads
                             }
                         )
                     }

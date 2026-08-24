@@ -529,32 +529,56 @@ class YouTubeRepository {
         // JioSaavn APIs after release without an app update.
         ensureRemoteEndpointsLoaded()
 
-        // Try each configured endpoint top-to-bottom, skipping any whose
-        // circuit breaker is open (a dead endpoint must not add timeouts to
-        // every query).
-        for (endpoint in jiosaavnEndpoints) {
-            if (!endpointAvailable(endpoint.name)) continue
-            repeat(2) { attempt ->
-                val results = runCatching {
-                    when (endpoint.type) {
-                        "official" -> searchJioSaavnOfficial(query, endpoint.url)
-                        "mirror" -> searchJioSaavnMirror(query, endpoint.url)
-                        else -> searchJioSaavnPrimary(query, endpoint.url)
-                    }
-                }.getOrDefault(emptyList())
-                if (results.isNotEmpty()) {
-                    recordEndpointSuccess(endpoint.name)
-                    Log.d(TAG, "JioSaavn ${endpoint.name} OK for '$query' -> ${results.size} results")
-                    return results
-                }
-                Log.w(TAG, "JioSaavn ${endpoint.name} empty for '$query' (attempt ${attempt + 1}/2)")
-                if (attempt < 1) kotlinx.coroutines.delay(300L)
-            }
-            recordEndpointFailure(endpoint.name)
+        // PARALLEL RACE: fire ALL enabled endpoints at once and take the first
+        // non-empty result. Sequential fallback ordering proved fragile — any
+        // single slow/blocked host (per-ISP Cloudflare rules differ!) stalled
+        // the whole Desi Hits catalog. Racing makes the fastest healthy path
+        // win regardless of which one it is, on every network.
+        val available = jiosaavnEndpoints.filter { endpointAvailable(it.name) }
+        if (available.isEmpty()) {
+            Log.w(TAG, "All JioSaavn endpoints in cooldown — forcing primary anyway")
+            return runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
         }
 
-        Log.e(TAG, "JioSaavn ALL endpoints FAILED for '$query'")
-        return emptyList()
+        var winner: List<YouTubeSong>? = null
+        kotlinx.coroutines.coroutineScope {
+            val resultChannel = kotlinx.coroutines.channels.Channel<List<YouTubeSong>>(capacity = available.size)
+            val jobs = available.map { endpoint ->
+                launch {
+                    val results = runCatching {
+                        when (endpoint.type) {
+                            "official" -> searchJioSaavnOfficial(query, endpoint.url)
+                            "mirror" -> searchJioSaavnMirror(query, endpoint.url)
+                            else -> searchJioSaavnPrimary(query, endpoint.url)
+                        }
+                    }.getOrDefault(emptyList())
+                    if (results.isNotEmpty()) {
+                        recordEndpointSuccess(endpoint.name)
+                        Log.d(TAG, "JioSaavn ${endpoint.name} OK for '$query' -> ${results.size} results")
+                    } else {
+                        recordEndpointFailure(endpoint.name)
+                        Log.w(TAG, "JioSaavn ${endpoint.name} empty for '$query'")
+                    }
+                    resultChannel.trySend(results)
+                }
+            }
+            // First non-empty wins; everything else is cancelled.
+            repeat(available.size) {
+                val results = kotlinx.coroutines.withTimeoutOrNull(12_000L) { resultChannel.receive() }
+                if (!results.isNullOrEmpty()) {
+                    winner = results
+                    jobs.forEach { it.cancel() }
+                    return@coroutineScope
+                }
+            }
+            jobs.forEach { it.cancel() }
+        }
+        winner?.let { return it }
+
+        // One last shot WITHOUT breaker restrictions: a cold device network can
+        // transiently fail every host; retry primary once directly.
+        Log.e(TAG, "JioSaavn race failed for '$query' — direct primary retry")
+        return runCatching { searchJioSaavnPrimary(query) }.getOrDefault(emptyList())
     }
 
     /**
@@ -1074,67 +1098,52 @@ class YouTubeRepository {
      * @return A fresh 320kbps audio URL, or null if resolution fails
      */
     suspend fun refreshJioSaavnUrl(songId: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val details = getJioSaavnSongDetails(songId)
-            if (details != null) {
-                val keys = mutableListOf<String>()
-                details.keys().forEachRemaining { keys.add(it) }
-                Log.d(TAG, "refreshJioSaavnUrl: got details for $songId, keys=$keys")
-                val downloadArr = details.optJSONArray("downloadUrl")
-                // Validate EVERY candidate with a tiny ranged GET — a URL that
-                // 404s (like the mirror's stale CDN links) must never reach the
-                // player. Try highest quality first, stop at the first live one.
-                if (downloadArr != null) {
-                    for (i in downloadArr.length() - 1 downTo 0) {
-                        try {
-                            val candidate = downloadArr.getJSONObject(i).optString("url", "")
-                            if (isFullStreamUrl(candidate) && httpIsReachableAudio(candidate)) {
-                                Log.d(TAG, "✓ refreshJioSaavnUrl: verified downloadUrl[$i] for $songId")
-                                return@withContext candidate
-                            }
-                        } catch (_: Exception) { /* skip bad entry */ }
-                    }
+        // Try EACH detail source and validate every candidate URL with a tiny
+        // ranged GET. A dead URL (e.g. the mirror's stale CDN links that 404)
+        // can never reach the player — we simply move to the next candidate.
+        val sources: List<Pair<String, suspend (String) -> JSONObject?>> = listOf(
+            "primary" to { id -> runCatching { getJioSaavnSongDetailsPrimary(id) }.getOrNull() },
+            "mirror" to { id -> runCatching { getJioSaavnSongDetailsMirror(id) }.getOrNull() },
+            "official" to { id -> runCatching { getJioSaavnSongDetailsOfficial(id) }.getOrNull() }
+        )
+        for ((sourceName, fetcher) in sources) {
+            val details = fetcher(songId) ?: continue
+            val candidates = mutableListOf<String>()
+            details.optJSONArray("downloadUrl")?.let { arr ->
+                // Highest quality first.
+                for (i in arr.length() - 1 downTo 0) {
+                    try {
+                        candidates.add(arr.getJSONObject(i).optString("url", ""))
+                    } catch (_: Exception) { /* skip */ }
                 }
-                val url = pickJioSaavnMediaUrl(downloadArr)
-                if (url != null && url.startsWith("http") && httpIsReachableAudio(url)) {
-                    Log.d(TAG, "✓ refreshJioSaavnUrl: got downloadUrl for $songId")
-                    return@withContext url
-                }
-                val mediaUrl = details.optString("media_url", "")
-                if (isFullStreamUrl(mediaUrl) && httpIsReachableAudio(mediaUrl)) {
-                    Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
-                    return@withContext mediaUrl
-                }
-                // NOTE: "vlink" and "media_preview_url" are intentionally NOT
-                // accepted here. They point at preview/ringtone clips (often on
-                // jiotunepreview.jio.com) that cut off after 10–30 seconds,
-                // which users perceive as "song not playing". Returning null
-                // lets callers fall back to full-stream resolution instead.
-                Log.w(TAG, "refreshJioSaavnUrl: no usable URL in details for $songId")
-            } else {
-                Log.w(TAG, "refreshJioSaavnUrl: details is null for $songId")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "refreshJioSaavnUrl failed for $songId: ${e.message}")
+            candidates.add(details.optString("media_url", ""))
+
+            for (candidate in candidates) {
+                if (!isFullStreamUrl(candidate)) continue
+                if (!httpIsReachableAudio(candidate)) {
+                    Log.w(TAG, "refreshJioSaavnUrl: $sourceName candidate dead (404/timeout), trying next")
+                    continue
+                }
+                Log.d(TAG, "✓ refreshJioSaavnUrl: verified $sourceName stream for $songId")
+                recordEndpointSuccess("details_$sourceName")
+                return@withContext candidate
+            }
+            recordEndpointFailure("details_$sourceName")
         }
 
-        // Fallback: try official song details API directly
+        Log.e(TAG, "refreshJioSaavnUrl: ALL detail sources failed to produce a live stream for $songId")
+
+        // Fallback: official search API sometimes exposes media_url directly.
         try {
             val url = "${endpointUrlOfType("official") ?: "https://www.jiosaavn.com/api.php"}?__call=song.getDetails&pids=$songId&_format=json&_marker=0"
             val response = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
             if (response.isNotBlank()) {
-                val root = JSONObject(response)
-                val item = root.optJSONObject(songId)
-                if (item != null) {
-                    // Only full-stream fields are accepted. "vlink" (frequently
-                    // a jiotunepreview.jio.com ringtone/preview) and
-                    // "media_preview_url" (short clip) would play for only
-                    // 10–30 seconds, so both are rejected.
-                    val officialMediaUrl = item.optString("media_url", "")
-                    if (isFullStreamUrl(officialMediaUrl) && httpIsReachableAudio(officialMediaUrl)) {
-                        Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_url for $songId")
-                        return@withContext officialMediaUrl
-                    }
+                val item = JSONObject(response).optJSONObject(songId)
+                val officialMediaUrl = item?.optString("media_url", "") ?: ""
+                if (isFullStreamUrl(officialMediaUrl) && httpIsReachableAudio(officialMediaUrl)) {
+                    Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_url for $songId")
+                    return@withContext officialMediaUrl
                 }
             }
         } catch (e: Exception) {
@@ -1432,78 +1441,116 @@ class YouTubeRepository {
             }
             if (candidates.isEmpty()) return@withContext emptyList()
 
-            // Fetch pages in parallel batches of 5 — 4x faster than sequential.
-            val fetched = kotlinx.coroutines.sync.Mutex()
-            val pages = mutableListOf<Triple<String, String, String?>>() // url, title, html?
-            val batchJobs = mutableListOf<kotlinx.coroutines.Job>()
-            candidates.chunked(5).forEach { batch ->
-                batchJobs += launch {
-                    for ((url, title) in batch) {
-                        val html = httpGetSafe(url, timeout = NORMAL_TIMEOUT)
-                        synchronized(pages) { pages.add(Triple(url, title, html.ifBlank { null })) }
+            // Parse pages through the shared helper in parallel batches of 5.
+            val jobs = candidates.chunked(5).map { batch ->
+                launch {
+                    for ((pageUrl, fallbackTitle) in batch) {
+                        val song = runCatching { parsePagalWorldSong(pageUrl, fallbackTitle) }.getOrNull()
+                        if (song != null) synchronized(songs) { songs.add(song) }
                     }
                 }
             }
-            batchJobs.forEach { it.join() }
-
-            for ((pageUrl, fallbackTitle, page) in pages) {
-                try {
-                    if (page == null) continue
-
-                    // Parse each <audio ...> tag AS A UNIT so file/year/month always
-                    // belong together (never mix one tag's file with another's date).
-                    val audioTags = Regex("<audio[^>]*>").findAll(page).toList()
-                    var pickedFile: String? = null
-                    var pickedYear = ""
-                    var pickedMonth = ""
-                    for (tag in audioTags) {
-                        val t = tag.value
-                        val f = Regex("data-file=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: continue
-                        val y = Regex("data-year=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
-                        val m = Regex("data-month=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
-                        // Prefer the 320kbps variant when present; otherwise keep the first.
-                        val better = f.contains("320", ignoreCase = true)
-                        if (pickedFile == null || better) {
-                            pickedFile = f; pickedYear = y; pickedMonth = m
-                        }
-                    }
-
-                    // Metadata: cover art from og:image, artists from "sung by ..."
-                    val thumbnail = Regex("<meta property=\"og:image\" content=\"([^\"]+)\"")
-                        .find(page)?.groupValues?.get(1) ?: ""
-                    val artist = Regex("sung by ([^.<]+)")
-                        .find(page)?.groupValues?.get(1)?.trim()
-                        ?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
-
-                    var audioUrl = ""
-                    if (pickedFile != null && pickedYear.isNotBlank() && pickedMonth.isNotBlank()) {
-                        val encodedFile = URLEncoder.encode(pickedFile, "UTF-8").replace("+", "%20")
-                        audioUrl = "https://pagal-world.com.co/wp-content/uploads/$pickedYear/$pickedMonth/$encodedFile"
-                        // Validate the stream NOW: a tiny 100-byte ranged GET must come
-                        // back as audio (200/206). Anything else -> treat as no stream
-                        // so playback falls back to full-song resolution instead of
-                        // failing in the player.
-                        if (!httpIsReachableAudio(audioUrl)) audioUrl = ""
-                    }
-
-                    val slug = pageUrl.trimEnd('/').substringAfterLast('/')
-                    songs.add(
-                        YouTubeSong(
-                            id = "pw_$slug",
-                            title = fallbackTitle,
-                            artist = artist,
-                            duration = 0, // ExoPlayer reports the real duration on load
-                            thumbnailUrl = thumbnail,
-                            audioUrl = audioUrl
-                        )
-                    )
-                } catch (e: Exception) { /* skip malformed result */ }
-            }
+            jobs.forEach { it.join() }
         } catch (e: Exception) {
             Log.w(TAG, "PagalWorld search error: ${e.message}")
         }
+        // Streamable first so playable results sit at the top of the list.
+        val sorted = songs.sortedWith(compareByDescending { it.audioUrl.isNotBlank() })
         Log.d(TAG, "PagalWorld found ${songs.size} results for '$query' (${songs.count { it.hasValidAudio() }} streamable)")
-        songs
+        sorted
+    }
+
+    /**
+     * Parse ONE PagalWorld song page into a full-metadata [YouTubeSong].
+     * Shared by keyword search and the Fresh Picks (latest uploads) loader so
+     * both paths behave identically. Returns null when the page is unusable.
+     */
+    private suspend fun parsePagalWorldSong(songPageUrl: String, fallbackTitle: String): YouTubeSong? {
+        val page = httpGetSafe(songPageUrl, timeout = NORMAL_TIMEOUT)
+        if (page.isBlank()) return null
+
+        // Parse each <audio ...> tag AS A UNIT so file/year/month always
+        // belong together (never mix one tag's file with another's date).
+        val audioTags = Regex("<audio[^>]*>").findAll(page).toList()
+        var pickedFile: String? = null
+        var pickedYear = ""
+        var pickedMonth = ""
+        for (tag in audioTags) {
+            val t = tag.value
+            val f = Regex("data-file=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: continue
+            val y = Regex("data-year=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
+            val m = Regex("data-month=\"([^\"]*)\"").find(t)?.groupValues?.get(1) ?: ""
+            // Prefer the 320kbps variant when present; otherwise keep the first.
+            val better = f.contains("320", ignoreCase = true)
+            if (pickedFile == null || better) {
+                pickedFile = f; pickedYear = y; pickedMonth = m
+            }
+        }
+
+        // Metadata: cover art from og:image, artists from "sung by ..."
+        val thumbnail = Regex("<meta property=\"og:image\" content=\"([^\"]+)\"")
+            .find(page)?.groupValues?.get(1) ?: ""
+        val artist = Regex("sung by ([^.<]+)")
+            .find(page)?.groupValues?.get(1)?.trim()
+            ?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
+
+        var audioUrl = ""
+        if (pickedFile != null && pickedYear.isNotBlank() && pickedMonth.isNotBlank()) {
+            val encodedFile = URLEncoder.encode(pickedFile, "UTF-8").replace("+", "%20")
+            audioUrl = "https://pagal-world.com.co/wp-content/uploads/$pickedYear/$pickedMonth/$encodedFile"
+            // Validate the stream NOW: a tiny 100-byte ranged GET must come
+            // back as audio (200/206). Anything else -> treat as no stream
+            // so playback falls back to full-song resolution instead of
+            // failing in the player.
+            if (!httpIsReachableAudio(audioUrl)) audioUrl = ""
+        }
+
+        val slug = songPageUrl.trimEnd('/').substringAfterLast('/')
+        return YouTubeSong(
+            id = "pw_$slug",
+            title = fallbackTitle,
+            artist = artist,
+            duration = 0,
+            thumbnailUrl = thumbnail,
+            audioUrl = audioUrl
+        )
+    }
+
+    /**
+     * FRESH PICKS: the newest uploads on PagalWorld (homepage "Recent MP3
+     * Songs"), parsed through the exact same metadata/stream pipeline as
+     * search. Lets users browse the platform's latest without typing a query.
+     */
+    suspend fun loadPagalWorldLatest(): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val home = httpGetSafe("https://pagal-world.com.co/", timeout = NORMAL_TIMEOUT)
+            if (home.isBlank()) return@withContext emptyList()
+            val links = Regex("href=\"(https://pagal-world\\.com\\.co/song/[^\"]+)/\"")
+                .findAll(home)
+                .map { it.groupValues[1] }
+                .distinct()
+                .take(20)
+                .toList()
+            val jobs = links.chunked(5).map { batch ->
+                launch {
+                    for (url in batch) {
+                        val title = url.trimEnd('/').substringAfterLast('/')
+                            .replace("-mp3-song", "").replace('-', ' ')
+                            .split(' ').joinToString(" ") { w ->
+                                if (w.isBlank()) w else w.replaceFirstChar { it.uppercase() }
+                            }
+                        val song = runCatching { parsePagalWorldSong(url, title) }.getOrNull()
+                        if (song != null) synchronized(songs) { songs.add(song) }
+                    }
+                }
+            }
+            jobs.forEach { it.join() }
+        } catch (e: Exception) {
+            Log.w(TAG, "PagalWorld latest error: ${e.message}")
+        }
+        Log.d(TAG, "PagalWorld latest loaded ${songs.size} songs")
+        songs.sortedWith(compareByDescending { it.audioUrl.isNotBlank() })
     }
 
     /** True when [url] answers a tiny ranged GET with an audio-capable status (200/206). */
