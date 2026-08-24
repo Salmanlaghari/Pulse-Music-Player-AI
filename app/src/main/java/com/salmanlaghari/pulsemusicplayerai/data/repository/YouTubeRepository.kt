@@ -48,6 +48,7 @@ class YouTubeRepository {
         // ═══ FAST TIMEOUTS (reduced for faster loading) ═══
         private const val FAST_TIMEOUT = 5000 // 5 seconds
         private const val NORMAL_TIMEOUT = 8000 // 8 seconds
+        private const val JIO_SAAVN_URL_TTL_MS = 15 * 60 * 1000L
 
         // ═══ REGION MAPPING — maps locale to YouTube region codes ═══
         private val REGION_MAP = mapOf(
@@ -1087,7 +1088,6 @@ class YouTubeRepository {
     // re-entering a song from the queue must NOT re-hit the network — this is
     // the single biggest win for "song took long to start" complaints.
     private val jioSaavnUrlCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
-    private const val JIO_SAAVN_URL_TTL_MS = 15 * 60 * 1000L
 
     suspend fun refreshJioSaavnUrl(songId: String): String? = withContext(Dispatchers.IO) {
         // FAST PATH: serve from the recent-resolution cache when fresh.
