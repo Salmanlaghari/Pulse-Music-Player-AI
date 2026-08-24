@@ -462,10 +462,13 @@ class YouTubeRepository {
     )
 
     private val defaultJiosaavnEndpoints = listOf(
+        // PRIMARY FIRST: CI diagnostic (2026-08-24) verified saavn.sumit.co is
+        // live again and its downloadUrl CDN links return 206 audio/mp4 up to
+        // 320kbps — while mirror media_url links return HTTP 404 (dead).
+        JioSaavnEndpoint("primary", "primary", "$JIOSAAVN_API", true),
         JioSaavnEndpoint("official", "official", "https://www.jiosaavn.com/api.php", true),
         JioSaavnEndpoint("mirror1", "mirror", "https://jiosaavn-api.vercel.app", true),
-        JioSaavnEndpoint("mirror2", "mirror", "https://jiosaavn-api-blue.vercel.app", true),
-        JioSaavnEndpoint("primary", "primary", "$JIOSAAVN_API", true)
+        JioSaavnEndpoint("mirror2", "mirror", "https://jiosaavn-api-blue.vercel.app", true)
     )
 
     @Volatile
@@ -875,32 +878,9 @@ class YouTubeRepository {
         // Make sure the online endpoint config is loaded before choosing hosts.
         ensureRemoteEndpointsLoaded()
 
-        // 1. Mirror (jiosaavn-api.vercel.app) first — returns a directly
-        //    playable media_url and is currently the most reliable source.
-        if (endpointAvailable("details_mirror")) repeat(2) { attempt ->
-            val res = runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
-            if (res != null) {
-                recordEndpointSuccess("details_mirror")
-                Log.d(TAG, "JioSaavn details MIRROR OK for '$songId' (attempt ${attempt + 1})")
-                return@withContext res
-            }
-            if (attempt < 1) kotlinx.coroutines.delay(400L)
-        }
-        recordEndpointFailure("details_mirror")
-
-        // 2. Official song.getDetails API (jiosaavn.com/api.php).
-        if (endpointAvailable("details_official")) {
-            val official = runCatching { getJioSaavnSongDetailsOfficial(songId) }.getOrNull()
-            if (official != null) {
-                recordEndpointSuccess("details_official")
-                Log.d(TAG, "JioSaavn details OFFICIAL OK for '$songId'")
-                return@withContext official
-            }
-        }
-        recordEndpointFailure("details_official")
-
-        // 3. Primary saavn.sumit.co LAST — extended outages made it the
-        //    slowest path when tried first.
+        // 1. PRIMARY (saavn.sumit.co) first — CI diagnostic (2026-08-24)
+        //    verified its downloadUrl CDN links stream fine (206 audio/mp4,
+        //    up to 320kbps), while mirror media_url links are HTTP 404 dead.
         if (endpointAvailable("details_primary")) repeat(2) { attempt ->
             val primary = runCatching { getJioSaavnSongDetailsPrimary(songId) }.getOrNull()
             if (primary != null) {
@@ -911,6 +891,32 @@ class YouTubeRepository {
             if (attempt < 1) kotlinx.coroutines.delay(500L)
         }
         recordEndpointFailure("details_primary")
+
+        // 2. Official song.getDetails API (jiosaavn.com/api.php).
+        //    NOTE: its encrypted_media_url DES decryption currently yields
+        //    garbage (rotated server-side), so this mostly provides nothing —
+        //    kept because it may recover at any time.
+        if (endpointAvailable("details_official")) {
+            val official = runCatching { getJioSaavnSongDetailsOfficial(songId) }.getOrNull()
+            if (official != null) {
+                recordEndpointSuccess("details_official")
+                Log.d(TAG, "JioSaavn details OFFICIAL OK for '$songId'")
+                return@withContext official
+            }
+        }
+        recordEndpointFailure("details_official")
+
+        // 3. Mirror LAST — its media_url links currently return HTTP 404.
+        if (endpointAvailable("details_mirror")) repeat(2) { attempt ->
+            val res = runCatching { getJioSaavnSongDetailsMirror(songId) }.getOrNull()
+            if (res != null) {
+                recordEndpointSuccess("details_mirror")
+                Log.d(TAG, "JioSaavn details MIRROR OK for '$songId' (attempt ${attempt + 1})")
+                return@withContext res
+            }
+            if (attempt < 1) kotlinx.coroutines.delay(400L)
+        }
+        recordEndpointFailure("details_mirror")
 
         Log.e(TAG, "JioSaavn details ALL endpoints FAILED for '$songId'")
         return@withContext null
@@ -1075,13 +1081,27 @@ class YouTubeRepository {
                 details.keys().forEachRemaining { keys.add(it) }
                 Log.d(TAG, "refreshJioSaavnUrl: got details for $songId, keys=$keys")
                 val downloadArr = details.optJSONArray("downloadUrl")
+                // Validate EVERY candidate with a tiny ranged GET — a URL that
+                // 404s (like the mirror's stale CDN links) must never reach the
+                // player. Try highest quality first, stop at the first live one.
+                if (downloadArr != null) {
+                    for (i in downloadArr.length() - 1 downTo 0) {
+                        try {
+                            val candidate = downloadArr.getJSONObject(i).optString("url", "")
+                            if (isFullStreamUrl(candidate) && httpIsReachableAudio(candidate)) {
+                                Log.d(TAG, "✓ refreshJioSaavnUrl: verified downloadUrl[$i] for $songId")
+                                return@withContext candidate
+                            }
+                        } catch (_: Exception) { /* skip bad entry */ }
+                    }
+                }
                 val url = pickJioSaavnMediaUrl(downloadArr)
-                if (url != null && url.startsWith("http")) {
+                if (url != null && url.startsWith("http") && httpIsReachableAudio(url)) {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: got downloadUrl for $songId")
                     return@withContext url
                 }
                 val mediaUrl = details.optString("media_url", "")
-                if (isFullStreamUrl(mediaUrl)) {
+                if (isFullStreamUrl(mediaUrl) && httpIsReachableAudio(mediaUrl)) {
                     Log.d(TAG, "✓ refreshJioSaavnUrl: got media_url for $songId")
                     return@withContext mediaUrl
                 }
@@ -1111,7 +1131,7 @@ class YouTubeRepository {
                     // "media_preview_url" (short clip) would play for only
                     // 10–30 seconds, so both are rejected.
                     val officialMediaUrl = item.optString("media_url", "")
-                    if (isFullStreamUrl(officialMediaUrl)) {
+                    if (isFullStreamUrl(officialMediaUrl) && httpIsReachableAudio(officialMediaUrl)) {
                         Log.d(TAG, "✓ refreshJioSaavnUrl: official API got media_url for $songId")
                         return@withContext officialMediaUrl
                     }
