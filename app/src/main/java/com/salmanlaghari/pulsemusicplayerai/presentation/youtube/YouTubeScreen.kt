@@ -91,6 +91,7 @@ fun YouTubeScreen(
     val isSouthAsianLoading by viewModel.isSouthAsianLoading.collectAsState()
     val southAsianProgress by viewModel.southAsianProgress.collectAsState()
     val southAsianLoadedAtMs by viewModel.southAsianLoadedAtMs.collectAsState()
+    val southAsianError by viewModel.southAsianError.collectAsState()
     val hasNewSouthAsianContent by viewModel.hasNewSouthAsianContent.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
     val isPlayLoading by viewModel.isPlayLoading.collectAsState()
@@ -341,51 +342,21 @@ fun YouTubeScreen(
                     }
                     item {
                         SourceChip(
-                            text = "🎭 Desi Hits",
-                            selected = selectedSource == MusicSource.DESI_HITS,
-                            onClick = {
-                                selectedSource = MusicSource.DESI_HITS
-                            }
-                        )
-                    }
-                    item {
-                        SourceChip(
-                            text = "🎶 JioSaavn",
-                            selected = selectedSource == MusicSource.JIOSAAVN,
-                            onClick = {
-                                selectedSource = MusicSource.JIOSAAVN
-                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                            }
-                        )
-                    }
-                    item {
-                        SourceChip(
-                            text = "▶ YouTube Music",
-                            selected = selectedSource == MusicSource.YOUTUBE_MUSIC,
-                            onClick = {
-                                selectedSource = MusicSource.YOUTUBE_MUSIC
-                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                            }
-                        )
-                    }
-                    item {
-                        SourceChip(
-                            text = "🍎 Apple Music",
-                            selected = selectedSource == MusicSource.APPLE_MUSIC,
-                            onClick = {
-                                selectedSource = MusicSource.APPLE_MUSIC
-                                if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                            }
-                        )
-                    }
-                    item {
-                        SourceChip(
                             text = "🎧 PagalWorld",
                             selected = selectedSource == MusicSource.PAGAL_WORLD,
                             onClick = {
                                 selectedSource = MusicSource.PAGAL_WORLD
                                 if (searchQuery.length >= 3) searchWithSource(searchQuery)
-                                else viewModel.loadPagalWorldLatest() // Fresh Picks: newest uploads
+                                else viewModel.loadPagalWorldCatalog() // 500+ Bollywood/Punjabi/Indipop/Haryanvi
+                            }
+                        )
+                    }
+                    item {
+                        SourceChip(
+                            text = "🎭 Desi Hits",
+                            selected = selectedSource == MusicSource.DESI_HITS,
+                            onClick = {
+                                selectedSource = MusicSource.DESI_HITS
                             }
                         )
                     }
@@ -759,10 +730,19 @@ fun YouTubeScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "No Desi Hits available right now",
+                                text = if (southAsianError != null) "Desi Hits sync failed" else "No Desi Hits available right now",
                                 color = TextDim,
                                 fontSize = 14.sp
                             )
+                            val syncError = southAsianError
+                            if (syncError != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = syncError,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp
+                                )
+                            }
                             Spacer(modifier = Modifier.height(12.dp))
                             androidx.compose.material3.TextButton(
                                 onClick = { viewModel.loadSouthAsianCatalog() }

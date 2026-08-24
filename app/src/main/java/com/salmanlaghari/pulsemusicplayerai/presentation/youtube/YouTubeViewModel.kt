@@ -72,6 +72,10 @@ class YouTubeViewModel(
     private val _southAsianProgress = MutableStateFlow(0 to 0) // (completed, total)
     val southAsianProgress: StateFlow<Pair<Int, Int>> = _southAsianProgress.asStateFlow()
 
+    /** Human-readable reason when the last Desi Hits sync produced zero songs. */
+    private val _southAsianError = MutableStateFlow<String?>(null)
+    val southAsianError: StateFlow<String?> = _southAsianError.asStateFlow()
+
     private val _southAsianLoadedAtMs = MutableStateFlow(0L)
     val southAsianLoadedAtMs: StateFlow<Long> = _southAsianLoadedAtMs.asStateFlow()
 
@@ -290,11 +294,14 @@ class YouTubeViewModel(
                         southAsianLoaded = true
                         _southAsianLoadedAtMs.value = System.currentTimeMillis()
                         saveSouthAsianCatalogToCache(songs)
+                        _southAsianError.value = null
                         Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
                     } else {
                         // All endpoints failed — KEEP whatever is on screen (cache or
                         // previous load). Clearing the list is what made the tab look
                         // like "sync never works".
+                        _southAsianError.value =
+                            "Sync failed — music servers unreachable on this network. Auto-retrying every 2 min."
                         Log.w(TAG, "South Asian network sync returned 0 songs — keeping ${_southAsianSongs.value.size} existing")
                     }
                 } catch (e: Exception) {
@@ -462,6 +469,24 @@ class YouTubeViewModel(
                 Log.d(TAG, "PagalWorld latest loaded ${results.size} songs")
             } catch (e: Exception) {
                 Log.e(TAG, "PagalWorld latest failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    /** PagalWorld catalog: 500+ Bollywood/Punjabi/Indipop/Haryanvi entries, lazy streams. */
+    fun loadPagalWorldCatalog() {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.loadPagalWorldCatalog()
+                _searchResults.value = results
+                Log.d(TAG, "PagalWorld catalog loaded ${results.size} entries")
+            } catch (e: Exception) {
+                Log.e(TAG, "PagalWorld catalog failed", e)
                 _searchResults.value = emptyList()
             } finally {
                 _isSearching.value = false
@@ -851,6 +876,20 @@ class YouTubeViewModel(
         // YouTube Music by matching title + artist.
         if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
             return song
+        }
+
+        // PagalWorld catalog entries carry no pre-fetched stream (lazy loading):
+        // resolve the direct MP3 from the song page on demand.
+        if (song.id.startsWith("pw_") && !song.hasValidAudio()) {
+            Log.d(TAG, "resolveAudio: resolving PagalWorld stream for '${song.title}'")
+            _playLoadingMessage.value = "Loading PagalWorld stream..."
+            val pw = withTimeoutOrNull(12_000) { youTubeRepository.getPagalWorldStream(song) }
+            if (pw != null && pw.hasValidAudio()) {
+                Log.d(TAG, "✓ resolveAudio: PagalWorld stream resolved for '${song.title}'")
+                _playLoadingMessage.value = "Playing now"
+                return pw
+            }
+            Log.w(TAG, "resolveAudio: PagalWorld had no stream for '${song.title}' — falling back")
         }
 
         // JioSaavn/Desi Hits songs: refresh the URL directly (faster than full search)

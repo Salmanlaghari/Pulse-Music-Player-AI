@@ -1422,22 +1422,38 @@ class YouTubeRepository {
     suspend fun searchPagalWorld(query: String): List<YouTubeSong> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<YouTubeSong>()
         try {
-            val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-            val searchUrl = "https://pagal-world.com.co/wp-json/wp/v2/search?search=$encoded&per_page=20"
-            val searchResponse = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
-            if (searchResponse.isBlank()) {
-                Log.w(TAG, "PagalWorld search returned no body for '$query'")
-                return@withContext emptyList()
-            }
-            val arr = JSONArray(searchResponse)
+            // MULTI-PASS search: WordPress search is literal-substring based, so
+            // a single query misses titles. We query the FULL term and then the
+            // FIRST WORD (e.g. "piyar hoti hai" + "piyar"), merging results so
+            // every matching song on the platform surfaces.
+            val trimmed = query.trim()
+            val encodedFull = URLEncoder.encode(trimmed, "UTF-8")
+            val firstWord = trimmed.split(Regex("\\s+")).firstOrNull()?.takeIf { it.length >= 3 }
+            val encodedWord = firstWord?.let { URLEncoder.encode(it, "UTF-8") }
+
+            val seenSlugs = mutableSetOf<String>()
             val candidates = mutableListOf<Pair<String, String>>() // pageUrl to fallbackTitle
-            for (i in 0 until arr.length()) {
+            val queries = buildList {
+                add(encodedFull)
+                if (encodedWord != null && encodedWord != encodedFull) add(encodedWord)
+            }
+            for (enc in queries) {
+                val searchUrl = "https://pagal-world.com.co/wp-json/wp/v2/search?search=$enc&per_page=20"
+                val response = httpGetSafe(searchUrl, timeout = NORMAL_TIMEOUT)
+                if (response.isBlank()) continue
                 try {
-                    val item = arr.getJSONObject(i)
-                    val songPageUrl = item.optString("url", "")
-                    if (!songPageUrl.contains("/song/")) continue
-                    candidates.add(songPageUrl to decodeHtmlEntities(item.optString("title", "Unknown")))
-                } catch (_: Exception) { /* skip malformed */ }
+                    val arr = JSONArray(response)
+                    for (i in 0 until arr.length()) {
+                        try {
+                            val item = arr.getJSONObject(i)
+                            val songPageUrl = item.optString("url", "")
+                            if (!songPageUrl.contains("/song/")) continue
+                            val slug = songPageUrl.trimEnd('/').substringAfterLast('/')
+                            if (!seenSlugs.add(slug)) continue
+                            candidates.add(songPageUrl to decodeHtmlEntities(item.optString("title", "Unknown")))
+                        } catch (_: Exception) { /* skip malformed */ }
+                    }
+                } catch (_: Exception) { /* skip bad body */ }
             }
             if (candidates.isEmpty()) return@withContext emptyList()
 
@@ -1514,6 +1530,85 @@ class YouTubeRepository {
             thumbnailUrl = thumbnail,
             audioUrl = audioUrl
         )
+    }
+
+    private val PAGAL_WORLD_CATEGORIES = listOf("bollywood", "punjabi", "indipop", "haryanvi")
+
+    /**
+     * PAGALWORLD CATALOG — 500+ songs scraped from the category listings
+     * (bollywood / punjabi / indipop / haryanvi, paginated). Entries are
+     * lightweight: title + page slug only; the direct MP3 stream is resolved
+     * lazily at play time via [getPagalWorldStream] so listing 500+ songs
+     * costs just a handful of HTML fetches.
+     */
+    suspend fun loadPagalWorldCatalog(maxPagesPerCategory: Int = 15): List<YouTubeSong> = withContext(Dispatchers.IO) {
+        val seen = HashSet<String>()
+        val songs = mutableListOf<YouTubeSong>()
+        try {
+            val jobs = PAGAL_WORLD_CATEGORIES.map { category ->
+                launch {
+                    for (page in 1..maxPagesPerCategory) {
+                        val pageUrl = if (page == 1) {
+                            "https://pagal-world.com.co/category/$category/"
+                        } else {
+                            "https://pagal-world.com.co/category/$category/page/$page/"
+                        }
+                        val html = httpGetSafe(pageUrl, timeout = NORMAL_TIMEOUT)
+                        if (html.isBlank()) break
+                        val links = Regex("href=\"(https://pagal-world\\.com\\.co/song/[^\"]+)/\"")
+                            .findAll(html)
+                            .map { it.groupValues[1] }
+                            .toList()
+                        if (links.isEmpty()) break
+                        var addedThisPage = 0
+                        for (link in links) {
+                            val slug = link.trimEnd('/').substringAfterLast('/')
+                            synchronized(seen) {
+                                if (seen.add(slug)) {
+                                    val title = slug.removeSuffix("-mp3-song").replace('-', ' ')
+                                        .split(' ').joinToString(" ") { w ->
+                                            if (w.isBlank()) w else w.replaceFirstChar { it.uppercase() }
+                                        }
+                                    synchronized(songs) {
+                                        songs.add(
+                                            YouTubeSong(
+                                                id = "pw_$slug",
+                                                title = title,
+                                                artist = "PagalWorld • ${category.replaceFirstChar { it.uppercase() }}",
+                                                duration = 0,
+                                                thumbnailUrl = "",
+                                                audioUrl = ""
+                                            )
+                                        )
+                                    }
+                                    addedThisPage++
+                                }
+                            }
+                        }
+                        if (addedThisPage == 0) break
+                    }
+                }
+            }
+            jobs.forEach { it.join() }
+        } catch (e: Exception) {
+            Log.w(TAG, "PagalWorld catalog error: ${e.message}")
+        }
+        Log.d(TAG, "PagalWorld catalog loaded ${songs.size} entries")
+        songs
+    }
+
+    /**
+     * Resolve the direct MP3 stream for a catalog entry on demand (play time).
+     * Returns the same song with audioUrl/thumbnail filled in, or null when
+     * the page has no stream — caller then falls back to other sources.
+     */
+    suspend fun getPagalWorldStream(song: YouTubeSong): YouTubeSong? {
+        val slug = song.id.removePrefix("pw_")
+        if (slug.isBlank()) return null
+        val url = "https://pagal-world.com.co/song/$slug/"
+        return runCatching { parsePagalWorldSong(url, song.title) }.getOrNull()?.let { parsed ->
+            song.copy(audioUrl = parsed.audioUrl, thumbnailUrl = parsed.thumbnailUrl.ifBlank { song.thumbnailUrl })
+        }
     }
 
     /**
