@@ -1,5 +1,7 @@
 name: Network Diagnostic
 on:
+  push:
+    branches: ['chore/**', 'fix/**', 'feature/**']
   workflow_dispatch:
 jobs:
   diag:
