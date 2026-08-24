@@ -451,6 +451,24 @@ class YouTubeViewModel(
         }
     }
 
+    /** Fresh Picks: newest PagalWorld uploads — shown when the tab opens without a query. */
+    fun loadPagalWorldLatest() {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.loadPagalWorldLatest()
+                _searchResults.value = results
+                Log.d(TAG, "PagalWorld latest loaded ${results.size} songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "PagalWorld latest failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     fun searchAppleMusic(query: String) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
