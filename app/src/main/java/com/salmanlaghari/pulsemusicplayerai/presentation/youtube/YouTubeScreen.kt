@@ -734,10 +734,11 @@ fun YouTubeScreen(
                                 color = TextDim,
                                 fontSize = 14.sp
                             )
-                            if (southAsianError != null) {
+                            val syncError = southAsianError
+                            if (syncError != null) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = southAsianError,
+                                    text = syncError,
                                     color = MaterialTheme.colorScheme.error,
                                     fontSize = 12.sp
                                 )
