@@ -44,11 +44,7 @@ fun PermissionScreen(
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        onPermissionResult(isGranted)
-    }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Android 13+ requires POST_NOTIFICATIONS at runtime — without it the
     // media playback notification never appears in the top bar / lock screen.
@@ -56,19 +52,27 @@ fun PermissionScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    // Ask for notifications alongside audio access so both system dialogs
-    // appear in one natural flow.
-    val launchPermissions = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
+            // Audio granted — NOW ask for notifications (one at a time; two
+            // simultaneous system dialogs cancel each other and forced users
+            // to tap Grant Access twice).
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // The app proceeds on audio grant regardless of the notification answer.
+        onPermissionResult(isGranted)
+    }
+
+    // Single tap: request audio access first; the notification dialog is
+    // chained AFTER audio is granted (see launcher callback above).
+    val launchPermissions = {
         launcher.launch(permissionToRequest)
     }
 
