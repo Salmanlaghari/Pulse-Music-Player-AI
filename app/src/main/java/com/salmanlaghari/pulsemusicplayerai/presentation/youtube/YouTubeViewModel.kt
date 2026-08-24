@@ -72,6 +72,10 @@ class YouTubeViewModel(
     private val _southAsianProgress = MutableStateFlow(0 to 0) // (completed, total)
     val southAsianProgress: StateFlow<Pair<Int, Int>> = _southAsianProgress.asStateFlow()
 
+    /** Human-readable reason when the last Desi Hits sync produced zero songs. */
+    private val _southAsianError = MutableStateFlow<String?>(null)
+    val southAsianError: StateFlow<String?> = _southAsianError.asStateFlow()
+
     private val _southAsianLoadedAtMs = MutableStateFlow(0L)
     val southAsianLoadedAtMs: StateFlow<Long> = _southAsianLoadedAtMs.asStateFlow()
 
@@ -126,8 +130,12 @@ class YouTubeViewModel(
         // periodically in the background (every 30 minutes). The catalog only
         // re-loads when it is stale, so this is a no-op most of the time.
         viewModelScope.launch {
+            // Auto-sync loop with adaptive cadence: retry every 2 minutes while
+            // the catalog is empty (so a transient API outage self-heals fast),
+            // otherwise re-sync every 30 minutes to stay fresh.
             while (true) {
-                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                val empty = _southAsianSongs.value.isEmpty()
+                kotlinx.coroutines.delay(if (empty) 2 * 60 * 1000L else 30 * 60 * 1000L)
                 syncSouthAsianCatalog()
             }
         }
@@ -281,12 +289,21 @@ class YouTubeViewModel(
                     val songs = youTubeRepository.loadSouthAsianCatalog { completed, total ->
                         _southAsianProgress.value = completed to total
                     }
-                    val previousCount = _southAsianSongs.value.size
-                    _southAsianSongs.value = songs
-                    southAsianLoaded = true
-                    _southAsianLoadedAtMs.value = System.currentTimeMillis()
-                    saveSouthAsianCatalogToCache(songs)
-                    Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
+                    if (songs.isNotEmpty()) {
+                        _southAsianSongs.value = songs
+                        southAsianLoaded = true
+                        _southAsianLoadedAtMs.value = System.currentTimeMillis()
+                        saveSouthAsianCatalogToCache(songs)
+                        _southAsianError.value = null
+                        Log.d(TAG, "Loaded ${songs.size} South Asian songs from network")
+                    } else {
+                        // All endpoints failed — KEEP whatever is on screen (cache or
+                        // previous load). Clearing the list is what made the tab look
+                        // like "sync never works".
+                        _southAsianError.value =
+                            "Sync failed — music servers unreachable on this network. Auto-retrying every 2 min."
+                        Log.w(TAG, "South Asian network sync returned 0 songs — keeping ${_southAsianSongs.value.size} existing")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load South Asian catalog", e)
                 } finally {
@@ -331,10 +348,10 @@ class YouTubeViewModel(
             val jsonString = preferences[SOUTH_ASIAN_CATALOG_KEY] ?: return null
             val timestamp = preferences[SOUTH_ASIAN_CATALOG_TIMESTAMP_KEY] ?: 0L
 
-            if (System.currentTimeMillis() - timestamp > SOUTH_ASIAN_CATALOG_TTL_MS) {
-                Log.d(TAG, "South Asian catalog cache expired (${(System.currentTimeMillis() - timestamp) / 1000}s old)")
-                return null
-            }
+            // NOTE: no hard TTL rejection here. A stale catalog is infinitely
+            // better than an empty tab — it is shown immediately and the
+            // periodic auto-sync refreshes it in the background.
+            Log.d(TAG, "South Asian catalog cache hit (${(System.currentTimeMillis() - timestamp) / 1000}s old)")
 
             val json = JSONObject(jsonString)
             val jsonArray = json.getJSONArray("songs")
@@ -441,6 +458,42 @@ class YouTubeViewModel(
         }
     }
 
+    /** Fresh Picks: newest PagalWorld uploads — shown when the tab opens without a query. */
+    fun loadPagalWorldLatest() {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.loadPagalWorldLatest()
+                _searchResults.value = results
+                Log.d(TAG, "PagalWorld latest loaded ${results.size} songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "PagalWorld latest failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    /** PagalWorld catalog: 500+ Bollywood/Punjabi/Indipop/Haryanvi entries, lazy streams. */
+    fun loadPagalWorldCatalog() {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val results = youTubeRepository.loadPagalWorldCatalog()
+                _searchResults.value = results
+                Log.d(TAG, "PagalWorld catalog loaded ${results.size} entries")
+            } catch (e: Exception) {
+                Log.e(TAG, "PagalWorld catalog failed", e)
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     fun searchAppleMusic(query: String) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
@@ -459,17 +512,17 @@ class YouTubeViewModel(
         }
     }
 
-    fun searchSpotify(query: String) {
+    fun searchPagalWorld(query: String) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(500)
             _isSearching.value = true
             try {
-                val results = youTubeRepository.searchSpotify(query)
+                val results = youTubeRepository.searchPagalWorld(query)
                 _searchResults.value = results
-                Log.d(TAG, "Spotify found ${results.size} results for '$query'")
+                Log.d(TAG, "PagalWorld found ${results.size} results for '$query'")
             } catch (e: Exception) {
-                Log.e(TAG, "Spotify search failed", e)
+                Log.e(TAG, "PagalWorld search failed", e)
                 _searchResults.value = emptyList()
             } finally {
                 _isSearching.value = false
@@ -533,23 +586,23 @@ class YouTubeViewModel(
                 // whole aggregated search and makes the app appear hung.
                 val appleDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchAppleMusic(query) } }.getOrDefault(null) ?: emptyList() }
                 val saavnDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchJioSaavn(query) } }.getOrDefault(null) ?: emptyList() }
-                val spotifyDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSpotify(query) } }.getOrDefault(null) ?: emptyList() }
+                val pagalWorldDeferred = async { runCatching { withTimeoutOrNull(12000) { youTubeRepository.searchPagalWorld(query) } }.getOrDefault(null) ?: emptyList() }
                 val ytmDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchYouTubeMusic(query) } }.getOrDefault(null) ?: emptyList() }
                 val soundcloudDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.searchSoundCloud(query) } }.getOrDefault(null) ?: emptyList() }
                 val generalDeferred = async { runCatching { withTimeoutOrNull(8000) { youTubeRepository.search(query) } }.getOrDefault(null) ?: emptyList() }
 
                 val apple = appleDeferred.await().take(10)
                 val saavn = saavnDeferred.await().take(10)
-                val spotify = spotifyDeferred.await().take(10)
+                val pagalWorld = pagalWorldDeferred.await().take(10)
                 val ytm = ytmDeferred.await().take(10)
                 val soundcloud = soundcloudDeferred.await().take(10)
                 val general = generalDeferred.await().take(10)
 
-                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} spotify=${spotify.size} ytm=${ytm.size} soundcloud=${soundcloud.size} general=${general.size}")
+                Log.d(TAG, "searchAllSources '$query' -> apple=${apple.size} saavn=${saavn.size} pagalworld=${pagalWorld.size} ytm=${ytm.size} soundcloud=${soundcloud.size} general=${general.size}")
 
                 // JioSaavn kept first so full-song Bollywood/Hindi results stay
                 // synced at the top, then the other synced platforms follow.
-                for (list in listOf(saavn, apple, spotify, ytm, soundcloud, general)) {
+                for (list in listOf(saavn, apple, pagalWorld, ytm, soundcloud, general)) {
                     for (s in list) {
                         if (seen.add(s.id)) combined.add(s)
                     }
@@ -823,6 +876,20 @@ class YouTubeViewModel(
         // YouTube Music by matching title + artist.
         if (song.hasValidAudio() && !isPreviewOnlySource(song.id)) {
             return song
+        }
+
+        // PagalWorld catalog entries carry no pre-fetched stream (lazy loading):
+        // resolve the direct MP3 from the song page on demand.
+        if (song.id.startsWith("pw_") && !song.hasValidAudio()) {
+            Log.d(TAG, "resolveAudio: resolving PagalWorld stream for '${song.title}'")
+            _playLoadingMessage.value = "Loading PagalWorld stream..."
+            val pw = withTimeoutOrNull(12_000) { youTubeRepository.getPagalWorldStream(song) }
+            if (pw != null && pw.hasValidAudio()) {
+                Log.d(TAG, "✓ resolveAudio: PagalWorld stream resolved for '${song.title}'")
+                _playLoadingMessage.value = "Playing now"
+                return pw
+            }
+            Log.w(TAG, "resolveAudio: PagalWorld had no stream for '${song.title}' — falling back")
         }
 
         // JioSaavn/Desi Hits songs: refresh the URL directly (faster than full search)
