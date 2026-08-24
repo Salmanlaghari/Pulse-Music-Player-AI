@@ -41,4 +41,5 @@ jobs:
           pip install pycryptodome --quiet || true
           PID=$(curl -s -m 10 "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=1&q=tum%20hi%20ho" | python3 -c "import json,sys; print(json.load(sys.stdin)['results'][0]['id'])")
           curl -s -m 10 "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=$PID&_format=json&_marker=0" -o /tmp/det.json
-          python3 -c "import json, base64; from Crypto.Cipher import DES; d=json.load(open('/tmp/det.json')); it=list(d.values())[0]; c=DES.new(b'38346591', DES.MODE_CBC, b'38346591'); dec=c.decrypt(base64.b64decode(it['encrypted_media_url'])); print('DECRYPTED:', dec[:-dec[-1]].decode())"
+          python3 -c "import json; d=json.load(open('/tmp/det.json')); print('KEYS:', list(d.keys())[:5]); it=list(d.values())[0]; enc=it.get('encrypted_media_url',''); print('ENC-HEAD:', enc[:60]); import base64; print('B64-OK len:', len(base64.b64decode(enc)))"
+          python3 -c "import json, base64; from Crypto.Cipher import DES; d=json.load(open('/tmp/det.json')); it=list(d.values())[0]; enc=it['encrypted_media_url']; c=DES.new(b'38346591', DES.MODE_CBC, b'38346591'); dec=c.decrypt(base64.b64decode(enc)); print('RAW:', dec[:40]); print('TRY-Latin1:', dec[:-dec[-1]].decode('latin-1')[:80])"
