@@ -9,7 +9,6 @@ jobs:
     steps:
       - name: Test JioSaavn endpoints
         run: |
-          set -x
           UA="Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
           curl -s -m 10 -A "$UA" "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=5&q=arijit" -o /tmp/o.json -w "OFFICIAL HTTP %{http_code} size %{size_download}\n"
           head -c 200 /tmp/o.json; echo
@@ -24,37 +23,22 @@ jobs:
 
       - name: Test PagalWorld pipeline
         run: |
-          set -x
           UA="Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
           curl -s -m 15 -A "$UA" "https://pagal-world.com.co/wp-json/wp/v2/search?search=barsaat&per_page=5" -o /tmp/pw.json -w "WP-SEARCH HTTP %{http_code} size %{size_download}\n"
           head -c 300 /tmp/pw.json; echo
           URL=$(python3 -c "import json; print(json.load(open('/tmp/pw.json'))[0]['url'])")
           echo "song page: $URL"
           curl -s -m 15 -A "$UA" "$URL" -o /tmp/page.html -w "PAGE HTTP %{http_code} size %{size_download}\n"
-          grep -o 'data-file="[^"]*"' /tmp/page.html | head -3
+          grep -o 'data-file="[^"]*"' /tmp/page.html | head -3 || true
           F=$(grep -o 'data-file="[^"]*"' /tmp/page.html | head -1 | sed 's/data-file="//; s/"$//')
           Y=$(grep -o 'data-year="[^"]*"' /tmp/page.html | head -1 | sed 's/data-year="//; s/"$//')
           M=$(grep -o 'data-month="[^"]*"' /tmp/page.html | head -1 | sed 's/data-month="//; s/"$//')
-          ENC=$(python3 - "$F" <<'PY'
-import sys, urllib.parse
-print(urllib.parse.quote_plus(sys.argv[1]).replace('+', '%20'))
-PY
-)
+          ENC=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote_plus(sys.argv[1]).replace('+', '%20'))" "$F")
           curl -s -o /dev/null -w "MP3 HTTP %{http_code} type %{content_type}\n" -m 15 -A "$UA" -r 0-99 "https://pagal-world.com.co/wp-content/uploads/$Y/$M/$ENC"
 
-      - name: DES decrypt test (Kotlin-equivalent)
+      - name: DES decrypt test
         run: |
-          pip install pycryptodome >/dev/null 2>&1 || true
-          UA="Mozilla/5.0"
-          curl -s -m 10 -A "$UA" "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=$(curl -s -m 10 "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=1&q=tum%20hi%20ho" | python3 -c "import json,sys; print(json.load(sys.stdin)['results'][0]['id'])")&_format=json&_marker=0" -o /tmp/det.json
-          python3 - <<'PY'
-import json, base64
-from Crypto.Cipher import DES
-d = json.load(open('/tmp/det.json'))
-it = list(d.values())[0]
-enc = it['encrypted_media_url']
-c = DES.new(b'38346591', DES.MODE_CBC, b'38346591')
-dec = c.decrypt(base64.b64decode(enc))
-url = dec[:-dec[-1]].decode()
-print('DECRYPTED:', url)
-PY
+          pip install pycryptodome --quiet || true
+          PID=$(curl -s -m 10 "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=1&q=tum%20hi%20ho" | python3 -c "import json,sys; print(json.load(sys.stdin)['results'][0]['id'])")
+          curl -s -m 10 "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=$PID&_format=json&_marker=0" -o /tmp/det.json
+          python3 -c "import json, base64; from Crypto.Cipher import DES; d=json.load(open('/tmp/det.json')); it=list(d.values())[0]; c=DES.new(b'38346591', DES.MODE_CBC, b'38346591'); dec=c.decrypt(base64.b64decode(it['encrypted_media_url'])); print('DECRYPTED:', dec[:-dec[-1]].decode())"
