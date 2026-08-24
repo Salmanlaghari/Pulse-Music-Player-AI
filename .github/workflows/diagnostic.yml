@@ -39,20 +39,11 @@ jobs:
       - name: Full playback chain (as the app does)
         run: |
           UA="Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
-          curl -s -m 10 -A "$UA" "https://jiosaavn-api.vercel.app/song?id=aRZbUYD7" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-print('MIRROR-KEYS:', sorted(d.keys())[:20])
-print('media_url:', d.get('media_url', 'NONE')[:90])
-mu = d.get('media_urls')
-print('media_urls:', json.dumps(mu)[:200] if mu else None)
-print('downloadUrl:', str(d.get('downloadUrl'))[:200])
-url = d.get('media_url') or ''
-if url:
-    import subprocess
-    out = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code} %{content_type}', '-m', '15', '-A', '$UA', '-r', '0-99', url], capture_output=True, text=True).stdout
-    print('STREAM-CHECK:', out)
-"
+          curl -s -m 10 -A "$UA" "https://jiosaavn-api.vercel.app/song?id=aRZbUYD7" -o /tmp/song.json -w "MIRROR HTTP %{http_code}\n"
+          python3 -c "import json; d=json.load(open('/tmp/song.json')); print('KEYS:', sorted(d.keys())[:22]); print('media_url:', str(d.get('media_url'))[:95]); print('media_urls:', json.dumps(d.get('media_urls'))[:180]); print('downloadUrl:', json.dumps(d.get('downloadUrl'))[:180])"
+          URL=$(python3 -c "import json; d=json.load(open('/tmp/song.json')); u=d.get('media_url') or ''; print(u if u.startswith('http') else '')")
+          echo "picked: $URL"
+          curl -s -o /dev/null -w "STREAM-CHECK HTTP %{http_code} type %{content_type}\n" -m 15 -A "$UA" -r 0-99 "$URL"
 
       - name: DES decrypt test
         run: |
