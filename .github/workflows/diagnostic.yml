@@ -1,0 +1,56 @@
+name: Network Diagnostic
+on:
+  workflow_dispatch:
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test JioSaavn endpoints
+        run: |
+          echo "=== OFFICIAL search ==="
+          curl -s -m 10 -A "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36" \
+            "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&p=1&n=5&q=arijit" -o /tmp/o.json -w "HTTP %{http_code} size %{size_download}\n"
+          head -c 200 /tmp/o.json; echo
+          python3 -c "
+import json
+d=json.load(open('/tmp/o.json'))
+res=d.get('results',[])
+print('official results:',len(res))
+if res:
+    it=res[0]; enc=it.get('encrypted_media_url','')
+    print('enc len:',len(enc))
+" || echo PARSE_FAIL
+
+          echo "=== MIRROR1 search ==="
+          curl -s -m 10 "https://jiosaavn-api.vercel.app/api/search?query=arijit" -o /tmp/m.json -w "HTTP %{http_code}\n"
+          head -c 150 /tmp/m.json; echo
+
+          echo "=== MIRROR details ==="
+          ID=$(python3 -c "import json;d=json.load(open('/tmp/o.json'));print(d['results'][0]['id'])")
+          curl -s -m 10 "https://jiosaavn-api.vercel.app/song?id=$ID" -o /tmp/md.json -w "HTTP %{http_code}\n"
+          head -c 250 /tmp/md.json; echo
+
+          echo "=== PRIMARY ==="
+          curl -s -m 10 "https://saavn.sumit.co/api/search/songs?query=arijit" -o /dev/null -w "HTTP %{http_code}\n"
+
+          echo "=== RAW CONFIG ==="
+          curl -s -m 10 -o /dev/null -w "HTTP %{http_code}\n" https://raw.githubusercontent.com/Salmanlaghari/Pulse-Music-Player-AI/main/docs/jiosaavn-endpoints.json
+
+      - name: Test PagalWorld pipeline
+        run: |
+          UA="Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+          echo "=== WP SEARCH ==="
+          curl -s -m 15 -A "$UA" "https://pagal-world.com.co/wp-json/wp/v2/search?search=barsaat&per_page=5" -o /tmp/pw.json -w "HTTP %{http_code} size %{size_download}\n"
+          head -c 300 /tmp/pw.json; echo
+          URL=$(python3 -c "import json;print(json.load(open('/tmp/pw.json'))[0]['url'])" 2>/dev/null)
+          echo "song page: $URL"
+          echo "=== SONG PAGE ==="
+          curl -s -m 15 -A "$UA" "$URL" -o /tmp/page.html -w "HTTP %{http_code} size %{size_download}\n"
+          grep -o 'data-file="[^"]*"' /tmp/page.html | head -3
+          grep -o 'data-year="[^"]*"' /tmp/page.html | head -2
+          F=$(grep -o 'data-file="[^"]*"' /tmp/page.html | head -1 | sed 's/data-file="//;s/"$//')
+          Y=$(grep -o 'data-year="[^"]*"' /tmp/page.html | head -1 | sed 's/data-year="//;s/"$//')
+          M=$(grep -o 'data-month="[^"]*"' /tmp/page.html | head -1 | sed 's/data-month="//;s/"$//')
+          echo "=== MP3 URL ==="
+          ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote_plus(sys.argv[1]).replace('+','%20'))" "$F")
+          curl -s -o /dev/null -w "MP3: HTTP %{http_code} type %{content_type}\n" -m 15 -A "$UA" -r 0-99 "https://pagal-world.com.co/wp-content/uploads/$Y/$M/$ENC"
