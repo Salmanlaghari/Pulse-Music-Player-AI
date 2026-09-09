@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="54S3KZA4cGtu8eY9COtaE7sFZFbNJWHHKm1ZJ7Q3_pI" />
-    <title>Pulse Music Player AI v1.15.0 — Official Release | Download APK</title>
-    <meta name="description" content="Pulse Music Player AI v1.15.0 — AI-powered Android music player with premium mini player, AVEE-style visualizers, multi-platform sync, MP3-to-MP4 studio, and glassmorphism UI. Download the latest Release APK directly — no account needed.">
-    <meta name="keywords" content="Pulse Music Player, AI Music Player, Android APK, Music Player Download, JioSaavn, YouTube Music, Spotify, Apple Music, Deezer, Audio Studio, Visualizer, Desi Hits, Mini Player, AVEE Visualizer">
+    <title>Pulse Music Player AI - Download APK for Android</title>
+    <meta name="description" content="Download Pulse Music Player AI APK for Android — the free AI music player with haptic feedback, 10+ visualizers, and multi-platform sync. Get the latest apk download from GitHub. No account needed.">
+    <meta name="keywords" content="pulse music player, apk download, github, ai music player, haptic music player, Pulse Music Player APK, AI Music Player, Android APK, Music Player Download, JioSaavn, YouTube Music, Spotify, Apple Music, Deezer, Audio Studio, Visualizer, Desi Hits, Mini Player, AVEE Visualizer">
     <meta name="author" content="Salman Laghari">
     <meta name="theme-color" content="#6C63FF">
-    <meta property="og:title" content="Pulse Music Player AI v1.15.0 — Official Release">
-    <meta property="og:description" content="AI-powered Android music player with premium mini player, AVEE-style visualizers, multi-platform sync, MP3-to-MP4 studio, and glassmorphism UI. Download the Release APK directly — no account needed.">
+    <meta property="og:title" content="Pulse Music Player AI - Download APK for Android">
+    <meta property="og:description" content="Download Pulse Music Player AI APK for Android — the free AI music player with haptic feedback, 10+ visualizers, and multi-platform sync. Get the latest apk download from GitHub. No account needed.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="images/hero-banner.png">
     <meta property="og:url" content="https://salmanlaghari.github.io/Pulse-Music-Player-AI/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Pulse Music Player AI v1.15.0 — Official Release">
-    <meta name="twitter:description" content="AI-powered Android music player with premium mini player, AVEE-style visualizers, and multi-platform sync. Download the Release APK directly — no account needed.">
+    <meta name="twitter:title" content="Pulse Music Player AI - Download APK for Android">
+    <meta name="twitter:description" content="Download Pulse Music Player AI APK — free AI music player with haptic feedback, 10+ visualizers, and multi-platform sync. Latest apk download from GitHub. No account needed.">
     <meta name="twitter:image" content="images/hero-banner.png">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <script type="application/ld+json">
@@ -26,7 +26,7 @@
       "name": "Pulse Music Player AI",
       "operatingSystem": "Android",
       "applicationCategory": "MusicPlayerApplication",
-      "description": "AI-powered Android music player with premium mini player, AVEE-style visualizers, multi-platform sync, MP3-to-MP4 studio, and glassmorphism UI.",
+      "description": "Pulse Music Player AI is a free APK download for Android — an AI music player with haptic feedback, 10+ audio visualizers, and multi-platform sync. Download the latest APK from GitHub.",
       "author": {
         "@type": "Person",
         "name": "Salman Laghari"
@@ -35,10 +35,11 @@
         "@type": "Person",
         "name": "Salman Laghari"
       },
-      "datePublished": "2026-08-23",
-      "version": "1.15.0",
-      "url": "https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/tag/v1.15.0",
-      "downloadUrl": "https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.15.0/Pulse-Music-Player-AI-Release.apk",
+      "datePublished": "2026-09-09",
+      "version": "1.16.4",
+      "url": "https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/tag/v1.16.4",
+      "downloadUrl": "https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.16.4/app-release.apk",
+      "featureList": "Haptic feedback on playback controls, AI music assistant, 10+ audio visualizers, MP3-to-MP4 video studio, multi-platform sync",
       "screenshot": "images/screenshot-01-home.png",
       "offers": {
         "@type": "Offer",
@@ -108,6 +109,35 @@
             0%, 100% { transform: translate(0,0) scale(1); }
             33% { transform: translate(30px,-30px) scale(1.05); }
             66% { transform: translate(-20px,20px) scale(0.95); }
+        }
+
+        /* ===== Top Download APK bar ===== */
+        .top-download-bar {
+            background: var(--gradient-1);
+            padding: 14px 0;
+            text-align: center;
+            position: sticky;
+            top: 61px;
+            z-index: 99;
+            box-shadow: 0 4px 20px rgba(108, 99, 255, 0.35);
+        }
+        .top-download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 28px;
+            background: white;
+            color: var(--primary-dark) !important;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 800;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+        }
+        .top-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
         }
 
         /* ===== Header ===== */
@@ -347,6 +377,7 @@
             .platforms-grid { grid-template-columns: repeat(2, 1fr); }
             .steps-grid { grid-template-columns: repeat(2, 1fr); }
             .stats-strip { grid-template-columns: repeat(2, 1fr); }
+            .top-download-bar { top: 61px; }
         }
         @media (max-width: 520px) {
             .hero { padding: 56px 20px 40px; }
@@ -354,6 +385,7 @@
             .steps-grid { grid-template-columns: 1fr; }
             .apk-card { flex-direction: column; text-align: center; }
             .release-notes { padding: 28px 22px; }
+            .top-download-btn { padding: 10px 22px; font-size: 15px; }
         }
     </style>
 <script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
@@ -381,13 +413,20 @@
         </div>
     </header>
 
+    <!-- Top Download APK bar -->
+    <div class="top-download-bar">
+        <a href="https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.16.4/app-release.apk" class="top-download-btn" id="top-download-btn">
+            <span class="icon">⬇</span> Download APK
+        </a>
+    </div>
+
     <!-- Hero -->
     <section class="hero">
-        <div class="version-badge"><span class="dot"></span> Version 1.15.0 · Latest Release · August 2026</div>
+        <div class="version-badge"><span class="dot"></span> Version 1.16.4 · Latest Release · September 2026</div>
         <h1>Pulse Music Player <span class="grad">AI</span><br>The Ultimate Android Music Experience</h1>
-        <p class="subtitle">An AI-powered music player that unifies JioSaavn, YouTube Music, Spotify, Apple Music, Deezer, and your local library into one beautiful, lightning-fast app. Built with Jetpack Compose, Media3, and a premium assistant that understands your vibe.</p>
+        <p class="subtitle">An AI-powered music player that unifies JioSaavn, YouTube Music, Spotify, Apple Music, Deezer, and your local library into one beautiful, lightning-fast app. Now with <strong style="color:var(--text)">tactile haptic feedback</strong> on every playback control — feel every beat, not just hear it. Built with Jetpack Compose, Media3, and a premium assistant that understands your vibe.</p>
         <div class="hero-cta">
-            <a href="#download" class="btn btn-primary"><span class="icon">⬇</span> Download Release APK</a>
+            <a href="https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.16.4/app-release.apk" class="btn btn-primary"><span class="icon">⬇</span> Download Release APK</a>
             <a href="#features" class="btn btn-secondary"><span class="icon">✨</span> Explore Features</a>
         </div>
         <div class="hero-image-wrap">
@@ -418,6 +457,12 @@
         <p class="image-caption" style="text-align:center; margin-bottom:50px;">Image Reference — Four pillar features of Pulse Music Player AI: the AI Assistant, 10+ audio visualizers, the MP3-to-MP4 Video Studio, and unified Multi-Platform Sync.</p>
 
         <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📳</div>
+                <h3>Haptic Music Feedback</h3>
+                <p>Pulse delivers rich tactile haptic feedback on every playback interaction — play, pause, skip, and seek all pulse gently against your fingertips. Combined with the persistent mini player, every tap feels intentional and premium. A true haptic music player experience.</p>
+                <span class="tag">Haptics</span>
+            </div>
             <div class="feature-card">
                 <div class="feature-icon">🤖</div>
                 <h3>AI Music Assistant</h3>
@@ -478,12 +523,20 @@
     <!-- What's New / Release Notes -->
     <section class="block" id="whats-new">
         <div class="section-head">
-            <span class="section-tag">Release Notes · v1.15.0</span>
+            <span class="section-tag">Release Notes · v1.16.4</span>
             <h2>What is New in <span class="grad">This Release</span></h2>
-            <p>Two major features shipped in this release — a premium mini player for the dashboard and a next-generation visualizer upgrade with AVEE-style templates — plus all the stability improvements from earlier sprints.</p>
+            <p>The latest release keeps refining the premium experience — with tactile haptic feedback on playback controls, a persistent mini player for the dashboard, and a next-generation visualizer upgrade with AVEE-style templates — plus all the stability improvements from earlier sprints.</p>
         </div>
 
         <div class="release-notes">
+            <div class="rn-item">
+                <div class="rn-title"><span class="emoji">📳</span> Tactile Haptic Feedback <span class="new-pill">NEW</span></div>
+                <ul class="rn-list">
+                    <li>Pulse now delivers rich haptic feedback on every playback interaction — play, pause, skip, and seek all pulse gently against your fingertips.</li>
+                    <li>The persistent mini player at the bottom of the Home dashboard responds with a satisfying press-scale animation and haptic confirmation on every tap.</li>
+                    <li>Combined with glassmorphism styling, every interaction feels intentional and premium — a true haptic music player experience.</li>
+                </ul>
+            </div>
             <div class="rn-item">
                 <div class="rn-title"><span class="emoji">🎛️</span> Premium Mini Player <span class="new-pill">NEW</span></div>
                 <ul class="rn-list">
@@ -528,9 +581,9 @@
     <!-- Screenshots -->
     <section class="block" id="screenshots">
         <div class="section-head">
-            <span class="section-tag">App Gallery · v1.15.0</span>
+            <span class="section-tag">App Gallery · v1.16.4</span>
             <h2>See Pulse in <span class="grad">Action</span></h2>
-            <p>Eight high-resolution screenshots showcasing the premium UI, mini player, full-screen player, visualizers, library, search, settings, and studio tools.</p>
+            <p>Eight high-resolution screenshots showcasing the premium UI, mini player with haptic feedback, full-screen player, visualizers, library, search, settings, and studio tools.</p>
         </div>
         <div class="feature-showcase" style="margin-bottom: 30px;">
             <img src="images/screenshot-01-home.png" alt="Pulse Music Player AI — Home dashboard showing recently added songs, favorites, and quick access tiles" loading="lazy">
@@ -684,7 +737,7 @@
         <div class="section-head">
             <span class="section-tag">Direct Public Download</span>
             <h2>Get the <span class="grad">Latest Release APK</span></h2>
-            <p>Download Pulse Music Player AI v1.15.0 directly — no account, no sign-up, no login. Just the optimized production build, ready to install.</p>
+            <p>Download Pulse Music Player AI v1.16.4 directly — no account, no sign-up, no login. Just the optimized production build, ready to install. Now with tactile haptic feedback on every playback control.</p>
         </div>
 
         <div class="download-section">
@@ -693,10 +746,10 @@
 
             <div class="apk-card">
                 <div class="apk-info">
-                    <div class="apk-name">📱 Pulse-Music-Player-AI-Release.apk <span class="apk-badge">Latest</span></div>
-                    <div class="apk-meta">Version 1.15.0 · ~50 MB · Android 8.0+ · Production build</div>
+                    <div class="apk-name">📱 app-release.apk <span class="apk-badge">Latest</span></div>
+                    <div class="apk-meta">Version 1.16.4 · ~50 MB · Android 8.0+ · Production build · Haptic feedback</div>
                 </div>
-                <a href="https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.15.0/Pulse-Music-Player-AI-Release.apk" class="btn btn-primary" id="download-btn">
+                <a href="https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases/download/v1.16.4/app-release.apk" class="btn btn-primary" id="download-btn">
                     <span class="icon">⬇</span> Download APK
                 </a>
             </div>
@@ -773,7 +826,7 @@
                 <a href="https://github.com/Salmanlaghari/Pulse-Music-Player-AI/releases" target="_blank" rel="noopener">Releases</a>
             </div>
             <div class="footer-copy">
-                © 2026 Pulse Music Player AI · Built by <a href="https://github.com/Salmanlaghari" target="_blank" rel="noopener">Salman Laghari</a> · v1.15.0 · Free & open for everyone.
+                © 2026 Pulse Music Player AI · Built by <a href="https://github.com/Salmanlaghari" target="_blank" rel="noopener">Salman Laghari</a> · v1.16.4 · Free & open for everyone.
             </div>
         </div>
     </footer>
